@@ -1,4 +1,5 @@
 [workspace]
 members = [
-    "free"
+    "free",
+    "load-average"
 ]
