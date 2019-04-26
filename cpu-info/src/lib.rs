@@ -1,15 +1,16 @@
 extern crate scanner_rust;
 
 use std::io::{self, ErrorKind};
-
-use scanner_rust::{Scanner, ScannerError};
 use std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 use std::thread::sleep;
 
+use scanner_rust::{Scanner, ScannerError};
+
 const CPUINFO_PATH: &'static str = "/proc/cpuinfo";
-const STAT_PATH: &'static str = "/proc/stat";
 const ITEMS: [&'static str; 4] = ["model name", "physical id", "siblings", "cpu cores"];
+
+const STAT_PATH: &'static str = "/proc/stat";
 
 #[derive(Debug, Clone)]
 pub struct CPU {
