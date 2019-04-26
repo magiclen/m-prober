@@ -78,8 +78,3 @@ impl RTCTime {
         })
     }
 }
-
-#[test]
-fn it_works() {
-    println!("{:?}", RTCTime::get_rtc_time().unwrap())
-}
