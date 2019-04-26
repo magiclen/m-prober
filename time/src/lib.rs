@@ -28,13 +28,13 @@ pub fn get_system_time() -> SystemTime {
 }
 
 #[derive(Debug, Clone)]
-pub struct RTCTime {
+pub struct RTCDateTime {
     rtc_time: String,
     rtc_date: String,
 }
 
-impl RTCTime {
-    pub fn get_rtc_time() -> Result<RTCTime, ScannerError> {
+impl RTCDateTime {
+    pub fn get_rtc_date_time() -> Result<RTCDateTime, ScannerError> {
         let mut sc = Scanner::scan_path(RTC_PATH)?;
 
         let mut item_values: Vec<String> = Vec::with_capacity(ITEMS.len());
@@ -72,7 +72,7 @@ impl RTCTime {
         let rtc_date = item_values.pop().unwrap();
         let rtc_time = item_values.pop().unwrap();
 
-        Ok(RTCTime {
+        Ok(RTCDateTime {
             rtc_time,
             rtc_date,
         })
