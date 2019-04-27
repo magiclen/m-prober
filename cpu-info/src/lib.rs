@@ -14,10 +14,10 @@ const STAT_PATH: &'static str = "/proc/stat";
 
 #[derive(Debug, Clone)]
 pub struct CPU {
-    physical_id: usize,
-    model_name: String,
-    siblings: usize,
-    cpu_cores: usize,
+    pub physical_id: usize,
+    pub model_name: String,
+    pub siblings: usize,
+    pub cpu_cores: usize,
 }
 
 impl CPU {
@@ -114,16 +114,16 @@ impl CPU {
 
 #[derive(Debug, Clone)]
 pub struct CPUStat {
-    user: usize,
-    nice: usize,
-    system: usize,
-    idle: usize,
-    iowait: usize,
-    irq: usize,
-    softirq: usize,
-    steal: usize,
-    guest: usize,
-    guest_nice: usize,
+    pub user: u64,
+    pub nice: u64,
+    pub system: u64,
+    pub idle: u64,
+    pub iowait: u64,
+    pub irq: u64,
+    pub softirq: u64,
+    pub steal: u64,
+    pub guest: u64,
+    pub guest_nice: u64,
 }
 
 impl CPUStat {
@@ -135,16 +135,16 @@ impl CPUStat {
         match label {
             Some(label) => {
                 if label.as_str().eq("cpu") {
-                    let user = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let nice = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let system = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let idle = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let iowait = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let irq = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let softirq = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let steal = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let guest = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
-                    let guest_nice = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let user = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let nice = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let system = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let idle = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let iowait = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let irq = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let softirq = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let steal = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let guest = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                    let guest_nice = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
 
                     Ok(CPUStat {
                         user,
@@ -178,7 +178,7 @@ impl CPUStat {
         match label {
             Some(label) => {
                 if label.as_str().eq("cpu") {
-                    sc.next_line()?;
+                    sc.next_line()?.unwrap();
 
                     let mut i = 0;
 
@@ -188,16 +188,16 @@ impl CPUStat {
                         match label {
                             Some(label) => {
                                 if label.starts_with("cpu") {
-                                    let user = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let nice = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let system = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let idle = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let iowait = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let irq = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let softirq = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let steal = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let guest = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
-                                    let guest_nice = sc.next_usize()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let user = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let nice = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let system = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let idle = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let iowait = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let irq = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let softirq = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let steal = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let guest = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
+                                    let guest_nice = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `cpu{}` has incorrect value.", i))))?;
 
                                     let cpu_stat = CPUStat {
                                         user,

@@ -9,26 +9,26 @@ const ITEMS: [&'static str; 11] = ["MemTotal", "MemFree", "MemAvailable", "Buffe
 
 #[derive(Debug, Clone)]
 pub struct Mem {
-    total: usize,
-    used: usize,
-    free: usize,
-    shared: usize,
-    buffers: usize,
-    cache: usize,
-    available: usize,
+    pub total: usize,
+    pub used: usize,
+    pub free: usize,
+    pub shared: usize,
+    pub buffers: usize,
+    pub cache: usize,
+    pub available: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct Swap {
-    total: usize,
-    used: usize,
-    free: usize,
+    pub total: usize,
+    pub used: usize,
+    pub free: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct Free {
-    mem: Mem,
-    swap: Swap,
+    pub mem: Mem,
+    pub swap: Swap,
 }
 
 impl Free {
@@ -57,7 +57,7 @@ impl Free {
 
                             break;
                         } else {
-                            sc.next_line()?;
+                            sc.next_line().unwrap();
                         }
                     }
                     None => {

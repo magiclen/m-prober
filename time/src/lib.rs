@@ -29,8 +29,8 @@ pub fn get_system_time() -> SystemTime {
 
 #[derive(Debug, Clone)]
 pub struct RTCDateTime {
-    rtc_time: String,
-    rtc_date: String,
+    pub rtc_time: String,
+    pub rtc_date: String,
 }
 
 impl RTCDateTime {

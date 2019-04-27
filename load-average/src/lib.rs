@@ -8,9 +8,9 @@ const LOADAVG_PATH: &'static str = "/proc/loadavg";
 
 #[derive(Debug, Clone)]
 pub struct LoadAverage {
-    one: f64,
-    five: f64,
-    fifteen: f64,
+    pub one: f64,
+    pub five: f64,
+    pub fifteen: f64,
 }
 
 impl LoadAverage {

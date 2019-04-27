@@ -5,4 +5,5 @@ members = [
     "cpu-info",
     "hostname",
     "time",
+    "network",
 ]
