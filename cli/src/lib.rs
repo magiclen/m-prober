@@ -66,6 +66,8 @@ impl Config {
         let examples = vec![
             "memory                         # Show current memory stats",
             "memory -m 1000                 # Show memory stats and refresh every 1000 milliseconds",
+            "memory -p                      # Show memory stats without colors",
+            "memory -u kb                   # Show memory stats in KB",
         ];
 
         let matches = App::new(APP_NAME)
