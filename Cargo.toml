@@ -1,3 +1,6 @@
+[profile.release]
+panic = "abort"
+
 [workspace]
 members = [
     "free",
@@ -6,4 +9,5 @@ members = [
     "hostname",
     "time",
     "network",
+    "cli"
 ]

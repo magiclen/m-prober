@@ -23,6 +23,7 @@ pub struct Swap {
     pub total: usize,
     pub used: usize,
     pub free: usize,
+    pub cache: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -95,6 +96,7 @@ impl Free {
             total: swap_total,
             used: swap_total - swap_free - swap_cached,
             free: swap_free,
+            cache: swap_cached,
         };
 
         Ok(Free {
