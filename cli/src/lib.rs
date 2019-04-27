@@ -36,6 +36,8 @@ const RED_COLOR: Color = Color::Rgb(255, 95, 0);
 const YELLOW_COLOR: Color = Color::Rgb(216, 177, 0);
 const SKY_BLUE_COLOR: Color = Color::Rgb(107, 200, 200);
 
+const CLEAR_SCREEN_DATA: [u8; 11] = [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
+
 // TODO -----Config START-----
 
 #[derive(Debug)]
@@ -207,7 +209,7 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, monitor: bool) 
     let mut stdout = output.buffer();
 
     if monitor {
-        stdout.write_all(&[0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a])?;
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
     let (mem_used, mem_total, swap_used, swap_total) = {
