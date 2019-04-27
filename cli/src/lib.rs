@@ -16,8 +16,8 @@ use std::io::{self, Write};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use terminal_size::{Width, Height, terminal_size};
+use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+use terminal_size::{Width, terminal_size};
 use clap::{App, Arg, SubCommand};
 use validators::number::NumberGteZero;
 use byte_unit::{Byte, ByteUnit};
@@ -170,11 +170,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                     'outer: loop {
                         let free = Free::get_free().unwrap();
 
-                        io::stdout().flush().map_err(|err| err.to_string())?;
-
                         draw_free(free, !plain, unit, true).map_err(|err| err.to_string())?;
-
-                        io::stdout().flush().map_err(|err| err.to_string())?;
 
                         let s_time = SystemTime::now();
 
@@ -201,12 +197,18 @@ pub fn run(config: Config) -> Result<i32, String> {
     Ok(0)
 }
 
-fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, align_top: bool) -> Result<(), io::Error> {
-    let mut stdout = if colorful {
-        StandardStream::stdout(ColorChoice::Always)
+fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), io::Error> {
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
     } else {
-        StandardStream::stdout(ColorChoice::Never)
+        BufferWriter::stdout(ColorChoice::Never)
     };
+
+    let mut stdout = output.buffer();
+
+    if monitor {
+        stdout.write_all(&[0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a])?;
+    }
 
     let (mem_used, mem_total, swap_used, swap_total) = {
         let (mem_used, mem_total, swap_used, swap_total) = (
@@ -244,13 +246,11 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, align_top: bool
 
     let percentage_len = mem_percentage.len().max(swap_percentage.len());
 
-    let (terminal_width, terminal_height) = if let Some((Width(width), Height(height))) = terminal_size() {
-        ((width as usize).max(MIN_TERMINAL_WIDTH), height as usize)
+    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
+        (width as usize).max(MIN_TERMINAL_WIDTH)
     } else {
-        (DEFAULT_TERMINAL_WIDTH, 0)
+        DEFAULT_TERMINAL_WIDTH
     };
-
-    let mut line = 1;
 
     // Memory
 
@@ -321,8 +321,6 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, align_top: bool
 
     writeln!(&mut stdout, "")?;
 
-    line += 1;
-
     // Swap
 
     stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
@@ -383,19 +381,7 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, align_top: bool
 
     writeln!(&mut stdout, "")?;
 
-    line += 1;
-
-    if align_top && line < terminal_height {
-        let d = terminal_height - line;
-
-        let mut s = String::with_capacity(d);
-
-        for _ in 0..d {
-            s.push('\n');
-        }
-
-        stdout.write_all(s.as_bytes())?;
-    }
+    output.print(&stdout)?;
 
     Ok(())
 }
