@@ -4,7 +4,7 @@ all: $(EXE)
 
 $(EXE): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | sed 's/ /\\ /g')
 	cargo build --release --target x86_64-unknown-linux-musl
-	strip ./target/x86_64-unknown-linux-musl/release
+	strip ./target/x86_64-unknown-linux-musl/release/magiclen-prober
 	
 install:
 	$(MAKE)
