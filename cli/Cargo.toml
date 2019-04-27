@@ -17,7 +17,7 @@ byte-unit = "2"
 serde_json = "1"
 termcolor = "1"
 terminal_size = "0.1"
-ncurses = "5"
+getch = "0.2"
 
 [dependencies.validators]
 version = "0.20"

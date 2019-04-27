@@ -5,7 +5,7 @@ extern crate byte_unit;
 extern crate validators;
 extern crate termcolor;
 extern crate terminal_size;
-extern crate ncurses;
+extern crate getch;
 
 extern crate free;
 
@@ -17,10 +17,11 @@ use std::thread;
 use std::sync::{Arc, Mutex};
 
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use terminal_size::{Width, terminal_size};
+use terminal_size::{Width, Height, terminal_size};
 use clap::{App, Arg, SubCommand};
 use validators::number::NumberGteZero;
 use byte_unit::{Byte, ByteUnit};
+use getch::Getch;
 
 use free::Free;
 
@@ -149,13 +150,11 @@ pub fn run(config: Config) -> Result<i32, String> {
                     let cont = Arc::new(Mutex::new(Some(0)));
                     let cont_2 = cont.clone();
 
-                    ncurses::initscr();
-
                     thread::spawn(move || {
                         loop {
-                            let key = ncurses::getch();
+                            let key = Getch::new().getch().unwrap();
 
-                            match key as u8 {
+                            match key {
                                 b'q' => {
                                     break;
                                 }
@@ -171,12 +170,11 @@ pub fn run(config: Config) -> Result<i32, String> {
                     'outer: loop {
                         let free = Free::get_free().unwrap();
 
-                        ncurses::clear();
-                        ncurses::refresh();
+                        io::stdout().flush().map_err(|err| err.to_string())?;
 
                         draw_free(free, !plain, unit, true).map_err(|err| err.to_string())?;
 
-                        ncurses::refresh();
+                        io::stdout().flush().map_err(|err| err.to_string())?;
 
                         let s_time = SystemTime::now();
 
@@ -190,8 +188,6 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
                     }
-
-                    ncurses::endwin();
                 }
                 None => {
                     let free = Free::get_free().unwrap();
@@ -205,7 +201,7 @@ pub fn run(config: Config) -> Result<i32, String> {
     Ok(0)
 }
 
-fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, curses: bool) -> Result<(), io::Error> {
+fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, align_top: bool) -> Result<(), io::Error> {
     let mut stdout = if colorful {
         StandardStream::stdout(ColorChoice::Always)
     } else {
@@ -248,11 +244,13 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, curses: bool) -
 
     let percentage_len = mem_percentage.len().max(swap_percentage.len());
 
-    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
-        (width as usize).max(MIN_TERMINAL_WIDTH)
+    let (terminal_width, terminal_height) = if let Some((Width(width), Height(height))) = terminal_size() {
+        ((width as usize).max(MIN_TERMINAL_WIDTH), height as usize)
     } else {
-        DEFAULT_TERMINAL_WIDTH
+        (DEFAULT_TERMINAL_WIDTH, 0)
     };
+
+    let mut line = 1;
 
     // Memory
 
@@ -321,13 +319,9 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, curses: bool) -
 
     write!(&mut stdout, ")")?; // 1
 
-    if curses {
-        stdout.flush()?;
+    writeln!(&mut stdout, "")?;
 
-        ncurses::addstr("\n");
-    } else {
-        writeln!(&mut stdout, "")?;
-    }
+    line += 1;
 
     // Swap
 
@@ -387,12 +381,20 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, curses: bool) -
 
     write!(&mut stdout, ")")?; // 1
 
-    if curses {
-        stdout.flush()?;
+    writeln!(&mut stdout, "")?;
 
-        ncurses::addstr("\n");
-    } else {
-        writeln!(&mut stdout, "")?;
+    line += 1;
+
+    if align_top && line < terminal_height {
+        let d = terminal_height - line;
+
+        let mut s = String::with_capacity(d);
+
+        for _ in 0..d {
+            s.push('\n');
+        }
+
+        stdout.write_all(s.as_bytes())?;
     }
 
     Ok(())
