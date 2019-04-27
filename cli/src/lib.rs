@@ -28,6 +28,7 @@ use free::Free;
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
 const MIN_SLEEP_INTERVAL: u64 = 200;
+const MAX_SLEEP_INTERVAL: u64 = 5000;
 const SLEEP_CHECKPOINT_COUNT: u128 = 5;
 
 const LABEL_COLOR: Color = Color::Rgb(0, 177, 177);
@@ -169,7 +170,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         cont_2.lock().unwrap().take();
                     });
 
-                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL));
+                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
 
                     'outer: loop {
                         let free = Free::get_free().unwrap();
@@ -279,14 +280,22 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, monitor: bool) 
 
     stdout.set_color(ColorSpec::new().set_fg(Some(YELLOW_COLOR)))?;
     for _ in 0..progress_cache {
-        write!(&mut stdout, "|")?; // 1
+        if colorful {
+            write!(&mut stdout, "|")?; // 1
+        } else {
+            write!(&mut stdout, "$")?; // 1
+        }
     }
 
     let progress_buffers = (free.mem.buffers as f64 * f).floor() as usize;
 
     stdout.set_color(ColorSpec::new().set_fg(Some(SKY_BLUE_COLOR)))?;
     for _ in 0..progress_buffers {
-        write!(&mut stdout, "|")?; // 1
+        if colorful {
+            write!(&mut stdout, "|")?; // 1
+        } else {
+            write!(&mut stdout, "#")?; // 1
+        }
     }
 
     for _ in 0..(progress_max - progress_used - progress_cache - progress_buffers) {
@@ -346,7 +355,11 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, monitor: bool) 
 
     stdout.set_color(ColorSpec::new().set_fg(Some(YELLOW_COLOR)))?;
     for _ in 0..progress_cache {
-        write!(&mut stdout, "|")?; // 1
+        if colorful {
+            write!(&mut stdout, "|")?; // 1
+        } else {
+            write!(&mut stdout, "$")?; // 1
+        }
     }
 
     for _ in 0..(progress_max - progress_used - progress_cache) {
