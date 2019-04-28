@@ -8,6 +8,8 @@ extern crate terminal_size;
 extern crate getch;
 
 extern crate free;
+extern crate cpu_info;
+extern crate load_average;
 
 use std::time::{Duration, SystemTime};
 use std::env;
@@ -24,6 +26,8 @@ use byte_unit::{Byte, ByteUnit};
 use getch::Getch;
 
 use free::Free;
+use cpu_info::{CPU, CPUStat};
+use load_average::LoadAverage;
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -52,6 +56,7 @@ pub enum Mode {
         monitor: Option<Duration>,
         plain: bool,
         separate: bool,
+        information: bool,
     },
 }
 
@@ -77,7 +82,8 @@ impl Config {
             "cpu                            # Show load average and CPU stats on average",
             "cpu -m 1000                    # Show load average and CPU stats on average and refresh every 1000 milliseconds",
             "cpu -p                         # Show load average and CPU stats on average without colors",
-            "cpu -s                         # Show load average and stats of CPUs separately",
+            "cpu -s                         # Show load average and stats of CPU cores separately",
+            "cpu -i                         # Only show CPU information",
         ];
 
         let matches = App::new(APP_NAME)
@@ -129,7 +135,11 @@ impl Config {
                     .long("separate")
                     .short("s")
                     .help("Separates each CPU")
-                    .takes_value(true)
+                )
+                .arg(Arg::with_name("INFORMATION")
+                    .long("information")
+                    .short("i")
+                    .help("Shows only information about CPUs")
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
@@ -176,10 +186,13 @@ impl Config {
 
             let separate = sub_matches.is_present("SEPARATE");
 
+            let information = sub_matches.is_present("INFORMATION");
+
             Mode::CPU {
                 monitor,
                 plain,
                 separate,
+                information,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -222,18 +235,16 @@ pub fn run(config: Config) -> Result<i32, String> {
 
                     let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
 
-                    'outer: loop {
-                        let free = Free::get_free().unwrap();
-
-                        draw_free(free, !plain, unit, true).map_err(|err| err.to_string())?;
-
+                    'memory_outer: loop {
                         let s_time = SystemTime::now();
+
+                        draw_free(!plain, unit, true).map_err(|err| err.to_string())?;
 
                         loop {
                             thread::sleep(sleep_interval);
 
                             if cont.lock().unwrap().is_none() {
-                                break 'outer;
+                                break 'memory_outer;
                             } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
                                 break;
                             }
@@ -241,22 +252,63 @@ pub fn run(config: Config) -> Result<i32, String> {
                     }
                 }
                 None => {
-                    let free = Free::get_free().unwrap();
-
-                    draw_free(free, !plain, unit, false).map_err(|err| err.to_string())?;
+                    draw_free(!plain, unit, false).map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::CPU { monitor, plain, separate } => {
-            // TODO
+        Mode::CPU { monitor, plain, separate, information } => {
+            match monitor {
+                Some(monitor) => {
+                    let cont = Arc::new(Mutex::new(Some(0)));
+                    let cont_2 = cont.clone();
+
+                    thread::spawn(move || {
+                        loop {
+                            let key = Getch::new().getch().unwrap();
+
+                            match key {
+                                b'q' => {
+                                    break;
+                                }
+                                _ => ()
+                            }
+                        }
+
+                        cont_2.lock().unwrap().take();
+                    });
+
+                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+
+                    'cpu_outer: loop {
+                        let s_time = SystemTime::now();
+
+                        draw_cpu_info(!plain, separate, information, true).map_err(|err| err.to_string())?;
+
+                        loop {
+                            thread::sleep(sleep_interval);
+
+                            if cont.lock().unwrap().is_none() {
+                                break 'cpu_outer;
+                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    draw_cpu_info(!plain, separate, information, false).map_err(|err| err.to_string())?;
+                }
+            }
         }
-        _ => unreachable!()
+//        _ => unreachable!()
     }
 
     Ok(0)
 }
 
-fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), io::Error> {
+fn draw_free(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), io::Error> {
+    let free = Free::get_free().unwrap();
+
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
     } else {
@@ -451,6 +503,383 @@ fn draw_free(free: Free, colorful: bool, unit: Option<ByteUnit>, monitor: bool) 
     write!(&mut stdout, ")")?; // 1
 
     writeln!(&mut stdout, "")?;
+
+    output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: bool) -> Result<(), io::Error> {
+    let cpus: Vec<CPU> = CPU::get_cpus().unwrap();
+
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
+    } else {
+        BufferWriter::stdout(ColorChoice::Never)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
+    }
+
+    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
+        (width as usize).max(MIN_TERMINAL_WIDTH)
+    } else {
+        DEFAULT_TERMINAL_WIDTH
+    };
+
+    // load average
+    if !only_information {
+        let load_average: LoadAverage = LoadAverage::get_load_average().unwrap();
+
+        let logical_cores_number: usize = cpus.iter().map(|cpu| cpu.siblings).sum();
+        let logical_cores_number_f64 = logical_cores_number as f64;
+
+        let one = format!("{:.2}", load_average.one);
+        let five = format!("{:.2}", load_average.five);
+        let fifteen = format!("{:.2}", load_average.fifteen);
+
+        let load_average_len = one.len().max(five.len()).max(fifteen.len());
+
+        let one_percentage = format!("{:.2}%", load_average.one * 100f64 / logical_cores_number_f64);
+        let five_percentage = format!("{:.2}%", load_average.five * 100f64 / logical_cores_number_f64);
+        let fifteen_percentage = format!("{:.2}%", load_average.fifteen * 100f64 / logical_cores_number_f64);
+
+        let percentage_len = one_percentage.len().max(five_percentage.len()).max(fifteen_percentage.len());
+
+        let progress_max = terminal_width - 11 - load_average_len - 2 - percentage_len - 1;
+
+        // number of logical CPU cores
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        if logical_cores_number > 1 {
+            write!(&mut stdout, "There are ")?;
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+            write!(&mut stdout, "{}", logical_cores_number)?;
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+            write!(&mut stdout, " logical CPU cores.")?;
+        } else {
+            write!(&mut stdout, "There is only one logical CPU core.")?;
+        }
+        writeln!(&mut stdout, "")?;
+
+        // one
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+        write!(&mut stdout, "one    ")?; // 7
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        write!(&mut stdout, " [")?; // 2
+
+        let f = progress_max as f64 / logical_cores_number_f64;
+
+        let progress_used = ((load_average.one * f).floor() as usize).min(progress_max);
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+        for _ in 0..progress_used {
+            write!(&mut stdout, "|")?; // 1
+        }
+
+        for _ in 0..(progress_max - progress_used) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        write!(&mut stdout, "] ")?; // 2
+
+        for _ in 0..(load_average_len - one.len()) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        stdout.write_all(one.as_bytes())?;
+
+        write!(&mut stdout, " (")?; // 2
+
+        for _ in 0..(percentage_len - one_percentage.len()) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.write_all(one_percentage.as_bytes())?;
+
+        write!(&mut stdout, ")")?; // 1
+
+        writeln!(&mut stdout, "")?;
+
+        // five
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+        write!(&mut stdout, "five   ")?; // 7
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        write!(&mut stdout, " [")?; // 2
+
+        let f = progress_max as f64 / logical_cores_number_f64;
+
+        let progress_used = ((load_average.five * f).floor() as usize).min(progress_max);
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+        for _ in 0..progress_used {
+            write!(&mut stdout, "|")?; // 1
+        }
+
+        for _ in 0..(progress_max - progress_used) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        write!(&mut stdout, "] ")?; // 2
+
+        for _ in 0..(load_average_len - five.len()) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        stdout.write_all(five.as_bytes())?;
+
+        write!(&mut stdout, " (")?; // 2
+
+        for _ in 0..(percentage_len - five_percentage.len()) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.write_all(five_percentage.as_bytes())?;
+
+        write!(&mut stdout, ")")?; // 1
+
+        writeln!(&mut stdout, "")?;
+
+        // fifteen
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+        write!(&mut stdout, "fifteen")?; // 7
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        write!(&mut stdout, " [")?; // 2
+
+        let f = progress_max as f64 / logical_cores_number_f64;
+
+        let progress_used = ((load_average.fifteen * f).floor() as usize).min(progress_max);
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+        for _ in 0..progress_used {
+            write!(&mut stdout, "|")?; // 1
+        }
+
+        for _ in 0..(progress_max - progress_used) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+        write!(&mut stdout, "] ")?; // 2
+
+        for _ in 0..(load_average_len - fifteen.len()) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        stdout.write_all(fifteen.as_bytes())?;
+
+        write!(&mut stdout, " (")?; // 2
+
+        for _ in 0..(percentage_len - fifteen_percentage.len()) {
+            write!(&mut stdout, " ")?; // 1
+        }
+
+        stdout.write_all(fifteen_percentage.as_bytes())?;
+
+        write!(&mut stdout, ")")?; // 1
+
+        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout, "")?;
+    }
+
+    // information
+
+    if separate {
+        let all_percentage: Vec<f64> = if only_information {
+            Vec::new()
+        } else {
+            CPUStat::get_all_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL)).unwrap()
+        };
+
+        let mut i = 0;
+
+        for cpu in cpus {
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+            stdout.write_all(cpu.model_name.as_bytes())?;
+
+            write!(&mut stdout, " ")?;
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+
+            write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings)?;
+
+            writeln!(&mut stdout, "")?;
+
+            let mut hz_string: Vec<String> = Vec::with_capacity(cpu.siblings);
+
+            for &cpu_mhz in cpu.cpus_mhz.iter() {
+                let cpu_hz = Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+
+                hz_string.push(format!("{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1]));
+            }
+
+            let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap();
+
+            let d = {
+                let mut n = cpu.siblings;
+
+                let mut d = 1;
+
+                while n > 10 {
+                    n /= 10;
+
+                    d += 1;
+                }
+
+                d
+            };
+
+            if only_information {
+                for (i, hz_string) in hz_string.into_iter().enumerate() {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+                    write!(&mut stdout, "{1:<0$}", d + 4, format!("CPU{}", i))?;
+
+                    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+                    write!(&mut stdout, "{1:>0$}", hz_string_len, hz_string)?;
+
+                    writeln!(&mut stdout, "")?;
+                }
+            } else {
+                let mut percentage_string: Vec<String> = Vec::with_capacity(cpu.siblings);
+
+                for &p in all_percentage[i..].iter().take(cpu.siblings) {
+                    percentage_string.push(format!("{:.2}%", p * 100f64));
+                }
+
+                let percentage_len = percentage_string.iter().map(|s| s.len()).max().unwrap();
+
+                let progress_max = terminal_width - d - 7 - percentage_len - 2 - hz_string_len - 1;
+
+                for (i, &p) in all_percentage[i..].iter().take(cpu.siblings).enumerate() {
+                    let percentage_string = &percentage_string[i];
+                    let hz_string = &hz_string[i];
+
+                    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+                    write!(&mut stdout, "CPU")?; // 3
+
+                    write!(&mut stdout, "{}", i)?;
+
+                    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+                    write!(&mut stdout, " [")?; // 2
+
+                    let f = progress_max as f64;
+
+                    let progress_used = (p * f).floor() as usize;
+
+                    stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+                    for _ in 0..progress_used {
+                        write!(&mut stdout, "|")?; // 1
+                    }
+
+                    for _ in 0..(progress_max - progress_used) {
+                        write!(&mut stdout, " ")?; // 1
+                    }
+
+                    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+                    write!(&mut stdout, "] ")?; // 2
+
+                    for _ in 0..(percentage_len - percentage_string.len()) {
+                        write!(&mut stdout, " ")?; // 1
+                    }
+
+                    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+                    stdout.write_all(percentage_string.as_bytes())?;
+
+                    write!(&mut stdout, " (")?; // 2
+
+                    for _ in 0..(hz_string_len - hz_string.len()) {
+                        write!(&mut stdout, " ")?; // 1
+                    }
+
+                    stdout.write_all(hz_string.as_bytes())?;
+
+                    write!(&mut stdout, ")")?; // 1
+
+                    writeln!(&mut stdout, "")?;
+                }
+
+                i += cpu.siblings;
+            }
+        }
+    } else {
+        let (average_percentage, average_percentage_string) = if only_information {
+            (0f64, "".to_string())
+        } else {
+            let average_percentage = CPUStat::get_average_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL)).unwrap();
+
+            let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
+
+            (average_percentage, average_percentage_string)
+        };
+
+        for cpu in cpus {
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+            stdout.write_all(cpu.model_name.as_bytes())?;
+
+            write!(&mut stdout, " ")?;
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+
+            write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings)?;
+
+            write!(&mut stdout, " ")?;
+
+            let cpu_mhz: f64 = cpu.cpus_mhz.iter().sum::<f64>() / cpu.cpus_mhz.len() as f64;
+
+            let cpu_hz = Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+
+            write!(&mut stdout, "{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1])?;
+
+            writeln!(&mut stdout, "")?;
+        }
+
+        if !only_information {
+            let progress_max = terminal_width - 7 - average_percentage_string.len();
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+            write!(&mut stdout, "CPU")?; // 3
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+            write!(&mut stdout, " [")?; // 2
+
+            let f = progress_max as f64;
+
+            let progress_used = (average_percentage * f).floor() as usize;
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+            for _ in 0..progress_used {
+                write!(&mut stdout, "|")?; // 1
+            }
+
+            for _ in 0..(progress_max - progress_used) {
+                write!(&mut stdout, " ")?; // 1
+            }
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+            write!(&mut stdout, "] ")?; // 2
+
+            stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+            stdout.write_all(average_percentage_string.as_bytes())?;
+
+            writeln!(&mut stdout, "")?;
+        }
+    }
 
     output.print(&stdout)?;
 
