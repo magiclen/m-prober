@@ -11,6 +11,7 @@ extern crate free;
 extern crate cpu_info;
 extern crate load_average;
 extern crate hostname;
+extern crate time;
 
 use std::time::{Duration, SystemTime};
 use std::env;
@@ -18,6 +19,7 @@ use std::path::Path;
 use std::io::{self, Write};
 use std::thread;
 use std::sync::{Arc, Mutex};
+use std::fmt::Write as WriteFmt;
 
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{Width, terminal_size};
@@ -60,6 +62,11 @@ pub enum Mode {
         information: bool,
     },
     HostName,
+    Uptime {
+        monitor: bool,
+        plain: bool,
+        second: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -87,6 +94,10 @@ impl Config {
             "cpu -s                      # Show load average and stats of CPU cores separately",
             "cpu -i                      # Only show CPU information",
             "hostname                    # Show the hostname",
+            "uptime                      # Show the uptime",
+            "uptime -m                   # Show the uptime and refresh every second",
+            "uptime -p                   # Show the uptime without colors",
+            "uptime -s                   # Show the uptime in seconds",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -157,6 +168,25 @@ impl Config {
                 .about("Shows the hostname")
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("uptime").aliases(&["u", "up", "utime", "ut"])
+                .about("Shows the uptime")
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Shows the uptime and refreshes every second")
+                )
+                .arg(Arg::with_name("PLAIN")
+                    .long("plain")
+                    .short("p")
+                    .help("No colors")
+                )
+                .arg(Arg::with_name("SECOND")
+                    .long("second")
+                    .short("s")
+                    .help("Shows the uptime in seconds")
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -210,6 +240,18 @@ impl Config {
             }
         } else if let Some(_) = matches.subcommand_matches("hostname") {
             Mode::HostName
+        } else if let Some(sub_matches) = matches.subcommand_matches("uptime") {
+            let monitor = sub_matches.is_present("MONITOR");
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            let second = sub_matches.is_present("SECOND");
+
+            Mode::Uptime {
+                monitor,
+                plain,
+                second,
+            }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
         };
@@ -320,6 +362,49 @@ pub fn run(config: Config) -> Result<i32, String> {
             let hostname = hostname::get_hostname().map_err(|err| err.to_string())?;
 
             println!("{}", hostname);
+        }
+        Mode::Uptime { monitor, plain, second } => {
+            if monitor {
+                let cont = Arc::new(Mutex::new(Some(0)));
+                let cont_2 = cont.clone();
+
+                thread::spawn(move || {
+                    loop {
+                        let key = Getch::new().getch().unwrap();
+
+                        match key {
+                            b'q' => {
+                                break;
+                            }
+                            _ => ()
+                        }
+                    }
+
+                    cont_2.lock().unwrap().take();
+                });
+
+                let monitor = Duration::from_secs(1);
+
+                let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+
+                'uptime_outer: loop {
+                    let s_time = SystemTime::now();
+
+                    draw_uptime(!plain, second, true).map_err(|err| err.to_string())?;
+
+                    loop {
+                        thread::sleep(sleep_interval);
+
+                        if cont.lock().unwrap().is_none() {
+                            break 'uptime_outer;
+                        } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                draw_uptime(!plain, second, false).map_err(|err| err.to_string())?;
+            }
         }
 //        _ => unreachable!()
     }
@@ -907,6 +992,110 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
             writeln!(&mut stdout, "")?;
         }
     }
+
+    output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), io::Error> {
+    let uptime = time::get_uptime().unwrap();
+
+    let uptime_sec = uptime.as_secs();
+
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
+    } else {
+        BufferWriter::stdout(ColorChoice::Never)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, "This computer has been up for ")?;
+
+    if second {
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        write!(&mut stdout, "{} second", uptime_sec)?;
+
+        if uptime_sec > 1 {
+            write!(&mut stdout, "s")?;
+        }
+    } else {
+        let days = uptime_sec / 86400;
+
+        let uptime_sec = uptime_sec % 86400;
+
+        let hours = uptime_sec / 3600;
+
+        let uptime_sec = uptime_sec % 3600;
+
+        let minutes = uptime_sec / 60;
+
+        let seconds = uptime_sec % 60;
+
+        let mut s = String::new();
+
+        if days > 0 {
+            s.write_fmt(format_args!("{} day", days)).unwrap();
+
+            if days > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
+        }
+
+        if hours > 0 || (days > 0) && (minutes > 0 || seconds > 0) {
+            s.write_fmt(format_args!("{} hour", hours)).unwrap();
+
+            if hours > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
+        }
+
+        if minutes > 0 || (hours > 0 && seconds > 0) {
+            s.write_fmt(format_args!("{} minute", minutes)).unwrap();
+
+            if minutes > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
+        }
+
+        if seconds > 0 {
+            s.write_fmt(format_args!("{} second", seconds)).unwrap();
+
+            if seconds > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
+        }
+
+        debug_assert!(s.len() >= 2);
+
+        if let Some(index) = s.as_str()[..(s.len() - 2)].rfind(", ") {
+            s.insert_str(index + 2, "and ");
+        }
+
+        let b = s.as_bytes();
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        stdout.write_all(&b[..(b.len() - 2)])?;
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, ".")?;
+
+    writeln!(&mut stdout, "")?;
 
     output.print(&stdout)?;
 
