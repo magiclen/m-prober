@@ -716,7 +716,9 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
 
         let mut i = 0;
 
-        for cpu in cpus {
+        let cpus_len_dec = cpus.len() - 1;
+
+        for (cpu_index, cpu) in cpus.into_iter().enumerate() {
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
             stdout.write_all(cpu.model_name.as_bytes())?;
 
@@ -822,6 +824,10 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
                 }
 
                 i += cpu.siblings;
+            }
+
+            if cpu_index != cpu_len_dec {
+                writeln!(&mut stdout, "")?;
             }
         }
     } else {
