@@ -111,6 +111,28 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("cpu").aliases(&["c", "cpus", "core", "cores", "load", "processor", "processors"])
+                .about("Shows CPU stats")
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Shows CPU stats and refreshes every N milliseconds")
+                    .takes_value(true)
+                    .value_name("MILLI_SECONDS")
+                )
+                .arg(Arg::with_name("PLAIN")
+                    .long("plain")
+                    .short("p")
+                    .help("No colors")
+                )
+                .arg(Arg::with_name("SEPARATE")
+                    .long("separate")
+                    .short("s")
+                    .help("Separates each CPU")
+                    .takes_value(true)
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -139,6 +161,25 @@ impl Config {
                 monitor,
                 plain,
                 unit,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("cpu") {
+            let monitor = match sub_matches.value_of("MONITOR") {
+                Some(monitor) => {
+                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+
+                    Some(Duration::from_secs_f64(monitor / 1000f64))
+                }
+                None => None
+            };
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            let separate = sub_matches.is_present("SEPARATE");
+
+            Mode::CPU {
+                monitor,
+                plain,
+                separate,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));

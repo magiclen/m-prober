@@ -8,7 +8,9 @@ use std::thread::sleep;
 use scanner_rust::{Scanner, ScannerError};
 
 const CPUINFO_PATH: &'static str = "/proc/cpuinfo";
-const ITEMS: [&'static str; 4] = ["model name", "physical id", "siblings", "cpu cores"];
+const ITEMS: [&'static str; 5] = ["model name", "cpu MHz", "physical id", "siblings", "cpu cores"];
+const PHYSICAL_ID_INDEX: usize = 2;
+const CPU_MHZ_INDEX: usize = 1;
 
 const STAT_PATH: &'static str = "/proc/stat";
 
@@ -16,6 +18,7 @@ const STAT_PATH: &'static str = "/proc/stat";
 pub struct CPU {
     pub physical_id: usize,
     pub model_name: String,
+    pub cpus_mhz: Vec<f64>,
     pub siblings: usize,
     pub cpu_cores: usize,
 }
@@ -27,10 +30,12 @@ impl CPU {
         let mut cpus = Vec::with_capacity(1);
         let mut physical_ids: BTreeSet<usize> = BTreeSet::new();
 
-        let items_len_dec = ITEMS.len() - 1;
+        let items_len_dec_dec = ITEMS.len() - 2;
+
+        let mut cpus_mhz = Vec::with_capacity(1);
 
         'outer: loop {
-            let mut item_values: Vec<String> = Vec::with_capacity(items_len_dec);
+            let mut item_values: Vec<String> = Vec::with_capacity(items_len_dec_dec);
 
             let mut physical_id = 0;
 
@@ -45,16 +50,24 @@ impl CPU {
                             if line.as_str().starts_with(item) {
                                 match line[item_len..].find(":") {
                                     Some(colon_index) => {
-                                        let item = line[(item_len + colon_index + 1)..].trim().to_string();
+                                        let value = line[(item_len + colon_index + 1)..].trim().to_string();
 
-                                        if i == 1 {
-                                            physical_id = item.parse().map_err(|_| ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `{}` has incorrect value.", item))))?;
+                                        match i {
+                                            CPU_MHZ_INDEX => {
+                                                let cpu_mhz: f64 = value.parse().map_err(|_| ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `{}` has incorrect value.", item))))?;
 
-                                            if physical_ids.contains(&physical_id) {
-                                                break 'cpu;
+                                                cpus_mhz.push(cpu_mhz);
                                             }
-                                        } else {
-                                            item_values.push(item);
+                                            PHYSICAL_ID_INDEX => {
+                                                physical_id = value.parse().map_err(|_| ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `{}` has incorrect value.", item))))?;
+
+                                                if physical_ids.contains(&physical_id) {
+                                                    break 'cpu;
+                                                }
+                                            }
+                                            _ => {
+                                                item_values.push(value);
+                                            }
                                         }
                                     }
                                     None => {
@@ -76,20 +89,26 @@ impl CPU {
                 }
             }
 
-            if item_values.len() == items_len_dec {
+            if item_values.len() == items_len_dec_dec {
                 let cpu_cores: usize = item_values.pop().unwrap().parse().map_err(|_| ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu cores` has incorrect value.".to_string())))?;
                 let siblings: usize = item_values.pop().unwrap().parse().map_err(|_| ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `siblings` has incorrect value.".to_string())))?;
-                let model_name = item_values.pop().unwrap();
 
-                let cpu = CPU {
-                    physical_id,
-                    model_name,
-                    siblings,
-                    cpu_cores,
-                };
+                if siblings == cpus_mhz.len() {
+                    let model_name = item_values.pop().unwrap();
 
-                cpus.push(cpu);
-                physical_ids.insert(physical_id);
+                    let cpu = CPU {
+                        physical_id,
+                        model_name,
+                        cpus_mhz,
+                        siblings,
+                        cpu_cores,
+                    };
+
+                    cpus.push(cpu);
+                    physical_ids.insert(physical_id);
+
+                    cpus_mhz = Vec::with_capacity(1);
+                }
             }
 
             loop {
@@ -291,4 +310,9 @@ impl CPUStat {
 
         Ok(result)
     }
+}
+
+#[test]
+fn test() {
+    println!("{:?}", CPU::get_cpus());
 }
