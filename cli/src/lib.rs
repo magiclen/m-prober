@@ -826,7 +826,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
                 i += cpu.siblings;
             }
 
-            if cpu_index != cpu_len_dec {
+            if cpu_index != cpus_len_dec {
                 writeln!(&mut stdout, "")?;
             }
         }
