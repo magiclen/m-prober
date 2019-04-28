@@ -10,6 +10,7 @@ extern crate getch;
 extern crate free;
 extern crate cpu_info;
 extern crate load_average;
+extern crate hostname;
 
 use std::time::{Duration, SystemTime};
 use std::env;
@@ -58,6 +59,7 @@ pub enum Mode {
         separate: bool,
         information: bool,
     },
+    HostName,
 }
 
 #[derive(Debug)]
@@ -75,15 +77,16 @@ impl Config {
         let arg0 = Path::new(&arg0).file_stem().unwrap().to_str().unwrap();
 
         let examples = vec![
-            "memory                         # Show current memory stats",
-            "memory -m 1000                 # Show memory stats and refresh every 1000 milliseconds",
-            "memory -p                      # Show memory stats without colors",
-            "memory -u kb                   # Show memory stats in KB",
-            "cpu                            # Show load average and CPU stats on average",
-            "cpu -m 1000                    # Show load average and CPU stats on average and refresh every 1000 milliseconds",
-            "cpu -p                         # Show load average and CPU stats on average without colors",
-            "cpu -s                         # Show load average and stats of CPU cores separately",
-            "cpu -i                         # Only show CPU information",
+            "memory                      # Show current memory stats",
+            "memory -m 1000              # Show memory stats and refresh every 1000 milliseconds",
+            "memory -p                   # Show memory stats without colors",
+            "memory -u kb                # Show memory stats in KB",
+            "cpu                         # Show load average and CPU stats on average",
+            "cpu -m 1000                 # Show load average and CPU stats on average and refresh every 1000 milliseconds",
+            "cpu -p                      # Show load average and CPU stats on average without colors",
+            "cpu -s                      # Show load average and stats of CPU cores separately",
+            "cpu -i                      # Only show CPU information",
+            "hostname                    # Show the hostname",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -150,6 +153,10 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("hostname").aliases(&["n", "h", "host", "name", "servername", "server"])
+                .about("Shows the hostname")
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -201,6 +208,8 @@ impl Config {
                 separate,
                 information,
             }
+        } else if let Some(_) = matches.subcommand_matches("hostname") {
+            Mode::HostName
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
         };
@@ -306,6 +315,11 @@ pub fn run(config: Config) -> Result<i32, String> {
                     draw_cpu_info(!plain, separate, information, false).map_err(|err| err.to_string())?;
                 }
             }
+        }
+        Mode::HostName => {
+            let hostname = hostname::get_hostname().map_err(|err| err.to_string())?;
+
+            println!("{}", hostname);
         }
 //        _ => unreachable!()
     }
