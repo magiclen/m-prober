@@ -12,6 +12,9 @@ install:
 	sudo chown root. /usr/local/bin/magiclen-prober
 	sudo chmod 0755 /usr/local/bin/magiclen-prober
 
+uninstall:
+	sudo rm /usr/local/bin/magiclen-prober
+
 test:
 	cargo test --verbose
 
