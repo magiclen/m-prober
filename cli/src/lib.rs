@@ -86,7 +86,14 @@ impl Config {
             "cpu -i                         # Only show CPU information",
         ];
 
+        let terminal_width = if let Some((Width(width), _)) = terminal_size() {
+            (width as usize).max(MIN_TERMINAL_WIDTH)
+        } else {
+            DEFAULT_TERMINAL_WIDTH
+        };
+
         let matches = App::new(APP_NAME)
+            .set_term_width(terminal_width)
             .version(CARGO_PKG_VERSION)
             .author(CARGO_PKG_AUTHORS)
             .about(format!("MagicLen Prober is a free and simple probe utility for Linux.\n\nEXAMPLES:\n{}", examples.iter()

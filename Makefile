@@ -1,4 +1,4 @@
-EXE = ./target/release/magiclen-prober
+EXE = ./target/x86_64-unknown-linux-musl/release/magiclen-prober
 
 all: $(EXE)
 
