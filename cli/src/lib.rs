@@ -48,6 +48,11 @@ pub enum Mode {
         plain: bool,
         unit: Option<ByteUnit>,
     },
+    CPU {
+        monitor: Option<Duration>,
+        plain: bool,
+        separate: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -69,6 +74,10 @@ impl Config {
             "memory -m 1000                 # Show memory stats and refresh every 1000 milliseconds",
             "memory -p                      # Show memory stats without colors",
             "memory -u kb                   # Show memory stats in KB",
+            "cpu                            # Show load average and CPU stats on average",
+            "cpu -m 1000                    # Show load average and CPU stats on average and refresh every 1000 milliseconds",
+            "cpu -p                         # Show load average and CPU stats on average without colors",
+            "cpu -s                         # Show load average and stats of CPUs separately",
         ];
 
         let matches = App::new(APP_NAME)
@@ -197,6 +206,10 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
+        Mode::CPU { monitor, plain, separate } => {
+            // TODO
+        }
+        _ => unreachable!()
     }
 
     Ok(0)
