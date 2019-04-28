@@ -31,6 +31,7 @@ use getch::Getch;
 use free::Free;
 use cpu_info::{CPU, CPUStat};
 use load_average::LoadAverage;
+use time::RTCDateTime;
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -67,6 +68,10 @@ pub enum Mode {
         plain: bool,
         second: bool,
     },
+    Time {
+        monitor: bool,
+        plain: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -98,6 +103,9 @@ impl Config {
             "uptime -m                   # Show the uptime and refresh every second",
             "uptime -p                   # Show the uptime without colors",
             "uptime -s                   # Show the uptime in seconds",
+            "time                        # Show the RTC (UTC) date and time",
+            "time -m                     # Show the RTC (UTC) date and time and refresh every second",
+            "time -p                     # Show the RTC (UTC) date and time without colors",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -187,6 +195,20 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("time").aliases(&["t", "systime", "stime", "st", "utc", "utctime", "rtc", "rtctime", "date"])
+                .about("Shows the RTC (UTC) date and time")
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Shows the RTC (UTC) date and time, and refreshes every second")
+                )
+                .arg(Arg::with_name("PLAIN")
+                    .long("plain")
+                    .short("p")
+                    .help("No colors")
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -251,6 +273,15 @@ impl Config {
                 monitor,
                 plain,
                 second,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("time") {
+            let monitor = sub_matches.is_present("MONITOR");
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            Mode::Time {
+                monitor,
+                plain,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -404,6 +435,49 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             } else {
                 draw_uptime(!plain, second, false).map_err(|err| err.to_string())?;
+            }
+        }
+        Mode::Time { monitor, plain } => {
+            if monitor {
+                let cont = Arc::new(Mutex::new(Some(0)));
+                let cont_2 = cont.clone();
+
+                thread::spawn(move || {
+                    loop {
+                        let key = Getch::new().getch().unwrap();
+
+                        match key {
+                            b'q' => {
+                                break;
+                            }
+                            _ => ()
+                        }
+                    }
+
+                    cont_2.lock().unwrap().take();
+                });
+
+                let monitor = Duration::from_secs(1);
+
+                let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+
+                'time_outer: loop {
+                    let s_time = SystemTime::now();
+
+                    draw_time(!plain, true).map_err(|err| err.to_string())?;
+
+                    loop {
+                        thread::sleep(sleep_interval);
+
+                        if cont.lock().unwrap().is_none() {
+                            break 'time_outer;
+                        } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                draw_time(!plain, false).map_err(|err| err.to_string())?;
             }
         }
 //        _ => unreachable!()
@@ -1094,6 +1168,46 @@ fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), io::Er
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
     write!(&mut stdout, ".")?;
+
+    writeln!(&mut stdout, "")?;
+
+    output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_time(colorful: bool, monitor: bool) -> Result<(), io::Error> {
+    let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time().unwrap();
+
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
+    } else {
+        BufferWriter::stdout(ColorChoice::Never)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "RTC Date")?;
+
+    write!(&mut stdout, " ")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+    stdout.write_all(rtc_date_time.rtc_date.as_bytes())?;
+
+    writeln!(&mut stdout, "")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "RTC Time")?;
+
+    write!(&mut stdout, " ")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+    stdout.write_all(rtc_date_time.rtc_time.as_bytes())?;
 
     writeln!(&mut stdout, "")?;
 
