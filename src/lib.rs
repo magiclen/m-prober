@@ -16,13 +16,13 @@ mod time;
 mod kernel;
 mod network;
 
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::env;
 use std::path::Path;
 use std::io::Write;
 use std::thread;
-use std::sync::{Arc, Mutex};
 use std::fmt::Write as WriteFmt;
+use std::process;
 
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{Width, terminal_size};
@@ -40,9 +40,7 @@ use network::NetworkWithSpeed;
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
-const MIN_SLEEP_INTERVAL: u64 = 200;
-const MAX_SLEEP_INTERVAL: u64 = 5000;
-const SLEEP_CHECKPOINT_COUNT: u128 = 5;
+const DEFAULT_INTERVAL: u64 = 100;
 
 const LABEL_COLOR: Color = Color::Rgb(0, 177, 177);
 const WHITE_COLOR: Color = Color::Rgb(219, 219, 219);
@@ -390,9 +388,6 @@ pub fn run(config: Config) -> Result<i32, String> {
         }
         Mode::Uptime { monitor, plain, second } => {
             if monitor {
-                let cont = Arc::new(Mutex::new(Some(0)));
-                let cont_2 = cont.clone();
-
                 thread::spawn(move || {
                     loop {
                         let key = Getch::new().getch().unwrap();
@@ -405,27 +400,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                         }
                     }
 
-                    cont_2.lock().unwrap().take();
+                    process::exit(0);
                 });
 
-                let monitor = Duration::from_secs(1);
+                let sleep_interval = Duration::from_secs(1);
 
-                let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
-
-                'uptime_outer: loop {
-                    let s_time = SystemTime::now();
-
+                loop {
                     draw_uptime(!plain, second, true).map_err(|err| err.to_string())?;
 
-                    loop {
-                        if cont.lock().unwrap().is_none() {
-                            break 'uptime_outer;
-                        } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                            break;
-                        }
-
-                        thread::sleep(sleep_interval);
-                    }
+                    thread::sleep(sleep_interval);
                 }
             } else {
                 draw_uptime(!plain, second, false).map_err(|err| err.to_string())?;
@@ -433,9 +416,6 @@ pub fn run(config: Config) -> Result<i32, String> {
         }
         Mode::Time { monitor, plain } => {
             if monitor {
-                let cont = Arc::new(Mutex::new(Some(0)));
-                let cont_2 = cont.clone();
-
                 thread::spawn(move || {
                     loop {
                         let key = Getch::new().getch().unwrap();
@@ -448,27 +428,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                         }
                     }
 
-                    cont_2.lock().unwrap().take();
+                    process::exit(0);
                 });
 
-                let monitor = Duration::from_secs(1);
+                let sleep_interval = Duration::from_secs(1);
 
-                let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
-
-                'time_outer: loop {
-                    let s_time = SystemTime::now();
-
+                loop {
                     draw_time(!plain, true).map_err(|err| err.to_string())?;
 
-                    loop {
-                        if cont.lock().unwrap().is_none() {
-                            break 'time_outer;
-                        } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                            break;
-                        }
-
-                        thread::sleep(sleep_interval);
-                    }
+                    thread::sleep(sleep_interval);
                 }
             } else {
                 draw_time(!plain, false).map_err(|err| err.to_string())?;
@@ -477,9 +445,6 @@ pub fn run(config: Config) -> Result<i32, String> {
         Mode::CPU { monitor, plain, separate, information } => {
             match monitor {
                 Some(monitor) => {
-                    let cont = Arc::new(Mutex::new(Some(0)));
-                    let cont_2 = cont.clone();
-
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
@@ -492,25 +457,19 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        cont_2.lock().unwrap().take();
+                        process::exit(0);
                     });
 
-                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+                    draw_cpu_info(!plain, separate, information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
-                    'cpu_outer: loop {
-                        let s_time = SystemTime::now();
+                    let sleep_interval = monitor;
 
-                        draw_cpu_info(!plain, separate, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
-
-                        loop {
-                            if cont.lock().unwrap().is_none() {
-                                break 'cpu_outer;
-                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                                break;
-                            }
-
+                    loop {
+                        if information {
                             thread::sleep(sleep_interval);
                         }
+
+                        draw_cpu_info(!plain, separate, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
@@ -521,9 +480,6 @@ pub fn run(config: Config) -> Result<i32, String> {
         Mode::Memory { monitor, plain, unit } => {
             match monitor {
                 Some(monitor) => {
-                    let cont = Arc::new(Mutex::new(Some(0)));
-                    let cont_2 = cont.clone();
-
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
@@ -536,25 +492,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        cont_2.lock().unwrap().take();
+                        process::exit(0);
                     });
 
-                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+                    let sleep_interval = monitor;
 
-                    'memory_outer: loop {
-                        let s_time = SystemTime::now();
-
+                    loop {
                         draw_memory(!plain, unit, true).map_err(|err| err.to_string())?;
 
-                        loop {
-                            if cont.lock().unwrap().is_none() {
-                                break 'memory_outer;
-                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                                break;
-                            }
-
-                            thread::sleep(sleep_interval);
-                        }
+                        thread::sleep(sleep_interval);
                     }
                 }
                 None => {
@@ -565,9 +511,6 @@ pub fn run(config: Config) -> Result<i32, String> {
         Mode::Network { monitor, plain, unit } => {
             match monitor {
                 Some(monitor) => {
-                    let cont = Arc::new(Mutex::new(Some(0)));
-                    let cont_2 = cont.clone();
-
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
@@ -580,25 +523,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        cont_2.lock().unwrap().take();
+                        process::exit(0);
                     });
 
-                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+                    draw_network(!plain, unit, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
-                    'network_outer: loop {
-                        let s_time = SystemTime::now();
+                    let sleep_interval = monitor;
 
+                    loop {
                         draw_network(!plain, unit, Some(sleep_interval)).map_err(|err| err.to_string())?;
-
-                        loop {
-                            if cont.lock().unwrap().is_none() {
-                                break 'network_outer;
-                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                                break;
-                            }
-
-                            thread::sleep(sleep_interval);
-                        }
                     }
                 }
                 None => {
@@ -952,7 +885,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         } else {
             CPUStat::get_all_percentage(match monitor {
                 Some(monitor) => monitor,
-                None => Duration::from_millis(MIN_SLEEP_INTERVAL)
+                None => Duration::from_millis(DEFAULT_INTERVAL)
             })?
         };
 
@@ -1017,9 +950,12 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
 
                 let progress_max = terminal_width - d - 7 - percentage_len - 2 - hz_string_len - 1;
 
-                for (i, &p) in all_percentage[i..].iter().take(cpu.siblings).enumerate() {
-                    let percentage_string = &percentage_string[i];
-                    let hz_string = &hz_string[i];
+                let mut percentage_string_iter = percentage_string.into_iter();
+                let mut hz_string_iter = hz_string.into_iter();
+
+                for p in all_percentage[i..].into_iter().take(cpu.siblings) {
+                    let percentage_string = percentage_string_iter.next().unwrap();
+                    let hz_string = hz_string_iter.next().unwrap();
 
                     stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
                     write!(&mut stdout, "CPU")?; // 3
@@ -1078,7 +1014,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         } else {
             let average_percentage = CPUStat::get_average_percentage(match monitor {
                 Some(monitor) => monitor,
-                None => Duration::from_millis(MIN_SLEEP_INTERVAL)
+                None => Duration::from_millis(DEFAULT_INTERVAL)
             })?;
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
@@ -1350,7 +1286,7 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
 fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let networks_with_speed = NetworkWithSpeed::get_networks_with_speed(match monitor {
         Some(monitor) => monitor,
-        None => Duration::from_millis(MIN_SLEEP_INTERVAL)
+        None => Duration::from_millis(DEFAULT_INTERVAL)
     })?;
 
     let networks_with_speed_len = networks_with_speed.len();
@@ -1367,19 +1303,132 @@ fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration
         stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
-    let mut upload: Vec<String> = Vec::with_capacity(networks_with_speed_len);
-    let mut upload_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+    debug_assert!(networks_with_speed_len > 0);
 
-    let mut download: Vec<String> = Vec::with_capacity(networks_with_speed_len);
-    let mut download_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+    let mut uploads: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+    let mut uploads_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+
+    let mut downloads: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+    let mut downloads_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
 
     for network_with_speed in networks_with_speed.iter() {
-        let upload = network_with_speed.speed.transmit;
-        let upload_total = network_with_speed.network.receive_bytes;
+        let upload = Byte::from_unit(network_with_speed.speed.transmit, ByteUnit::B).unwrap();
+        let upload_total = Byte::from_bytes(network_with_speed.network.transmit_bytes as u128);
 
-        let download = network_with_speed.speed.receive;
-        let download_total = network_with_speed.speed.receive;
+        let download = Byte::from_unit(network_with_speed.speed.receive, ByteUnit::B).unwrap();
+        let download_total = Byte::from_bytes(network_with_speed.network.receive_bytes as u128);
+
+        let (mut upload, upload_total, mut download, download_total) = match unit {
+            Some(unit) => {
+                (
+                    upload.get_adjusted_unit(unit).to_string(),
+                    upload_total.get_adjusted_unit(unit).to_string(),
+                    download.get_adjusted_unit(unit).to_string(),
+                    download_total.get_adjusted_unit(unit).to_string(),
+                )
+            }
+            None => {
+                (
+                    upload.get_appropriate_unit(false).to_string(),
+                    upload_total.get_appropriate_unit(false).to_string(),
+                    download.get_appropriate_unit(false).to_string(),
+                    download_total.get_appropriate_unit(false).to_string(),
+                )
+            }
+        };
+
+        upload.push_str("/s");
+        download.push_str("/s");
+
+        uploads.push(upload);
+        uploads_total.push(upload_total);
+        downloads.push(download);
+        downloads_total.push(download_total);
     }
+
+    let interface_len = networks_with_speed.iter().map(|network_with_sppeed| network_with_sppeed.network.interface.len()).max().unwrap();
+    let interface_len_inc = interface_len + 1;
+
+    let upload_len = uploads.iter().map(|upload| upload.len()).max().unwrap().max(12);
+    let upload_total_len = uploads_total.iter().map(|upload_total| upload_total.len()).max().unwrap().max(13);
+    let download_len = downloads.iter().map(|download| download.len()).max().unwrap().max(14);
+    let download_total_len = downloads_total.iter().map(|download_total| download_total.len()).max().unwrap().max(15);
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "{1:>0$}", interface_len_inc + upload_len, "Upload Speed")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " | ")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "{1:>0$}", upload_total_len, "Uploaded Data")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " | ")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "{1:>0$}", download_len, "Download Speed")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " | ")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "{1:>0$}", download_total_len, "Downloaded Data")?;
+
+    writeln!(&mut stdout, "")?;
+
+    let mut uploads_iter = uploads.into_iter();
+    let mut uploads_total_iter = uploads_total.into_iter();
+    let mut downloads_iter = downloads.into_iter();
+    let mut downloads_total_iter = downloads_total.into_iter();
+
+    for network_with_speed in networks_with_speed.into_iter() {
+        let upload = uploads_iter.next().unwrap();
+        let upload_total = uploads_total_iter.next().unwrap();
+
+        let download = downloads_iter.next().unwrap();
+        let download_total = downloads_total_iter.next().unwrap();
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+        write!(&mut stdout, "{1:<0$}", interface_len_inc, network_with_speed.network.interface)?;
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+
+        for _ in 0..(upload_len - upload.len()) {
+            write!(&mut stdout, " ")?;
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        stdout.write_all(upload.as_bytes())?;
+
+        write!(&mut stdout, "   ")?;
+
+        for _ in 0..(upload_total_len - upload_total.len()) {
+            write!(&mut stdout, " ")?;
+        }
+
+        stdout.write_all(upload_total.as_bytes())?;
+
+        write!(&mut stdout, "   ")?;
+
+        for _ in 0..(download_len - download.len()) {
+            write!(&mut stdout, " ")?;
+        }
+
+        stdout.write_all(download.as_bytes())?;
+
+        write!(&mut stdout, "   ")?;
+
+        for _ in 0..(download_total_len - download_total.len()) {
+            write!(&mut stdout, " ")?;
+        }
+
+        stdout.write_all(download_total.as_bytes())?;
+
+        writeln!(&mut stdout, "")?;
+    }
+
+    output.print(&stdout)?;
 
     Ok(())
 }
