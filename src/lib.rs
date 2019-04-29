@@ -76,6 +76,11 @@ pub enum Mode {
         plain: bool,
         unit: Option<ByteUnit>,
     },
+    Network {
+        monitor: Option<Duration>,
+        plain: bool,
+        unit: Option<ByteUnit>,
+    },
 }
 
 #[derive(Debug)]
@@ -102,15 +107,19 @@ impl Config {
             "time                        # Show the RTC (UTC) date and time",
             "time -m                     # Show the RTC (UTC) date and time and refresh every second",
             "time -p                     # Show the RTC (UTC) date and time without colors",
-            "cpu                         # Show load average and CPU stats on average",
+            "cpu                         # Show load average and current CPU stats on average",
             "cpu -m 1000                 # Show load average and CPU stats on average and refresh every 1000 milliseconds",
-            "cpu -p                      # Show load average and CPU stats on average without colors",
-            "cpu -s                      # Show load average and stats of CPU cores separately",
+            "cpu -p                      # Show load average and current CPU stats on average without colors",
+            "cpu -s                      # Show load average and current stats of CPU cores separately",
             "cpu -i                      # Only show CPU information",
             "memory                      # Show current memory stats",
             "memory -m 1000              # Show memory stats and refresh every 1000 milliseconds",
-            "memory -p                   # Show memory stats without colors",
-            "memory -u kb                # Show memory stats in KB",
+            "memory -p                   # Show current memory stats without colors",
+            "memory -u kb                # Show current memory stats in KB",
+            "network                     # Show current network stats",
+            "network -m 1000             # Show network stats and refresh every 1000 milliseconds",
+            "network -p                  # Show current network stats without colors",
+            "network -u kb               # Show current network stats in KB",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -129,7 +138,7 @@ impl Config {
                 .concat()
             ).as_str()
             )
-            .subcommand(SubCommand::with_name("hostname").aliases(&["n", "h", "host", "name", "servername", "server"])
+            .subcommand(SubCommand::with_name("hostname").aliases(&["h", "host", "name", "servername", "server"])
                 .about("Shows the hostname")
                 .display_order(0)
                 .after_help("Enjoy it! https://magiclen.org")
@@ -224,6 +233,29 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("network").aliases(&["n", "net", "networks", "bandwidth", "traffic"])
+                .about("Shows network stats")
+                .display_order(6)
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Shows network stats and refreshes every N milliseconds")
+                    .takes_value(true)
+                    .value_name("MILLI_SECONDS")
+                )
+                .arg(Arg::with_name("PLAIN")
+                    .long("plain")
+                    .short("p")
+                    .help("No colors")
+                )
+                .arg(Arg::with_name("UNIT")
+                    .long("unit")
+                    .short("u")
+                    .help("Forces to use a fixed unit")
+                    .takes_value(true)
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -296,6 +328,32 @@ impl Config {
             };
 
             Mode::Memory {
+                monitor,
+                plain,
+                unit,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("network") {
+            let monitor = match sub_matches.value_of("MONITOR") {
+                Some(monitor) => {
+                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+
+                    Some(Duration::from_secs_f64(monitor / 1000f64))
+                }
+                None => None
+            };
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            let unit = match sub_matches.value_of("UNIT") {
+                Some(unit) => {
+                    let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
+
+                    Some(unit)
+                }
+                None => None
+            };
+
+            Mode::Network {
                 monitor,
                 plain,
                 unit,
@@ -484,7 +542,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                     'memory_outer: loop {
                         let s_time = SystemTime::now();
 
-                        draw_free(!plain, unit, true).map_err(|err| err.to_string())?;
+                        draw_memory(!plain, unit, true).map_err(|err| err.to_string())?;
 
                         loop {
                             thread::sleep(sleep_interval);
@@ -498,7 +556,51 @@ pub fn run(config: Config) -> Result<i32, String> {
                     }
                 }
                 None => {
-                    draw_free(!plain, unit, false).map_err(|err| err.to_string())?;
+                    draw_memory(!plain, unit, false).map_err(|err| err.to_string())?;
+                }
+            }
+        }
+        Mode::Network { monitor, plain, unit } => {
+            match monitor {
+                Some(monitor) => {
+                    let cont = Arc::new(Mutex::new(Some(0)));
+                    let cont_2 = cont.clone();
+
+                    thread::spawn(move || {
+                        loop {
+                            let key = Getch::new().getch().unwrap();
+
+                            match key {
+                                b'q' => {
+                                    break;
+                                }
+                                _ => ()
+                            }
+                        }
+
+                        cont_2.lock().unwrap().take();
+                    });
+
+                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+
+                    'network_outer: loop {
+                        let s_time = SystemTime::now();
+
+                        draw_memory(!plain, unit, true).map_err(|err| err.to_string())?;
+
+                        loop {
+                            thread::sleep(sleep_interval);
+
+                            if cont.lock().unwrap().is_none() {
+                                break 'network_outer;
+                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    draw_memory(!plain, unit, false).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -507,8 +609,10 @@ pub fn run(config: Config) -> Result<i32, String> {
     Ok(0)
 }
 
-fn draw_free(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError> {
-    let free = Free::get_free()?;
+fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), ScannerError> {
+    let uptime = time::get_uptime()?;
+
+    let uptime_sec = uptime.as_secs();
 
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
@@ -522,186 +626,125 @@ fn draw_free(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<()
         stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
-    let (mem_used, mem_total, swap_used, swap_total) = {
-        let (mem_used, mem_total, swap_used, swap_total) = (
-            Byte::from_bytes(free.mem.used as u128),
-            Byte::from_bytes(free.mem.total as u128),
-            Byte::from_bytes(free.swap.used as u128),
-            Byte::from_bytes(free.swap.total as u128),
-        );
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, "This computer has been up for ")?;
 
-        match unit {
-            Some(unit) => {
-                (
-                    mem_used.get_adjusted_unit(unit).to_string(),
-                    mem_total.get_adjusted_unit(unit).to_string(),
-                    swap_used.get_adjusted_unit(unit).to_string(),
-                    swap_total.get_adjusted_unit(unit).to_string(),
-                )
-            }
-            None => {
-                (
-                    mem_used.get_appropriate_unit(true).to_string(),
-                    mem_total.get_appropriate_unit(true).to_string(),
-                    swap_used.get_appropriate_unit(true).to_string(),
-                    swap_total.get_appropriate_unit(true).to_string(),
-                )
-            }
+    if second {
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        write!(&mut stdout, "{} second", uptime_sec)?;
+
+        if uptime_sec > 1 {
+            write!(&mut stdout, "s")?;
         }
-    };
-
-    let used_len = mem_used.len().max(swap_used.len());
-    let total_len = mem_total.len().max(swap_total.len());
-
-    let mem_percentage = format!("{:.2}%", free.mem.used as f64 * 100f64 / free.mem.total as f64);
-    let swap_percentage = format!("{:.2}%", free.swap.used as f64 * 100f64 / free.swap.total as f64);
-
-    let percentage_len = mem_percentage.len().max(swap_percentage.len());
-
-    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
-        (width as usize).max(MIN_TERMINAL_WIDTH)
     } else {
-        DEFAULT_TERMINAL_WIDTH
-    };
+        let days = uptime_sec / 86400;
 
-    // Memory
+        let uptime_sec = uptime_sec % 86400;
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-    write!(&mut stdout, "Memory")?; // 6
+        let hours = uptime_sec / 3600;
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, " [")?; // 2
+        let uptime_sec = uptime_sec % 3600;
 
-    let progress_max = terminal_width - 10 - used_len - 3 - total_len - 2 - percentage_len - 1;
+        let minutes = uptime_sec / 60;
 
-    let f = progress_max as f64 / free.mem.total as f64;
+        let seconds = uptime_sec % 60;
 
-    let progress_used = (free.mem.used as f64 * f).floor() as usize;
+        let mut s = String::new();
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
-    for _ in 0..progress_used {
-        write!(&mut stdout, "|")?; // 1
-    }
+        if days > 0 {
+            s.write_fmt(format_args!("{} day", days)).unwrap();
 
-    let progress_cache = (free.mem.cache as f64 * f).floor() as usize;
+            if days > 1 {
+                s.push('s');
+            }
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(YELLOW_COLOR)))?;
-    for _ in 0..progress_cache {
-        if colorful {
-            write!(&mut stdout, "|")?; // 1
-        } else {
-            write!(&mut stdout, "$")?; // 1
+            s.push_str(", ");
         }
-    }
 
-    let progress_buffers = (free.mem.buffers as f64 * f).floor() as usize;
+        if hours > 0 || (days > 0) && (minutes > 0 || seconds > 0) {
+            s.write_fmt(format_args!("{} hour", hours)).unwrap();
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(SKY_BLUE_COLOR)))?;
-    for _ in 0..progress_buffers {
-        if colorful {
-            write!(&mut stdout, "|")?; // 1
-        } else {
-            write!(&mut stdout, "#")?; // 1
+            if hours > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
         }
-    }
 
-    for _ in 0..(progress_max - progress_used - progress_cache - progress_buffers) {
-        write!(&mut stdout, " ")?; // 1
+        if minutes > 0 || (hours > 0 && seconds > 0) {
+            s.write_fmt(format_args!("{} minute", minutes)).unwrap();
+
+            if minutes > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
+        }
+
+        if seconds > 0 {
+            s.write_fmt(format_args!("{} second", seconds)).unwrap();
+
+            if seconds > 1 {
+                s.push('s');
+            }
+
+            s.push_str(", ");
+        }
+
+        debug_assert!(s.len() >= 2);
+
+        if let Some(index) = s.as_str()[..(s.len() - 2)].rfind(", ") {
+            s.insert_str(index + 2, "and ");
+        }
+
+        let b = s.as_bytes();
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+        stdout.write_all(&b[..(b.len() - 2)])?;
     }
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, "] ")?; // 2
-
-    for _ in 0..(used_len - mem_used.len()) {
-        write!(&mut stdout, " ")?; // 1
-    }
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-    stdout.write_all(mem_used.as_bytes())?;
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, " / ")?; // 3
-
-    for _ in 0..(total_len - mem_total.len()) {
-        write!(&mut stdout, " ")?; // 1
-    }
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-    stdout.write_all(mem_total.as_bytes())?;
-
-    write!(&mut stdout, " (")?; // 2
-
-    for _ in 0..(percentage_len - mem_percentage.len()) {
-        write!(&mut stdout, " ")?; // 1
-    }
-
-    stdout.write_all(mem_percentage.as_bytes())?;
-
-    write!(&mut stdout, ")")?; // 1
+    write!(&mut stdout, ".")?;
 
     writeln!(&mut stdout, "")?;
 
-    // Swap
+    output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
+    let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time()?;
+
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
+    } else {
+        BufferWriter::stdout(ColorChoice::Never)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
+    }
 
     stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-    write!(&mut stdout, "Swap  ")?; // 6
+    write!(&mut stdout, "RTC Date")?;
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, " [")?; // 2
-
-    let f = progress_max as f64 / free.swap.total as f64;
-
-    let progress_used = (free.swap.used as f64 * f).floor() as usize;
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
-    for _ in 0..progress_used {
-        write!(&mut stdout, "|")?; // 1
-    }
-
-    let progress_cache = (free.swap.cache as f64 * f).floor() as usize;
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(YELLOW_COLOR)))?;
-    for _ in 0..progress_cache {
-        if colorful {
-            write!(&mut stdout, "|")?; // 1
-        } else {
-            write!(&mut stdout, "$")?; // 1
-        }
-    }
-
-    for _ in 0..(progress_max - progress_used - progress_cache) {
-        write!(&mut stdout, " ")?; // 1
-    }
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, "] ")?; // 2
-
-    for _ in 0..(used_len - swap_used.len()) {
-        write!(&mut stdout, " ")?; // 1
-    }
+    write!(&mut stdout, " ")?;
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-    stdout.write_all(swap_used.as_bytes())?;
+    stdout.write_all(rtc_date_time.rtc_date.as_bytes())?;
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, " / ")?; // 3
+    writeln!(&mut stdout, "")?;
 
-    for _ in 0..(total_len - swap_total.len()) {
-        write!(&mut stdout, " ")?; // 1
-    }
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "RTC Time")?;
+
+    write!(&mut stdout, " ")?;
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-    stdout.write_all(swap_total.as_bytes())?;
-
-    write!(&mut stdout, " (")?; // 2
-
-    for _ in 0..(percentage_len - swap_percentage.len()) {
-        write!(&mut stdout, " ")?; // 1
-    }
-
-    stdout.write_all(swap_percentage.as_bytes())?;
-
-    write!(&mut stdout, ")")?; // 1
+    stdout.write_all(rtc_date_time.rtc_time.as_bytes())?;
 
     writeln!(&mut stdout, "")?;
 
@@ -1093,10 +1136,8 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
     Ok(())
 }
 
-fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), ScannerError> {
-    let uptime = time::get_uptime()?;
-
-    let uptime_sec = uptime.as_secs();
+fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError> {
+    let free = Free::get_free()?;
 
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
@@ -1110,125 +1151,186 @@ fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), Scanne
         stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, "This computer has been up for ")?;
+    let (mem_used, mem_total, swap_used, swap_total) = {
+        let (mem_used, mem_total, swap_used, swap_total) = (
+            Byte::from_bytes(free.mem.used as u128),
+            Byte::from_bytes(free.mem.total as u128),
+            Byte::from_bytes(free.swap.used as u128),
+            Byte::from_bytes(free.swap.total as u128),
+        );
 
-    if second {
-        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-        write!(&mut stdout, "{} second", uptime_sec)?;
-
-        if uptime_sec > 1 {
-            write!(&mut stdout, "s")?;
-        }
-    } else {
-        let days = uptime_sec / 86400;
-
-        let uptime_sec = uptime_sec % 86400;
-
-        let hours = uptime_sec / 3600;
-
-        let uptime_sec = uptime_sec % 3600;
-
-        let minutes = uptime_sec / 60;
-
-        let seconds = uptime_sec % 60;
-
-        let mut s = String::new();
-
-        if days > 0 {
-            s.write_fmt(format_args!("{} day", days)).unwrap();
-
-            if days > 1 {
-                s.push('s');
+        match unit {
+            Some(unit) => {
+                (
+                    mem_used.get_adjusted_unit(unit).to_string(),
+                    mem_total.get_adjusted_unit(unit).to_string(),
+                    swap_used.get_adjusted_unit(unit).to_string(),
+                    swap_total.get_adjusted_unit(unit).to_string(),
+                )
             }
-
-            s.push_str(", ");
-        }
-
-        if hours > 0 || (days > 0) && (minutes > 0 || seconds > 0) {
-            s.write_fmt(format_args!("{} hour", hours)).unwrap();
-
-            if hours > 1 {
-                s.push('s');
+            None => {
+                (
+                    mem_used.get_appropriate_unit(true).to_string(),
+                    mem_total.get_appropriate_unit(true).to_string(),
+                    swap_used.get_appropriate_unit(true).to_string(),
+                    swap_total.get_appropriate_unit(true).to_string(),
+                )
             }
-
-            s.push_str(", ");
         }
-
-        if minutes > 0 || (hours > 0 && seconds > 0) {
-            s.write_fmt(format_args!("{} minute", minutes)).unwrap();
-
-            if minutes > 1 {
-                s.push('s');
-            }
-
-            s.push_str(", ");
-        }
-
-        if seconds > 0 {
-            s.write_fmt(format_args!("{} second", seconds)).unwrap();
-
-            if seconds > 1 {
-                s.push('s');
-            }
-
-            s.push_str(", ");
-        }
-
-        debug_assert!(s.len() >= 2);
-
-        if let Some(index) = s.as_str()[..(s.len() - 2)].rfind(", ") {
-            s.insert_str(index + 2, "and ");
-        }
-
-        let b = s.as_bytes();
-
-        stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-        stdout.write_all(&b[..(b.len() - 2)])?;
-    }
-
-    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
-    write!(&mut stdout, ".")?;
-
-    writeln!(&mut stdout, "")?;
-
-    output.print(&stdout)?;
-
-    Ok(())
-}
-
-fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
-    let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time()?;
-
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
-        BufferWriter::stdout(ColorChoice::Never)
     };
 
-    let mut stdout = output.buffer();
+    let used_len = mem_used.len().max(swap_used.len());
+    let total_len = mem_total.len().max(swap_total.len());
 
-    if monitor {
-        stdout.write_all(&CLEAR_SCREEN_DATA)?;
-    }
+    let mem_percentage = format!("{:.2}%", free.mem.used as f64 * 100f64 / free.mem.total as f64);
+    let swap_percentage = format!("{:.2}%", free.swap.used as f64 * 100f64 / free.swap.total as f64);
+
+    let percentage_len = mem_percentage.len().max(swap_percentage.len());
+
+    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
+        (width as usize).max(MIN_TERMINAL_WIDTH)
+    } else {
+        DEFAULT_TERMINAL_WIDTH
+    };
+
+    // Memory
 
     stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-    write!(&mut stdout, "RTC Date")?;
+    write!(&mut stdout, "Memory")?; // 6
 
-    write!(&mut stdout, " ")?;
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " [")?; // 2
+
+    let progress_max = terminal_width - 10 - used_len - 3 - total_len - 2 - percentage_len - 1;
+
+    let f = progress_max as f64 / free.mem.total as f64;
+
+    let progress_used = (free.mem.used as f64 * f).floor() as usize;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+    for _ in 0..progress_used {
+        write!(&mut stdout, "|")?; // 1
+    }
+
+    let progress_cache = (free.mem.cache as f64 * f).floor() as usize;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(YELLOW_COLOR)))?;
+    for _ in 0..progress_cache {
+        if colorful {
+            write!(&mut stdout, "|")?; // 1
+        } else {
+            write!(&mut stdout, "$")?; // 1
+        }
+    }
+
+    let progress_buffers = (free.mem.buffers as f64 * f).floor() as usize;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(SKY_BLUE_COLOR)))?;
+    for _ in 0..progress_buffers {
+        if colorful {
+            write!(&mut stdout, "|")?; // 1
+        } else {
+            write!(&mut stdout, "#")?; // 1
+        }
+    }
+
+    for _ in 0..(progress_max - progress_used - progress_cache - progress_buffers) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, "] ")?; // 2
+
+    for _ in 0..(used_len - mem_used.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-    stdout.write_all(rtc_date_time.rtc_date.as_bytes())?;
+    stdout.write_all(mem_used.as_bytes())?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " / ")?; // 3
+
+    for _ in 0..(total_len - mem_total.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+    stdout.write_all(mem_total.as_bytes())?;
+
+    write!(&mut stdout, " (")?; // 2
+
+    for _ in 0..(percentage_len - mem_percentage.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(mem_percentage.as_bytes())?;
+
+    write!(&mut stdout, ")")?; // 1
 
     writeln!(&mut stdout, "")?;
 
-    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-    write!(&mut stdout, "RTC Time")?;
+    // Swap
 
-    write!(&mut stdout, " ")?;
+    stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
+    write!(&mut stdout, "Swap  ")?; // 6
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " [")?; // 2
+
+    let f = progress_max as f64 / free.swap.total as f64;
+
+    let progress_used = (free.swap.used as f64 * f).floor() as usize;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
+    for _ in 0..progress_used {
+        write!(&mut stdout, "|")?; // 1
+    }
+
+    let progress_cache = (free.swap.cache as f64 * f).floor() as usize;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(YELLOW_COLOR)))?;
+    for _ in 0..progress_cache {
+        if colorful {
+            write!(&mut stdout, "|")?; // 1
+        } else {
+            write!(&mut stdout, "$")?; // 1
+        }
+    }
+
+    for _ in 0..(progress_max - progress_used - progress_cache) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, "] ")?; // 2
+
+    for _ in 0..(used_len - swap_used.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-    stdout.write_all(rtc_date_time.rtc_time.as_bytes())?;
+    stdout.write_all(swap_used.as_bytes())?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+    write!(&mut stdout, " / ")?; // 3
+
+    for _ in 0..(total_len - swap_total.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
+    stdout.write_all(swap_total.as_bytes())?;
+
+    write!(&mut stdout, " (")?; // 2
+
+    for _ in 0..(percentage_len - swap_percentage.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(swap_percentage.as_bytes())?;
+
+    write!(&mut stdout, ")")?; // 1
 
     writeln!(&mut stdout, "")?;
 
