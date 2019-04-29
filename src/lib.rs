@@ -93,15 +93,6 @@ impl Config {
         let arg0 = Path::new(&arg0).file_name().unwrap().to_str().ok_or("The file name of this program is not supported by UTF-8.".to_string())?;
 
         let examples = vec![
-            "memory                      # Show current memory stats",
-            "memory -m 1000              # Show memory stats and refresh every 1000 milliseconds",
-            "memory -p                   # Show memory stats without colors",
-            "memory -u kb                # Show memory stats in KB",
-            "cpu                         # Show load average and CPU stats on average",
-            "cpu -m 1000                 # Show load average and CPU stats on average and refresh every 1000 milliseconds",
-            "cpu -p                      # Show load average and CPU stats on average without colors",
-            "cpu -s                      # Show load average and stats of CPU cores separately",
-            "cpu -i                      # Only show CPU information",
             "hostname                    # Show the hostname",
             "kernel                      # Show the kernel version",
             "uptime                      # Show the uptime",
@@ -111,6 +102,15 @@ impl Config {
             "time                        # Show the RTC (UTC) date and time",
             "time -m                     # Show the RTC (UTC) date and time and refresh every second",
             "time -p                     # Show the RTC (UTC) date and time without colors",
+            "cpu                         # Show load average and CPU stats on average",
+            "cpu -m 1000                 # Show load average and CPU stats on average and refresh every 1000 milliseconds",
+            "cpu -p                      # Show load average and CPU stats on average without colors",
+            "cpu -s                      # Show load average and stats of CPU cores separately",
+            "cpu -i                      # Only show CPU information",
+            "memory                      # Show current memory stats",
+            "memory -m 1000              # Show memory stats and refresh every 1000 milliseconds",
+            "memory -p                   # Show memory stats without colors",
+            "memory -u kb                # Show memory stats in KB",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
