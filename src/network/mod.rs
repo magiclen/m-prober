@@ -1,5 +1,3 @@
-#![feature(duration_float)]
-
 use std::hash::{Hash, Hasher};
 use std::collections::HashSet;
 use std::io::{self, ErrorKind};
@@ -79,7 +77,7 @@ impl Network {
                     networks.push(network);
 
                     if sc.next_line()?.is_none() {
-                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of interface `{}` is not correct.", interface))));
+                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of networks is not correct.".to_string())));
                     }
                 }
                 None => {

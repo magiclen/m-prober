@@ -14,6 +14,7 @@ mod load_average;
 mod hostname;
 mod time;
 mod kernel;
+mod network;
 
 use std::time::{Duration, SystemTime};
 use std::env;
@@ -35,6 +36,7 @@ use free::Free;
 use cpu_info::{CPU, CPUStat};
 use load_average::LoadAverage;
 use time::RTCDateTime;
+use network::NetworkWithSpeed;
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -416,13 +418,13 @@ pub fn run(config: Config) -> Result<i32, String> {
                     draw_uptime(!plain, second, true).map_err(|err| err.to_string())?;
 
                     loop {
-                        thread::sleep(sleep_interval);
-
                         if cont.lock().unwrap().is_none() {
                             break 'uptime_outer;
                         } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
                             break;
                         }
+
+                        thread::sleep(sleep_interval);
                     }
                 }
             } else {
@@ -459,13 +461,13 @@ pub fn run(config: Config) -> Result<i32, String> {
                     draw_time(!plain, true).map_err(|err| err.to_string())?;
 
                     loop {
-                        thread::sleep(sleep_interval);
-
                         if cont.lock().unwrap().is_none() {
                             break 'time_outer;
                         } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
                             break;
                         }
+
+                        thread::sleep(sleep_interval);
                     }
                 }
             } else {
@@ -498,21 +500,21 @@ pub fn run(config: Config) -> Result<i32, String> {
                     'cpu_outer: loop {
                         let s_time = SystemTime::now();
 
-                        draw_cpu_info(!plain, separate, information, true).map_err(|err| err.to_string())?;
+                        draw_cpu_info(!plain, separate, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
 
                         loop {
-                            thread::sleep(sleep_interval);
-
                             if cont.lock().unwrap().is_none() {
                                 break 'cpu_outer;
                             } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
                                 break;
                             }
+
+                            thread::sleep(sleep_interval);
                         }
                     }
                 }
                 None => {
-                    draw_cpu_info(!plain, separate, information, false).map_err(|err| err.to_string())?;
+                    draw_cpu_info(!plain, separate, information, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -545,13 +547,13 @@ pub fn run(config: Config) -> Result<i32, String> {
                         draw_memory(!plain, unit, true).map_err(|err| err.to_string())?;
 
                         loop {
-                            thread::sleep(sleep_interval);
-
                             if cont.lock().unwrap().is_none() {
                                 break 'memory_outer;
                             } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
                                 break;
                             }
+
+                            thread::sleep(sleep_interval);
                         }
                     }
                 }
@@ -586,21 +588,21 @@ pub fn run(config: Config) -> Result<i32, String> {
                     'network_outer: loop {
                         let s_time = SystemTime::now();
 
-                        draw_memory(!plain, unit, true).map_err(|err| err.to_string())?;
+                        draw_network(!plain, unit, Some(sleep_interval)).map_err(|err| err.to_string())?;
 
                         loop {
-                            thread::sleep(sleep_interval);
-
                             if cont.lock().unwrap().is_none() {
                                 break 'network_outer;
                             } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
                                 break;
                             }
+
+                            thread::sleep(sleep_interval);
                         }
                     }
                 }
                 None => {
-                    draw_memory(!plain, unit, false).map_err(|err| err.to_string())?;
+                    draw_network(!plain, unit, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -753,7 +755,7 @@ fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
     Ok(())
 }
 
-fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: bool) -> Result<(), ScannerError> {
+fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let cpus: Vec<CPU> = CPU::get_cpus()?;
 
     let output = if colorful {
@@ -764,7 +766,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
 
     let mut stdout = output.buffer();
 
-    if monitor {
+    if monitor.is_some() {
         stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
@@ -948,7 +950,10 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         let all_percentage: Vec<f64> = if only_information {
             Vec::new()
         } else {
-            CPUStat::get_all_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL))?
+            CPUStat::get_all_percentage(match monitor {
+                Some(monitor) => monitor,
+                None => Duration::from_millis(MIN_SLEEP_INTERVAL)
+            })?
         };
 
         let mut i = 0;
@@ -1071,7 +1076,10 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         let (average_percentage, average_percentage_string) = if only_information {
             (0f64, "".to_string())
         } else {
-            let average_percentage = CPUStat::get_average_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL))?;
+            let average_percentage = CPUStat::get_average_percentage(match monitor {
+                Some(monitor) => monitor,
+                None => Duration::from_millis(MIN_SLEEP_INTERVAL)
+            })?;
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
 
@@ -1335,6 +1343,43 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
     writeln!(&mut stdout, "")?;
 
     output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
+    let networks_with_speed = NetworkWithSpeed::get_networks_with_speed(match monitor {
+        Some(monitor) => monitor,
+        None => Duration::from_millis(MIN_SLEEP_INTERVAL)
+    })?;
+
+    let networks_with_speed_len = networks_with_speed.len();
+
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
+    } else {
+        BufferWriter::stdout(ColorChoice::Never)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor.is_some() {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
+    }
+
+    let mut upload: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+    let mut upload_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+
+    let mut download: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+    let mut download_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+
+    for network_with_speed in networks_with_speed.iter() {
+        let upload = network_with_speed.speed.transmit;
+        let upload_total = network_with_speed.network.receive_bytes;
+
+        let download = network_with_speed.speed.receive;
+        let download_total = network_with_speed.speed.receive;
+    }
 
     Ok(())
 }
