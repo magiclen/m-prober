@@ -40,7 +40,7 @@ use network::NetworkWithSpeed;
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
-const DEFAULT_INTERVAL: u64 = 333;
+const DEFAULT_INTERVAL: u64 = 333; // should be smaller than 1000 milliseconds
 
 const LABEL_COLOR: Color = Color::Rgb(0, 177, 177);
 const WHITE_COLOR: Color = Color::Rgb(219, 219, 219);
