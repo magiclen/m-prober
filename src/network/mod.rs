@@ -24,10 +24,12 @@ impl Hash for Network {
 }
 
 impl PartialEq for Network {
+    #[inline]
     fn eq(&self, other: &Network) -> bool {
         self.interface.eq(&other.interface)
     }
 
+    #[inline]
     fn ne(&self, other: &Network) -> bool {
         self.interface.ne(&other.interface)
     }

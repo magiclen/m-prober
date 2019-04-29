@@ -7,6 +7,7 @@ extern crate termcolor;
 extern crate terminal_size;
 extern crate getch;
 extern crate scanner_rust;
+extern crate libc;
 
 mod free;
 mod cpu_info;
@@ -15,6 +16,7 @@ mod hostname;
 mod time;
 mod kernel;
 mod network;
+mod disk;
 
 use std::time::Duration;
 use std::env;
@@ -85,6 +87,7 @@ pub enum Mode {
         monitor: Option<Duration>,
         plain: bool,
         unit: Option<ByteUnit>,
+        information: bool,
     },
 }
 
@@ -126,9 +129,10 @@ impl Config {
             "network -p                  # Show current network stats without colors",
             "network -u kb               # Show current network stats in KB",
             "disk                        # Show current disk stats",
-            "disk -m 1000                # Show network disk and refresh every 1000 milliseconds",
+            "disk -m 1000                # Show current disk stats and refresh every 1000 milliseconds",
             "disk -p                     # Show current disk stats without colors",
             "disk -u kb                  # Show current disk stats in KB",
+            "disk -i                     # Only show disk information",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -286,6 +290,11 @@ impl Config {
                     .help("Forces to use a fixed unit")
                     .takes_value(true)
                 )
+                .arg(Arg::with_name("INFORMATION")
+                    .long("information")
+                    .short("i")
+                    .help("Shows only information about disks")
+                )
                 .after_help("Enjoy it! https://magiclen.org")
             )
             .after_help("Enjoy it! https://magiclen.org")
@@ -411,10 +420,13 @@ impl Config {
                 None => None
             };
 
+            let information = sub_matches.is_present("INFORMATION");
+
             Mode::Disk {
                 monitor,
                 plain,
                 unit,
+                information,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -597,7 +609,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
-        Mode::Disk { monitor, plain, unit } => {
+        Mode::Disk { monitor, plain, unit, information } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -615,16 +627,16 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_disk(!plain, unit, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_disk(!plain, unit, information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
                     loop {
-                        draw_disk(!plain, unit, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_disk(!plain, unit, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_disk(!plain, unit, None).map_err(|err| err.to_string())?;
+                    draw_disk(!plain, unit, information, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -776,6 +788,8 @@ fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
 
     Ok(())
 }
+
+// TODO
 
 fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let cpus: Vec<CPU> = CPU::get_cpus()?;
@@ -1522,7 +1536,7 @@ fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration
     Ok(())
 }
 
-fn draw_disk(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
+fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
     } else {
@@ -1534,6 +1548,12 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration>) 
     if monitor.is_some() {
         stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
+
+    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
+        (width as usize).max(MIN_TERMINAL_WIDTH)
+    } else {
+        DEFAULT_TERMINAL_WIDTH
+    };
 
     output.print(&stdout)?;
 

@@ -311,8 +311,3 @@ impl CPUStat {
         Ok(result)
     }
 }
-
-#[test]
-fn test() {
-    println!("{:?}", CPU::get_cpus());
-}
