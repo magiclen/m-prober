@@ -81,6 +81,11 @@ pub enum Mode {
         plain: bool,
         unit: Option<ByteUnit>,
     },
+    Disk {
+        monitor: Option<Duration>,
+        plain: bool,
+        unit: Option<ByteUnit>,
+    },
 }
 
 #[derive(Debug)]
@@ -120,6 +125,10 @@ impl Config {
             "network -m 1000             # Show network stats and refresh every 1000 milliseconds",
             "network -p                  # Show current network stats without colors",
             "network -u kb               # Show current network stats in KB",
+            "disk                        # Show current disk stats",
+            "disk -m 1000                # Show network disk and refresh every 1000 milliseconds",
+            "disk -p                     # Show current disk stats without colors",
+            "disk -u kb                  # Show current disk stats in KB",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -256,6 +265,29 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("disk").aliases(&["d", "storage", "disks", "blk", "block", "blocks"])
+                .about("Shows disk stats")
+                .display_order(7)
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Shows disk stats and refreshes every N milliseconds")
+                    .takes_value(true)
+                    .value_name("MILLI_SECONDS")
+                )
+                .arg(Arg::with_name("PLAIN")
+                    .long("plain")
+                    .short("p")
+                    .help("No colors")
+                )
+                .arg(Arg::with_name("UNIT")
+                    .long("unit")
+                    .short("u")
+                    .help("Forces to use a fixed unit")
+                    .takes_value(true)
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -354,6 +386,32 @@ impl Config {
             };
 
             Mode::Network {
+                monitor,
+                plain,
+                unit,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("disk") {
+            let monitor = match sub_matches.value_of("MONITOR") {
+                Some(monitor) => {
+                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+
+                    Some(Duration::from_secs_f64(monitor / 1000f64))
+                }
+                None => None
+            };
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            let unit = match sub_matches.value_of("UNIT") {
+                Some(unit) => {
+                    let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
+
+                    Some(unit)
+                }
+                None => None
+            };
+
+            Mode::Disk {
                 monitor,
                 plain,
                 unit,
@@ -536,6 +594,37 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
                 None => {
                     draw_network(!plain, unit, None).map_err(|err| err.to_string())?;
+                }
+            }
+        }
+        Mode::Disk { monitor, plain, unit } => {
+            match monitor {
+                Some(monitor) => {
+                    thread::spawn(move || {
+                        loop {
+                            let key = Getch::new().getch().unwrap();
+
+                            match key {
+                                b'q' => {
+                                    break;
+                                }
+                                _ => ()
+                            }
+                        }
+
+                        process::exit(0);
+                    });
+
+                    draw_disk(!plain, unit, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+
+                    let sleep_interval = monitor;
+
+                    loop {
+                        draw_disk(!plain, unit, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                    }
+                }
+                None => {
+                    draw_disk(!plain, unit, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -1426,6 +1515,24 @@ fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration
         stdout.write_all(download_total.as_bytes())?;
 
         writeln!(&mut stdout, "")?;
+    }
+
+    output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_disk(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
+    let output = if colorful {
+        BufferWriter::stdout(ColorChoice::Always)
+    } else {
+        BufferWriter::stdout(ColorChoice::Never)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor.is_some() {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
     output.print(&stdout)?;
