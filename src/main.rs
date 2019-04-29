@@ -1,8 +1,8 @@
-extern crate magiclen_prober;
+extern crate mprober;
 
 use std::process;
 
-use magiclen_prober::*;
+use mprober::*;
 
 fn main() {
     let config = Config::from_cli();

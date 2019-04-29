@@ -1,8 +1,6 @@
-extern crate scanner_rust;
-
 use std::io::{self, ErrorKind};
 
-use scanner_rust::{Scanner, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
 
 const MEMINFO_PATH: &'static str = "/proc/meminfo";
 const ITEMS: [&'static str; 11] = ["MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached", "SwapCached", "SwapTotal", "SwapFree", "Shmem", "Slab", "SUnreclaim"];
@@ -58,7 +56,9 @@ impl Free {
 
                             break;
                         } else {
-                            sc.next_line().unwrap();
+                            if sc.next_line()?.is_none() {
+                                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of label `{}` is not correct.", label))));
+                            }
                         }
                     }
                     None => {

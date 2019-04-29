@@ -1,11 +1,7 @@
-#![feature(duration_float)]
-
-extern crate scanner_rust;
-
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::io::{self, ErrorKind};
 
-use scanner_rust::{Scanner, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
 
 const UPTIME_PATH: &'static str = "/proc/uptime";
 
@@ -21,10 +17,6 @@ pub fn get_uptime() -> Result<Duration, ScannerError> {
     };
 
     Ok(Duration::from_secs_f64(uptime))
-}
-
-pub fn get_system_time() -> SystemTime {
-    SystemTime::now()
 }
 
 #[derive(Debug, Clone)]

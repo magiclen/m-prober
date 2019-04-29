@@ -1,8 +1,6 @@
-extern crate scanner_rust;
-
 use std::io::{self, ErrorKind};
 
-use scanner_rust::{Scanner, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
 
 const LOADAVG_PATH: &'static str = "/proc/loadavg";
 

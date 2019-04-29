@@ -1,19 +1,20 @@
-EXE = ./target/x86_64-unknown-linux-musl/release/magiclen-prober
+EXE = ./target/x86_64-unknown-linux-musl/release/mprober
+INSTALLED_EXE = /usr/local/bin/mprober
 
 all: $(EXE)
 
 $(EXE): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | sed 's/ /\\ /g')
 	cargo build --release --target x86_64-unknown-linux-musl
-	strip ./target/x86_64-unknown-linux-musl/release/magiclen-prober
+	strip $(EXE)
 	
 install:
 	$(MAKE)
-	sudo cp ./target/x86_64-unknown-linux-musl/release/magiclen-prober /usr/local/bin/magiclen-prober
-	sudo chown root. /usr/local/bin/magiclen-prober
-	sudo chmod 0755 /usr/local/bin/magiclen-prober
+	sudo cp $(EXE) $(INSTALLED_EXE)
+	sudo chown root. $(INSTALLED_EXE)
+	sudo chmod 0755 $(INSTALLED_EXE)
 
 uninstall:
-	sudo rm /usr/local/bin/magiclen-prober
+	sudo rm $(INSTALLED_EXE)
 
 test:
 	cargo test --verbose

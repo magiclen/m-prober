@@ -1,14 +1,13 @@
 #![feature(duration_float)]
 
-extern crate scanner_rust;
-
 use std::hash::{Hash, Hasher};
 use std::collections::HashSet;
 use std::io::{self, ErrorKind};
 use std::time::Duration;
 use std::thread::sleep;
 
-use scanner_rust::{Scanner, ScannerError};
+use crate::scanner_rust::{Scanner, ScannerError};
+use std::string::ToString;
 
 const NET_DEV_PATH: &'static str = "/proc/net/dev";
 
@@ -79,7 +78,9 @@ impl Network {
 
                     networks.push(network);
 
-                    sc.next_line()?.unwrap();
+                    if sc.next_line()?.is_none() {
+                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of interface `{}` is not correct.", interface))));
+                    }
                 }
                 None => {
                     break;

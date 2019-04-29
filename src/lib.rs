@@ -6,17 +6,19 @@ extern crate validators;
 extern crate termcolor;
 extern crate terminal_size;
 extern crate getch;
+extern crate scanner_rust;
 
-extern crate free;
-extern crate cpu_info;
-extern crate load_average;
-extern crate hostname;
-extern crate time;
+mod free;
+mod cpu_info;
+mod load_average;
+mod hostname;
+mod time;
+mod kernel;
 
 use std::time::{Duration, SystemTime};
 use std::env;
 use std::path::Path;
-use std::io::{self, Write};
+use std::io::Write;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::fmt::Write as WriteFmt;
@@ -27,6 +29,7 @@ use clap::{App, Arg, SubCommand};
 use validators::number::NumberGteZero;
 use byte_unit::{Byte, ByteUnit};
 use getch::Getch;
+use scanner_rust::ScannerError;
 
 use free::Free;
 use cpu_info::{CPU, CPUStat};
@@ -51,18 +54,8 @@ const CLEAR_SCREEN_DATA: [u8; 11] = [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0
 
 #[derive(Debug)]
 pub enum Mode {
-    Memory {
-        monitor: Option<Duration>,
-        plain: bool,
-        unit: Option<ByteUnit>,
-    },
-    CPU {
-        monitor: Option<Duration>,
-        plain: bool,
-        separate: bool,
-        information: bool,
-    },
     HostName,
+    Kernel,
     Uptime {
         monitor: bool,
         plain: bool,
@@ -72,6 +65,17 @@ pub enum Mode {
         monitor: bool,
         plain: bool,
     },
+    CPU {
+        monitor: Option<Duration>,
+        plain: bool,
+        separate: bool,
+        information: bool,
+    },
+    Memory {
+        monitor: Option<Duration>,
+        plain: bool,
+        unit: Option<ByteUnit>,
+    },
 }
 
 #[derive(Debug)]
@@ -79,14 +83,14 @@ pub struct Config {
     pub mode: Mode
 }
 
-const APP_NAME: &str = "MagicLen Prober";
+const APP_NAME: &str = "M Prober (MagicLen Prober)";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 impl Config {
     pub fn from_cli() -> Result<Config, String> {
         let arg0 = env::args().next().unwrap();
-        let arg0 = Path::new(&arg0).file_stem().unwrap().to_str().unwrap();
+        let arg0 = Path::new(&arg0).file_name().unwrap().to_str().ok_or("The file name of this program is not supported by UTF-8.".to_string())?;
 
         let examples = vec![
             "memory                      # Show current memory stats",
@@ -99,6 +103,7 @@ impl Config {
             "cpu -s                      # Show load average and stats of CPU cores separately",
             "cpu -i                      # Only show CPU information",
             "hostname                    # Show the hostname",
+            "kernel                      # Show the kernel version",
             "uptime                      # Show the uptime",
             "uptime -m                   # Show the uptime and refresh every second",
             "uptime -p                   # Show the uptime without colors",
@@ -124,30 +129,54 @@ impl Config {
                 .concat()
             ).as_str()
             )
-            .subcommand(SubCommand::with_name("memory").aliases(&["m", "mem", "free", "memories", "swap", "ram", "dram", "ddr", "cache", "buffer", "buf"])
-                .about("Shows memory stats")
+            .subcommand(SubCommand::with_name("hostname").aliases(&["n", "h", "host", "name", "servername", "server"])
+                .about("Shows the hostname")
+                .display_order(0)
+                .after_help("Enjoy it! https://magiclen.org")
+            )
+            .subcommand(SubCommand::with_name("kernel").aliases(&["k", "l", "linux"])
+                .about("Shows the kernel version")
+                .display_order(1)
+                .after_help("Enjoy it! https://magiclen.org")
+            )
+            .subcommand(SubCommand::with_name("uptime").aliases(&["u", "up", "utime", "ut"])
+                .about("Shows the uptime")
+                .display_order(2)
                 .arg(Arg::with_name("MONITOR")
                     .long("monitor")
                     .short("m")
-                    .help("Shows memory stats and refreshes every N milliseconds")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
+                    .help("Shows the uptime and refreshes every second")
                 )
                 .arg(Arg::with_name("PLAIN")
                     .long("plain")
                     .short("p")
                     .help("No colors")
                 )
-                .arg(Arg::with_name("UNIT")
-                    .long("unit")
-                    .short("u")
-                    .help("Forces to use a fixed unit")
-                    .takes_value(true)
+                .arg(Arg::with_name("SECOND")
+                    .long("second")
+                    .short("s")
+                    .help("Shows the uptime in seconds")
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
+            .subcommand(SubCommand::with_name("time").aliases(&["t", "systime", "stime", "st", "utc", "utctime", "rtc", "rtctime", "date"])
+                .about("Shows the RTC (UTC) date and time")
+                .display_order(3)
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Shows the RTC (UTC) date and time, and refreshes every second")
+                )
+                .arg(Arg::with_name("PLAIN")
+                    .long("plain")
+                    .short("p")
+                    .help("No colors")
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
             .subcommand(SubCommand::with_name("cpu").aliases(&["c", "cpus", "core", "cores", "load", "processor", "processors"])
                 .about("Shows CPU stats")
+                .display_order(4)
                 .arg(Arg::with_name("MONITOR")
                     .long("monitor")
                     .short("m")
@@ -172,47 +201,80 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
-            .subcommand(SubCommand::with_name("hostname").aliases(&["n", "h", "host", "name", "servername", "server"])
-                .about("Shows the hostname")
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("uptime").aliases(&["u", "up", "utime", "ut"])
-                .about("Shows the uptime")
+            .subcommand(SubCommand::with_name("memory").aliases(&["m", "mem", "free", "memories", "swap", "ram", "dram", "ddr", "cache", "buffer", "buf"])
+                .about("Shows memory stats")
+                .display_order(5)
                 .arg(Arg::with_name("MONITOR")
                     .long("monitor")
                     .short("m")
-                    .help("Shows the uptime and refreshes every second")
+                    .help("Shows memory stats and refreshes every N milliseconds")
+                    .takes_value(true)
+                    .value_name("MILLI_SECONDS")
                 )
                 .arg(Arg::with_name("PLAIN")
                     .long("plain")
                     .short("p")
                     .help("No colors")
                 )
-                .arg(Arg::with_name("SECOND")
-                    .long("second")
-                    .short("s")
-                    .help("Shows the uptime in seconds")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("time").aliases(&["t", "systime", "stime", "st", "utc", "utctime", "rtc", "rtctime", "date"])
-                .about("Shows the RTC (UTC) date and time")
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows the RTC (UTC) date and time, and refreshes every second")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
+                .arg(Arg::with_name("UNIT")
+                    .long("unit")
+                    .short("u")
+                    .help("Forces to use a fixed unit")
+                    .takes_value(true)
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
-        let mode = if let Some(sub_matches) = matches.subcommand_matches("memory") {
+        let mode = if let Some(_) = matches.subcommand_matches("hostname") {
+            Mode::HostName
+        } else if let Some(_) = matches.subcommand_matches("kernel") {
+            Mode::Kernel
+        } else if let Some(sub_matches) = matches.subcommand_matches("uptime") {
+            let monitor = sub_matches.is_present("MONITOR");
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            let second = sub_matches.is_present("SECOND");
+
+            Mode::Uptime {
+                monitor,
+                plain,
+                second,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("time") {
+            let monitor = sub_matches.is_present("MONITOR");
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            Mode::Time {
+                monitor,
+                plain,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("cpu") {
+            let monitor = match sub_matches.value_of("MONITOR") {
+                Some(monitor) => {
+                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+
+                    Some(Duration::from_secs_f64(monitor / 1000f64))
+                }
+                None => None
+            };
+
+            let plain = sub_matches.is_present("PLAIN");
+
+            let separate = sub_matches.is_present("SEPARATE");
+
+            let information = sub_matches.is_present("INFORMATION");
+
+            Mode::CPU {
+                monitor,
+                plain,
+                separate,
+                information,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("memory") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
                     let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
@@ -238,51 +300,6 @@ impl Config {
                 plain,
                 unit,
             }
-        } else if let Some(sub_matches) = matches.subcommand_matches("cpu") {
-            let monitor = match sub_matches.value_of("MONITOR") {
-                Some(monitor) => {
-                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
-
-                    Some(Duration::from_secs_f64(monitor / 1000f64))
-                }
-                None => None
-            };
-
-            let plain = sub_matches.is_present("PLAIN");
-
-            let separate = sub_matches.is_present("SEPARATE");
-
-            let information = sub_matches.is_present("INFORMATION");
-
-            Mode::CPU {
-                monitor,
-                plain,
-                separate,
-                information,
-            }
-        } else if let Some(_) = matches.subcommand_matches("hostname") {
-            Mode::HostName
-        } else if let Some(sub_matches) = matches.subcommand_matches("uptime") {
-            let monitor = sub_matches.is_present("MONITOR");
-
-            let plain = sub_matches.is_present("PLAIN");
-
-            let second = sub_matches.is_present("SECOND");
-
-            Mode::Uptime {
-                monitor,
-                plain,
-                second,
-            }
-        } else if let Some(sub_matches) = matches.subcommand_matches("time") {
-            let monitor = sub_matches.is_present("MONITOR");
-
-            let plain = sub_matches.is_present("PLAIN");
-
-            Mode::Time {
-                monitor,
-                plain,
-            }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
         };
@@ -301,96 +318,13 @@ pub fn run(config: Config) -> Result<i32, String> {
     let mode = config.mode;
 
     match mode {
-        Mode::Memory { monitor, plain, unit } => {
-            match monitor {
-                Some(monitor) => {
-                    let cont = Arc::new(Mutex::new(Some(0)));
-                    let cont_2 = cont.clone();
-
-                    thread::spawn(move || {
-                        loop {
-                            let key = Getch::new().getch().unwrap();
-
-                            match key {
-                                b'q' => {
-                                    break;
-                                }
-                                _ => ()
-                            }
-                        }
-
-                        cont_2.lock().unwrap().take();
-                    });
-
-                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
-
-                    'memory_outer: loop {
-                        let s_time = SystemTime::now();
-
-                        draw_free(!plain, unit, true).map_err(|err| err.to_string())?;
-
-                        loop {
-                            thread::sleep(sleep_interval);
-
-                            if cont.lock().unwrap().is_none() {
-                                break 'memory_outer;
-                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                                break;
-                            }
-                        }
-                    }
-                }
-                None => {
-                    draw_free(!plain, unit, false).map_err(|err| err.to_string())?;
-                }
-            }
-        }
-        Mode::CPU { monitor, plain, separate, information } => {
-            match monitor {
-                Some(monitor) => {
-                    let cont = Arc::new(Mutex::new(Some(0)));
-                    let cont_2 = cont.clone();
-
-                    thread::spawn(move || {
-                        loop {
-                            let key = Getch::new().getch().unwrap();
-
-                            match key {
-                                b'q' => {
-                                    break;
-                                }
-                                _ => ()
-                            }
-                        }
-
-                        cont_2.lock().unwrap().take();
-                    });
-
-                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
-
-                    'cpu_outer: loop {
-                        let s_time = SystemTime::now();
-
-                        draw_cpu_info(!plain, separate, information, true).map_err(|err| err.to_string())?;
-
-                        loop {
-                            thread::sleep(sleep_interval);
-
-                            if cont.lock().unwrap().is_none() {
-                                break 'cpu_outer;
-                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
-                                break;
-                            }
-                        }
-                    }
-                }
-                None => {
-                    draw_cpu_info(!plain, separate, information, false).map_err(|err| err.to_string())?;
-                }
-            }
-        }
         Mode::HostName => {
             let hostname = hostname::get_hostname().map_err(|err| err.to_string())?;
+
+            println!("{}", hostname);
+        }
+        Mode::Kernel => {
+            let hostname = kernel::get_kernel_version().map_err(|err| err.to_string())?;
 
             println!("{}", hostname);
         }
@@ -480,14 +414,101 @@ pub fn run(config: Config) -> Result<i32, String> {
                 draw_time(!plain, false).map_err(|err| err.to_string())?;
             }
         }
-//        _ => unreachable!()
+        Mode::CPU { monitor, plain, separate, information } => {
+            match monitor {
+                Some(monitor) => {
+                    let cont = Arc::new(Mutex::new(Some(0)));
+                    let cont_2 = cont.clone();
+
+                    thread::spawn(move || {
+                        loop {
+                            let key = Getch::new().getch().unwrap();
+
+                            match key {
+                                b'q' => {
+                                    break;
+                                }
+                                _ => ()
+                            }
+                        }
+
+                        cont_2.lock().unwrap().take();
+                    });
+
+                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+
+                    'cpu_outer: loop {
+                        let s_time = SystemTime::now();
+
+                        draw_cpu_info(!plain, separate, information, true).map_err(|err| err.to_string())?;
+
+                        loop {
+                            thread::sleep(sleep_interval);
+
+                            if cont.lock().unwrap().is_none() {
+                                break 'cpu_outer;
+                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    draw_cpu_info(!plain, separate, information, false).map_err(|err| err.to_string())?;
+                }
+            }
+        }
+        Mode::Memory { monitor, plain, unit } => {
+            match monitor {
+                Some(monitor) => {
+                    let cont = Arc::new(Mutex::new(Some(0)));
+                    let cont_2 = cont.clone();
+
+                    thread::spawn(move || {
+                        loop {
+                            let key = Getch::new().getch().unwrap();
+
+                            match key {
+                                b'q' => {
+                                    break;
+                                }
+                                _ => ()
+                            }
+                        }
+
+                        cont_2.lock().unwrap().take();
+                    });
+
+                    let sleep_interval = Duration::from_millis(((monitor.as_millis() as u128 / SLEEP_CHECKPOINT_COUNT) as u64).max(MIN_SLEEP_INTERVAL).min(MAX_SLEEP_INTERVAL));
+
+                    'memory_outer: loop {
+                        let s_time = SystemTime::now();
+
+                        draw_free(!plain, unit, true).map_err(|err| err.to_string())?;
+
+                        loop {
+                            thread::sleep(sleep_interval);
+
+                            if cont.lock().unwrap().is_none() {
+                                break 'memory_outer;
+                            } else if s_time.elapsed().map_err(|err| err.to_string())? > monitor {
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    draw_free(!plain, unit, false).map_err(|err| err.to_string())?;
+                }
+            }
+        }
     }
 
     Ok(0)
 }
 
-fn draw_free(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), io::Error> {
-    let free = Free::get_free().unwrap();
+fn draw_free(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError> {
+    let free = Free::get_free()?;
 
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
@@ -689,8 +710,8 @@ fn draw_free(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<()
     Ok(())
 }
 
-fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: bool) -> Result<(), io::Error> {
-    let cpus: Vec<CPU> = CPU::get_cpus().unwrap();
+fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: bool) -> Result<(), ScannerError> {
+    let cpus: Vec<CPU> = CPU::get_cpus()?;
 
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
@@ -712,7 +733,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
 
     // load average
     if !only_information {
-        let load_average: LoadAverage = LoadAverage::get_load_average().unwrap();
+        let load_average: LoadAverage = LoadAverage::get_load_average()?;
 
         let logical_cores_number: usize = cpus.iter().map(|cpu| cpu.siblings).sum();
         let logical_cores_number_f64 = logical_cores_number as f64;
@@ -884,7 +905,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         let all_percentage: Vec<f64> = if only_information {
             Vec::new()
         } else {
-            CPUStat::get_all_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL)).unwrap()
+            CPUStat::get_all_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL))?
         };
 
         let mut i = 0;
@@ -1007,7 +1028,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         let (average_percentage, average_percentage_string) = if only_information {
             (0f64, "".to_string())
         } else {
-            let average_percentage = CPUStat::get_average_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL)).unwrap();
+            let average_percentage = CPUStat::get_average_percentage(Duration::from_millis(MIN_SLEEP_INTERVAL))?;
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
 
@@ -1072,8 +1093,8 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
     Ok(())
 }
 
-fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), io::Error> {
-    let uptime = time::get_uptime().unwrap();
+fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), ScannerError> {
+    let uptime = time::get_uptime()?;
 
     let uptime_sec = uptime.as_secs();
 
@@ -1176,8 +1197,8 @@ fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), io::Er
     Ok(())
 }
 
-fn draw_time(colorful: bool, monitor: bool) -> Result<(), io::Error> {
-    let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time().unwrap();
+fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
+    let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time()?;
 
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)

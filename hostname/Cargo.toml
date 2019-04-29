@@ -1,8 +1,0 @@
-[package]
-name = "hostname"
-version = "0.1.0"
-authors = ["Magic Len <len@magiclen.org>"]
-edition = "2018"
-license = "MIT"
-
-[dependencies]
