@@ -27,7 +27,7 @@ use std::process;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{Width, terminal_size};
 use clap::{App, Arg, SubCommand};
-use validators::number::NumberGteZero;
+use validators::number::NumberGtZero;
 use byte_unit::{Byte, ByteUnit};
 use getch::Getch;
 use scanner_rust::ScannerError;
@@ -287,7 +287,7 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("cpu") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
@@ -309,7 +309,7 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("memory") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
@@ -335,7 +335,7 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("network") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGteZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
