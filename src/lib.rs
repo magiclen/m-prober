@@ -272,7 +272,7 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
-            .subcommand(SubCommand::with_name("disk").aliases(&["d", "storage", "disks", "blk", "block", "blocks", "mount", "mounts"])
+            .subcommand(SubCommand::with_name("disk").aliases(&["d", "storage", "disks", "blk", "block", "blocks", "mount", "mounts", "ssd", "hdd"])
                 .about("Shows disk stats")
                 .display_order(7)
                 .arg(Arg::with_name("MONITOR")
