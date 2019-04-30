@@ -3,6 +3,7 @@
 
 extern crate clap;
 extern crate byte_unit;
+#[macro_use]
 extern crate validators;
 extern crate termcolor;
 extern crate terminal_size;
@@ -10,10 +11,17 @@ extern crate getch;
 extern crate scanner_rust;
 extern crate libc;
 
-#[macro_use]
-extern crate rocket;
 extern crate rand;
 extern crate base64;
+#[macro_use]
+extern crate enum_ordinalize;
+
+#[macro_use]
+extern crate rocket;
+#[macro_use]
+extern crate rocket_simple_authorization;
+extern crate rocket_cache_response;
+extern crate rocket_json_response;
 
 mod free;
 mod cpu_info;
@@ -101,6 +109,7 @@ pub enum Mode {
     Web {
         monitor: Duration,
         port: u16,
+        auth_key: Option<String>,
     },
 }
 
@@ -149,7 +158,8 @@ impl Config {
             "disk --mounts               # Show current disk stats including mount points",
             "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 1 second.",
             "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds.",
-            "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer. The default time interval is 1 second.",
+            "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer.",
+            "web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key.",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -337,6 +347,12 @@ impl Config {
                     .takes_value(true)
                     .default_value("8000")
                 )
+                .arg(Arg::with_name("AUTH_KEY")
+                    .long("auth-key")
+                    .short("a")
+                    .help("Assigns an auth key")
+                    .takes_value(true)
+                )
                 .after_help("Enjoy it! https://magiclen.org")
             )
             .after_help("Enjoy it! https://magiclen.org")
@@ -496,9 +512,12 @@ impl Config {
                 None => unreachable!()
             };
 
+            let auth_key = sub_matches.value_of("AUTH_KEY").map(|s| s.to_string());
+
             Mode::Web {
                 monitor,
                 port,
+                auth_key,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -716,8 +735,8 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
-        Mode::Web { monitor, port } => {
-            rocket_mounts::launch(monitor, port);
+        Mode::Web { monitor, port, auth_key } => {
+            rocket_mounts::launch(monitor, port, auth_key);
         }
     }
 
