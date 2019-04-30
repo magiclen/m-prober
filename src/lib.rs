@@ -1,4 +1,5 @@
 #![feature(duration_float)]
+#![feature(proc_macro_hygiene, decl_macro)]
 
 extern crate clap;
 extern crate byte_unit;
@@ -9,6 +10,11 @@ extern crate getch;
 extern crate scanner_rust;
 extern crate libc;
 
+#[macro_use]
+extern crate rocket;
+extern crate rand;
+extern crate base64;
+
 mod free;
 mod cpu_info;
 mod load_average;
@@ -17,7 +23,7 @@ mod time;
 mod kernel;
 mod network;
 mod disk;
-mod rocket;
+mod rocket_mounts;
 
 use std::time::Duration;
 use std::env;
@@ -711,7 +717,7 @@ pub fn run(config: Config) -> Result<i32, String> {
             }
         }
         Mode::Web { monitor, port } => {
-            rocket::launch(monitor, port);
+            rocket_mounts::launch(monitor, port);
         }
     }
 
