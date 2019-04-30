@@ -139,9 +139,9 @@ impl Config {
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
-            (width as usize).max(MIN_TERMINAL_WIDTH)
+            width as usize
         } else {
-            DEFAULT_TERMINAL_WIDTH
+            0
         };
 
         let matches = App::new(APP_NAME)
