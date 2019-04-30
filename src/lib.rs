@@ -17,6 +17,7 @@ mod time;
 mod kernel;
 mod network;
 mod disk;
+mod rocket;
 
 use std::time::Duration;
 use std::env;
@@ -91,6 +92,10 @@ pub enum Mode {
         information: bool,
         mounts: bool,
     },
+    Web {
+        monitor: Duration,
+        port: u16,
+    },
 }
 
 #[derive(Debug)]
@@ -136,6 +141,9 @@ impl Config {
             "disk -u kb                  # Show current disk stats in KB",
             "disk -i                     # Only show disk information without I/O rates",
             "disk --mounts               # Show current disk stats including mount points",
+            "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 1 second.",
+            "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds.",
+            "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer. The default time interval is 1 second.",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -305,6 +313,26 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("web").aliases(&["server", "http"])
+                .about("Starts a HTTP service to monitor this computer")
+                .display_order(8)
+                .arg(Arg::with_name("MONITOR")
+                    .long("monitor")
+                    .short("m")
+                    .help("Automatically refreshes every N seconds")
+                    .takes_value(true)
+                    .value_name("SECONDS")
+                    .default_value("1")
+                )
+                .arg(Arg::with_name("PORT")
+                    .long("port")
+                    .short("p")
+                    .help("Assigns a TCP port for the HTTP service")
+                    .takes_value(true)
+                    .default_value("8000")
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -438,6 +466,33 @@ impl Config {
                 unit,
                 information,
                 mounts,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("web") {
+            let monitor = match sub_matches.value_of("MONITOR") {
+                Some(monitor) => {
+                    let monitor: u64 = monitor.parse().map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
+
+                    if monitor == 0 {
+                        return Err(format!("`{}` is not a correct value for SECONDS", monitor));
+                    }
+
+                    Duration::from_secs(monitor)
+                }
+                None => unreachable!()
+            };
+
+            let port = match sub_matches.value_of("PORT") {
+                Some(port) => {
+                    let port: u16 = port.parse().map_err(|_| format!("`{}` is not a correct value for PORT", port))?;
+
+                    port
+                }
+                None => unreachable!()
+            };
+
+            Mode::Web {
+                monitor,
+                port,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -654,6 +709,9 @@ pub fn run(config: Config) -> Result<i32, String> {
                     draw_disk(!plain, unit, information, mounts, None).map_err(|err| err.to_string())?;
                 }
             }
+        }
+        Mode::Web { monitor, port } => {
+            rocket::launch(monitor, port);
         }
     }
 
