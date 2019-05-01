@@ -3,7 +3,7 @@ INSTALLED_EXE = /usr/local/bin/mprober
 
 all: $(EXE)
 
-$(EXE): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | sed 's/ /\\ /g')
+$(EXE): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | sed 's/ /\\ /g') $(shell find ./front-end ./views -type f | sed 's/ /\\ /g')
 	cargo build --release --target x86_64-unknown-linux-musl
 	strip $(EXE)
 	

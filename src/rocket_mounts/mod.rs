@@ -1,4 +1,6 @@
 mod api;
+mod bundles;
+mod monitor;
 
 use std::time::Duration;
 
@@ -37,6 +39,10 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>) {
     let rocket = rocket.manage(monitor);
 
     let rocket = api::mounts(rocket);
+
+    let rocket = bundles::mounts(rocket);
+
+    let rocket = monitor::mounts(rocket);
 
     rocket.launch();
 }

@@ -11,6 +11,9 @@ extern crate getch;
 extern crate scanner_rust;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static_include;
+extern crate crc_any;
 
 extern crate libc;
 
@@ -19,6 +22,8 @@ extern crate base64;
 extern crate enum_ordinalize;
 #[macro_use]
 extern crate serde_json;
+#[macro_use]
+extern crate handlebars;
 
 #[macro_use]
 extern crate rocket;
@@ -26,6 +31,10 @@ extern crate rocket;
 extern crate rocket_simple_authorization;
 extern crate rocket_cache_response;
 extern crate rocket_json_response;
+#[macro_use]
+extern crate rocket_include_static_resources;
+#[macro_use]
+extern crate rocket_include_handlebars;
 
 mod free;
 mod cpu_info;
