@@ -48,20 +48,24 @@ pub struct Auth;
 
 impl SimpleAuthorization for Auth {
     #[inline]
-    fn has_authority<S: AsRef<str>>(key: Option<S>) -> bool {
+    fn has_authority<S: AsRef<str>>(key: Option<S>) -> Option<Option<String>> {
         match unsafe { super::AUTH_KEY.as_ref() } {
             Some(auth_key) => {
                 match key {
-                    Some(key) => key.as_ref().eq(auth_key),
-                    None => false
+                    Some(key) => if key.as_ref().eq(auth_key) {
+                        Some(None)
+                    } else {
+                        None
+                    },
+                    None => None
                 }
             }
-            None => true
+            None => Some(None)
         }
     }
 
     #[inline]
-    fn create_auth<S: AsRef<str>>(_key: Option<S>) -> Auth {
+    fn create_auth(_key: Option<String>) -> Auth {
         Auth
     }
 }
