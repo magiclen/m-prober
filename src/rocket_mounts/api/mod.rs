@@ -61,7 +61,7 @@ impl SimpleAuthorization for Auth {
     }
 
     #[inline]
-    fn create_auth<S: Into<String>>(_key: Option<S>) -> Auth {
+    fn create_auth<S: AsRef<str>>(_key: Option<S>) -> Auth {
         Auth
     }
 }
