@@ -24,7 +24,7 @@ enum-ordinalize = "2"
 lazy_static = "1"
 
 rocket = "0.4"
-rocket-simple-authorization = "0.4"
+rocket-simple-authorization = "0.5.1"
 rocket-cache-response = "0.5"
 rocket-json-response = "0.3"
 
