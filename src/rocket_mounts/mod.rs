@@ -6,11 +6,14 @@ use crate::rocket::{Config, config::Environment};
 use crate::rand::{self, RngCore};
 use crate::base64;
 
-const MAX_DETECT_INTERVAL: u64 = 5000;
-
 static mut AUTH_KEY: Option<String> = None;
+static mut DETECT_INTERVAL: Duration = Duration::from_secs(0);
 
 pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>) {
+    unsafe {
+        DETECT_INTERVAL = monitor;
+    }
+
     unsafe {
         AUTH_KEY = auth_key;
     }

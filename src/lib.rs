@@ -9,6 +9,9 @@ extern crate termcolor;
 extern crate terminal_size;
 extern crate getch;
 extern crate scanner_rust;
+#[macro_use]
+extern crate lazy_static;
+
 extern crate libc;
 
 extern crate rand;
@@ -67,6 +70,8 @@ const YELLOW_COLOR: Color = Color::Rgb(216, 177, 0);
 const SKY_BLUE_COLOR: Color = Color::Rgb(107, 200, 200);
 
 const CLEAR_SCREEN_DATA: [u8; 11] = [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
+
+validated_customized_ranged_number!(WebMonitorInterval, u64, 1, 15);
 
 // TODO -----Config START-----
 
@@ -492,13 +497,9 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("web") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor: u64 = monitor.parse().map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
+                    let monitor = WebMonitorInterval::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
 
-                    if monitor == 0 {
-                        return Err(format!("`{}` is not a correct value for SECONDS", monitor));
-                    }
-
-                    Duration::from_secs(monitor)
+                    Duration::from_secs(monitor.get_number())
                 }
                 None => unreachable!()
             };
@@ -890,8 +891,6 @@ fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
 // TODO
 
 fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
-    let cpus: Vec<CPU> = CPU::get_cpus()?;
-
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
     } else {
@@ -910,8 +909,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         DEFAULT_TERMINAL_WIDTH
     };
 
-    // load average
-    if !only_information {
+    let mut draw_load_average = |cpus: &[CPU]| -> Result<(), ScannerError> {
         let load_average: LoadAverage = LoadAverage::get_load_average()?;
 
         let logical_cores_number: usize = cpus.iter().map(|cpu| cpu.siblings).sum();
@@ -1076,9 +1074,9 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
 
         writeln!(&mut stdout, "")?;
         writeln!(&mut stdout, "")?;
-    }
 
-    // information
+        Ok(())
+    };
 
     if separate {
         let all_percentage: Vec<f64> = if only_information {
@@ -1089,6 +1087,10 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
                 None => Duration::from_millis(DEFAULT_INTERVAL)
             })?
         };
+
+        let cpus: Vec<CPU> = CPU::get_cpus()?;
+
+        draw_load_average(&cpus)?;
 
         let mut i = 0;
 
@@ -1222,6 +1224,10 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
 
             (average_percentage, average_percentage_string)
         };
+
+        let cpus: Vec<CPU> = CPU::get_cpus()?;
+
+        draw_load_average(&cpus)?;
 
         for cpu in cpus {
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
