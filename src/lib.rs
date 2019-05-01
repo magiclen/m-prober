@@ -16,8 +16,9 @@ extern crate libc;
 
 extern crate rand;
 extern crate base64;
-#[macro_use]
 extern crate enum_ordinalize;
+#[macro_use]
+extern crate serde_json;
 
 #[macro_use]
 extern crate rocket;
@@ -41,7 +42,6 @@ use std::env;
 use std::path::Path;
 use std::io::Write;
 use std::thread;
-use std::fmt::Write as WriteFmt;
 use std::process;
 
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
@@ -747,8 +747,6 @@ pub fn run(config: Config) -> Result<i32, String> {
 fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), ScannerError> {
     let uptime = time::get_uptime()?;
 
-    let uptime_sec = uptime.as_secs();
-
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
     } else {
@@ -765,6 +763,8 @@ fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), Scanne
     write!(&mut stdout, "This computer has been up for ")?;
 
     if second {
+        let uptime_sec = uptime.as_secs();
+
         stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
         write!(&mut stdout, "{} second", uptime_sec)?;
 
@@ -772,70 +772,10 @@ fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), Scanne
             write!(&mut stdout, "s")?;
         }
     } else {
-        let days = uptime_sec / 86400;
-
-        let uptime_sec = uptime_sec % 86400;
-
-        let hours = uptime_sec / 3600;
-
-        let uptime_sec = uptime_sec % 3600;
-
-        let minutes = uptime_sec / 60;
-
-        let seconds = uptime_sec % 60;
-
-        let mut s = String::new();
-
-        if days > 0 {
-            s.write_fmt(format_args!("{} day", days)).unwrap();
-
-            if days > 1 {
-                s.push('s');
-            }
-
-            s.push_str(", ");
-        }
-
-        if hours > 0 || (days > 0) && (minutes > 0 || seconds > 0) {
-            s.write_fmt(format_args!("{} hour", hours)).unwrap();
-
-            if hours > 1 {
-                s.push('s');
-            }
-
-            s.push_str(", ");
-        }
-
-        if minutes > 0 || (hours > 0 && seconds > 0) {
-            s.write_fmt(format_args!("{} minute", minutes)).unwrap();
-
-            if minutes > 1 {
-                s.push('s');
-            }
-
-            s.push_str(", ");
-        }
-
-        if seconds > 0 {
-            s.write_fmt(format_args!("{} second", seconds)).unwrap();
-
-            if seconds > 1 {
-                s.push('s');
-            }
-
-            s.push_str(", ");
-        }
-
-        debug_assert!(s.len() >= 2);
-
-        if let Some(index) = s.as_str()[..(s.len() - 2)].rfind(", ") {
-            s.insert_str(index + 2, "and ");
-        }
-
-        let b = s.as_bytes();
+        let s = time::format_duration(uptime);
 
         stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
-        stdout.write_all(&b[..(b.len() - 2)])?;
+        stdout.write_all(s.as_bytes())?;
     }
 
     stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
@@ -1113,7 +1053,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
             for &cpu_mhz in cpu.cpus_mhz.iter() {
                 let cpu_hz = Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
-                hz_string.push(format!("{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1]));
+                hz_string.push(format!("{:.2} {}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1]));
             }
 
             let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap();
