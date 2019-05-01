@@ -43,7 +43,7 @@ mod hostname;
 mod time;
 mod kernel;
 mod network;
-mod disk;
+mod volume;
 mod rocket_mounts;
 
 use std::time::Duration;
@@ -66,7 +66,7 @@ use cpu_info::{CPU, CPUStat};
 use load_average::LoadAverage;
 use time::RTCDateTime;
 use network::NetworkWithSpeed;
-use disk::{Disk, DiskWithSpeed};
+use volume::{Volume, VolumeWithSpeed};
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -113,7 +113,7 @@ pub enum Mode {
         plain: bool,
         unit: Option<ByteUnit>,
     },
-    Disk {
+    Volume {
         monitor: Option<Duration>,
         plain: bool,
         unit: Option<ByteUnit>,
@@ -164,12 +164,12 @@ impl Config {
             "network -m 1000             # Show network stats and refresh every 1000 milliseconds",
             "network -p                  # Show current network stats without colors",
             "network -u kb               # Show current network stats in KB",
-            "disk                        # Show current disk stats",
-            "disk -m 1000                # Show current disk stats and refresh every 1000 milliseconds",
-            "disk -p                     # Show current disk stats without colors",
-            "disk -u kb                  # Show current disk stats in KB",
-            "disk -i                     # Only show disk information without I/O rates",
-            "disk --mounts               # Show current disk stats including mount points",
+            "volume                      # Show current volume stats",
+            "volume -m 1000              # Show current volume stats and refresh every 1000 milliseconds",
+            "volume -p                   # Show current volume stats without colors",
+            "volume -u kb                # Show current volume stats in KB",
+            "volume -i                   # Only show volume information without I/O rates",
+            "volume --mounts             # Show current volume stats including mount points",
             "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 1 second.",
             "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds.",
             "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer.",
@@ -310,13 +310,13 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
-            .subcommand(SubCommand::with_name("disk").aliases(&["d", "storage", "disks", "blk", "block", "blocks", "mount", "mounts", "ssd", "hdd"])
-                .about("Shows disk stats")
+            .subcommand(SubCommand::with_name("volume").aliases(&["v", "storage", "volumes", "d", "disk", "disks", "blk", "block", "blocks", "mount", "mounts", "ssd", "hdd"])
+                .about("Shows volume stats")
                 .display_order(7)
                 .arg(Arg::with_name("MONITOR")
                     .long("monitor")
                     .short("m")
-                    .help("Shows disk stats and refreshes every N milliseconds")
+                    .help("Shows volume stats and refreshes every N milliseconds")
                     .takes_value(true)
                     .value_name("MILLI_SECONDS")
                 )
@@ -334,7 +334,7 @@ impl Config {
                 .arg(Arg::with_name("INFORMATION")
                     .long("information")
                     .short("i")
-                    .help("Shows only information about disks without I/O rates")
+                    .help("Shows only information about volumes without I/O rates")
                 )
                 .arg(Arg::with_name("MOUNTS")
                     .long("mounts")
@@ -471,7 +471,7 @@ impl Config {
                 plain,
                 unit,
             }
-        } else if let Some(sub_matches) = matches.subcommand_matches("disk") {
+        } else if let Some(sub_matches) = matches.subcommand_matches("volume") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
                     let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
@@ -496,7 +496,7 @@ impl Config {
 
             let mounts = sub_matches.is_present("MOUNTS");
 
-            Mode::Disk {
+            Mode::Volume {
                 monitor,
                 plain,
                 unit,
@@ -710,7 +710,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
-        Mode::Disk { monitor, plain, unit, information, mounts } => {
+        Mode::Volume { monitor, plain, unit, information, mounts } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -728,7 +728,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_disk(!plain, unit, information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_volume(!plain, unit, information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -737,11 +737,11 @@ pub fn run(config: Config) -> Result<i32, String> {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_disk(!plain, unit, information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_volume(!plain, unit, information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_disk(!plain, unit, information, mounts, None).map_err(|err| err.to_string())?;
+                    draw_volume(!plain, unit, information, mounts, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -1588,7 +1588,7 @@ fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration
     Ok(())
 }
 
-fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mounts: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
+fn draw_volume(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mounts: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let output = if colorful {
         BufferWriter::stdout(ColorChoice::Always)
     } else {
@@ -1608,32 +1608,32 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
     };
 
     if only_information {
-        let disks = Disk::get_disks()?;
+        let volumes = Volume::get_volumes()?;
 
-        let disks_len = disks.len();
+        let volumes_len = volumes.len();
 
-        debug_assert!(disks_len > 0);
+        debug_assert!(volumes_len > 0);
 
-        let mut disks_size: Vec<String> = Vec::with_capacity(disks_len);
+        let mut volumes_size: Vec<String> = Vec::with_capacity(volumes_len);
 
-        let mut disks_used: Vec<String> = Vec::with_capacity(disks_len);
+        let mut volumes_used: Vec<String> = Vec::with_capacity(volumes_len);
 
-        let mut disks_used_percentage: Vec<String> = Vec::with_capacity(disks_len);
+        let mut volumes_used_percentage: Vec<String> = Vec::with_capacity(volumes_len);
 
-        let mut disks_read_total: Vec<String> = Vec::with_capacity(disks_len);
+        let mut volumes_read_total: Vec<String> = Vec::with_capacity(volumes_len);
 
-        let mut disks_write_total: Vec<String> = Vec::with_capacity(disks_len);
+        let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_len);
 
-        for disk in disks.iter() {
-            let size = Byte::from_bytes(disk.size as u128);
+        for volume in volumes.iter() {
+            let size = Byte::from_bytes(volume.size as u128);
 
-            let used = Byte::from_bytes(disk.used as u128);
+            let used = Byte::from_bytes(volume.used as u128);
 
-            let used_percentage = format!("{:.2}%", (disk.used * 100) as f64 / disk.size as f64);
+            let used_percentage = format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
 
-            let read_total = Byte::from_bytes(disk.read_bytes as u128);
+            let read_total = Byte::from_bytes(volume.read_bytes as u128);
 
-            let write_total = Byte::from_bytes(disk.write_bytes as u128);
+            let write_total = Byte::from_bytes(volume.write_bytes as u128);
 
             let (size, used, read_total, write_total) = match unit {
                 Some(unit) => {
@@ -1654,58 +1654,58 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
                 }
             };
 
-            disks_size.push(size);
-            disks_used.push(used);
-            disks_used_percentage.push(used_percentage);
-            disks_read_total.push(read_total);
-            disks_write_total.push(write_total);
+            volumes_size.push(size);
+            volumes_used.push(used);
+            volumes_used_percentage.push(used_percentage);
+            volumes_read_total.push(read_total);
+            volumes_write_total.push(write_total);
         }
 
-        let devices_len = disks.iter().map(|disk| disk.device.len()).max().unwrap();
+        let devices_len = volumes.iter().map(|volume| volume.device.len()).max().unwrap();
         let devices_len_inc = devices_len + 1;
 
-        let disks_size_len = disks_size.iter().map(|size| size.len()).max().unwrap();
-        let disks_used_len = disks_used.iter().map(|used| used.len()).max().unwrap();
-        let disks_used_percentage_len = disks_used_percentage.iter().map(|used_percentage| used_percentage.len()).max().unwrap();
-        let disks_read_total_len = disks_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
-        let disks_write_total_len = disks_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
+        let volumes_size_len = volumes_size.iter().map(|size| size.len()).max().unwrap();
+        let volumes_used_len = volumes_used.iter().map(|used| used.len()).max().unwrap();
+        let volumes_used_percentage_len = volumes_used_percentage.iter().map(|used_percentage| used_percentage.len()).max().unwrap();
+        let volumes_read_total_len = volumes_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
+        let volumes_write_total_len = volumes_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
 
-        let progress_max = terminal_width - devices_len - 4 - disks_used_len - 3 - disks_size_len - 2 - disks_used_percentage_len - 1;
+        let progress_max = terminal_width - devices_len - 4 - volumes_used_len - 3 - volumes_size_len - 2 - volumes_used_percentage_len - 1;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-        write!(&mut stdout, "{1:>0$}", devices_len_inc + disks_read_total_len, "Read Data")?;
+        write!(&mut stdout, "{1:>0$}", devices_len_inc + volumes_read_total_len, "Read Data")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
         write!(&mut stdout, " | ")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-        write!(&mut stdout, "{1:>0$}", disks_write_total_len, "Written Data")?;
+        write!(&mut stdout, "{1:>0$}", volumes_write_total_len, "Written Data")?;
 
         writeln!(&mut stdout, "")?;
 
-        let mut disks_size_iter = disks_size.into_iter();
-        let mut disks_used_iter = disks_used.into_iter();
-        let mut disks_used_percentage_iter = disks_used_percentage.into_iter();
-        let mut disks_read_total_iter = disks_read_total.into_iter();
-        let mut disks_write_total_iter = disks_write_total.into_iter();
+        let mut volumes_size_iter = volumes_size.into_iter();
+        let mut volumes_used_iter = volumes_used.into_iter();
+        let mut volumes_used_percentage_iter = volumes_used_percentage.into_iter();
+        let mut volumes_read_total_iter = volumes_read_total.into_iter();
+        let mut volumes_write_total_iter = volumes_write_total.into_iter();
 
-        for disk in disks.into_iter() {
-            let size = disks_size_iter.next().unwrap();
+        for volume in volumes.into_iter() {
+            let size = volumes_size_iter.next().unwrap();
 
-            let used = disks_used_iter.next().unwrap();
+            let used = volumes_used_iter.next().unwrap();
 
-            let used_percentage = disks_used_percentage_iter.next().unwrap();
+            let used_percentage = volumes_used_percentage_iter.next().unwrap();
 
-            let read_total = disks_read_total_iter.next().unwrap();
+            let read_total = volumes_read_total_iter.next().unwrap();
 
-            let write_total = disks_write_total_iter.next().unwrap();
+            let write_total = volumes_write_total_iter.next().unwrap();
 
             stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-            write!(&mut stdout, "{1:<0$}", devices_len_inc, disk.device)?;
+            write!(&mut stdout, "{1:<0$}", devices_len_inc, volume.device)?;
 
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
 
-            for _ in 0..(disks_read_total_len - read_total.len()) {
+            for _ in 0..(volumes_read_total_len - read_total.len()) {
                 write!(&mut stdout, " ")?;
             }
 
@@ -1713,7 +1713,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, "   ")?;
 
-            for _ in 0..(disks_write_total_len - write_total.len()) {
+            for _ in 0..(volumes_write_total_len - write_total.len()) {
                 write!(&mut stdout, " ")?;
             }
 
@@ -1729,9 +1729,9 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, " [")?; // 2
 
-            let f = progress_max as f64 / disk.size as f64;
+            let f = progress_max as f64 / volume.size as f64;
 
-            let progress_used = (disk.used as f64 * f).floor() as usize;
+            let progress_used = (volume.used as f64 * f).floor() as usize;
 
             stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
             for _ in 0..progress_used {
@@ -1745,7 +1745,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
             write!(&mut stdout, "] ")?; // 2
 
-            for _ in 0..(disks_used_len - used.len()) {
+            for _ in 0..(volumes_used_len - used.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
@@ -1755,7 +1755,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
             write!(&mut stdout, " / ")?; // 3
 
-            for _ in 0..(disks_size_len - size.len()) {
+            for _ in 0..(volumes_size_len - size.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
@@ -1764,7 +1764,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, " (")?; // 2
 
-            for _ in 0..(disks_used_percentage_len - used_percentage.len()) {
+            for _ in 0..(volumes_used_percentage_len - used_percentage.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
@@ -1777,7 +1777,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             if mounts {
                 stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
 
-                for point in disk.points {
+                for point in volume.points {
                     for _ in 0..devices_len_inc {
                         write!(&mut stdout, " ")?;
                     }
@@ -1789,41 +1789,41 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             }
         }
     } else {
-        let disks_with_speed = DiskWithSpeed::get_disks_with_speed(match monitor {
+        let volumes_with_speed = VolumeWithSpeed::get_volumes_with_speed(match monitor {
             Some(monitor) => monitor,
             None => Duration::from_millis(DEFAULT_INTERVAL)
         })?;
 
-        let disks_with_speed_len = disks_with_speed.len();
+        let volumes_with_speed_len = volumes_with_speed.len();
 
-        debug_assert!(disks_with_speed_len > 0);
+        debug_assert!(volumes_with_speed_len > 0);
 
-        let mut disks_size: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_size: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        let mut disks_used: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_used: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        let mut disks_used_percentage: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_used_percentage: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        let mut disks_read: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_read: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        let mut disks_read_total: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_read_total: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        let mut disks_write: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_write: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        let mut disks_write_total: Vec<String> = Vec::with_capacity(disks_with_speed_len);
+        let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        for disk_with_speed in disks_with_speed.iter() {
-            let size = Byte::from_bytes(disk_with_speed.disk.size as u128);
+        for volume_with_speed in volumes_with_speed.iter() {
+            let size = Byte::from_bytes(volume_with_speed.volume.size as u128);
 
-            let used = Byte::from_bytes(disk_with_speed.disk.used as u128);
+            let used = Byte::from_bytes(volume_with_speed.volume.used as u128);
 
-            let used_percentage = format!("{:.2}%", (disk_with_speed.disk.used * 100) as f64 / disk_with_speed.disk.size as f64);
+            let used_percentage = format!("{:.2}%", (volume_with_speed.volume.used * 100) as f64 / volume_with_speed.volume.size as f64);
 
-            let read = Byte::from_unit(disk_with_speed.speed.read, ByteUnit::B).unwrap();
-            let read_total = Byte::from_bytes(disk_with_speed.disk.read_bytes as u128);
+            let read = Byte::from_unit(volume_with_speed.speed.read, ByteUnit::B).unwrap();
+            let read_total = Byte::from_bytes(volume_with_speed.volume.read_bytes as u128);
 
-            let write = Byte::from_unit(disk_with_speed.speed.write, ByteUnit::B).unwrap();
-            let write_total = Byte::from_bytes(disk_with_speed.disk.write_bytes as u128);
+            let write = Byte::from_unit(volume_with_speed.speed.write, ByteUnit::B).unwrap();
+            let write_total = Byte::from_bytes(volume_with_speed.volume.write_bytes as u128);
 
             let (size, used, mut read, read_total, mut write, write_total) = match unit {
                 Some(unit) => {
@@ -1851,78 +1851,78 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             read.push_str("/s");
             write.push_str("/s");
 
-            disks_size.push(size);
-            disks_used.push(used);
-            disks_used_percentage.push(used_percentage);
-            disks_read.push(read);
-            disks_read_total.push(read_total);
-            disks_write.push(write);
-            disks_write_total.push(write_total);
+            volumes_size.push(size);
+            volumes_used.push(used);
+            volumes_used_percentage.push(used_percentage);
+            volumes_read.push(read);
+            volumes_read_total.push(read_total);
+            volumes_write.push(write);
+            volumes_write_total.push(write_total);
         }
 
-        let devices_len = disks_with_speed.iter().map(|disk_with_speed| disk_with_speed.disk.device.len()).max().unwrap();
+        let devices_len = volumes_with_speed.iter().map(|volume_with_speed| volume_with_speed.volume.device.len()).max().unwrap();
         let devices_len_inc = devices_len + 1;
 
-        let disks_size_len = disks_size.iter().map(|size| size.len()).max().unwrap();
-        let disks_used_len = disks_used.iter().map(|used| used.len()).max().unwrap();
-        let disks_used_percentage_len = disks_used_percentage.iter().map(|used_percentage| used_percentage.len()).max().unwrap();
-        let disks_read_len = disks_read.iter().map(|read| read.len()).max().unwrap().max(12);
-        let disks_read_total_len = disks_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
-        let disks_write_len = disks_write.iter().map(|write| write.len()).max().unwrap().max(12);
-        let disks_write_total_len = disks_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
+        let volumes_size_len = volumes_size.iter().map(|size| size.len()).max().unwrap();
+        let volumes_used_len = volumes_used.iter().map(|used| used.len()).max().unwrap();
+        let volumes_used_percentage_len = volumes_used_percentage.iter().map(|used_percentage| used_percentage.len()).max().unwrap();
+        let volumes_read_len = volumes_read.iter().map(|read| read.len()).max().unwrap().max(12);
+        let volumes_read_total_len = volumes_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
+        let volumes_write_len = volumes_write.iter().map(|write| write.len()).max().unwrap().max(12);
+        let volumes_write_total_len = volumes_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
 
-        let progress_max = terminal_width - devices_len - 4 - disks_used_len - 3 - disks_size_len - 2 - disks_used_percentage_len - 1;
+        let progress_max = terminal_width - devices_len - 4 - volumes_used_len - 3 - volumes_size_len - 2 - volumes_used_percentage_len - 1;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-        write!(&mut stdout, "{1:>0$}", devices_len_inc + disks_read_len, "Reading Rate")?;
+        write!(&mut stdout, "{1:>0$}", devices_len_inc + volumes_read_len, "Reading Rate")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
         write!(&mut stdout, " | ")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-        write!(&mut stdout, "{1:>0$}", disks_read_total_len, "Read Data")?;
+        write!(&mut stdout, "{1:>0$}", volumes_read_total_len, "Read Data")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
         write!(&mut stdout, " | ")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-        write!(&mut stdout, "{1:>0$}", disks_write_len, "Writing Rate")?;
+        write!(&mut stdout, "{1:>0$}", volumes_write_len, "Writing Rate")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
         write!(&mut stdout, " | ")?;
 
         stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-        write!(&mut stdout, "{1:>0$}", disks_write_total_len, "Written Data")?;
+        write!(&mut stdout, "{1:>0$}", volumes_write_total_len, "Written Data")?;
 
         writeln!(&mut stdout, "")?;
 
-        let mut disks_size_iter = disks_size.into_iter();
-        let mut disks_used_iter = disks_used.into_iter();
-        let mut disks_used_percentage_iter = disks_used_percentage.into_iter();
-        let mut disks_read_iter = disks_read.into_iter();
-        let mut disks_read_total_iter = disks_read_total.into_iter();
-        let mut disks_write_iter = disks_write.into_iter();
-        let mut disks_write_total_iter = disks_write_total.into_iter();
+        let mut volumes_size_iter = volumes_size.into_iter();
+        let mut volumes_used_iter = volumes_used.into_iter();
+        let mut volumes_used_percentage_iter = volumes_used_percentage.into_iter();
+        let mut volumes_read_iter = volumes_read.into_iter();
+        let mut volumes_read_total_iter = volumes_read_total.into_iter();
+        let mut volumes_write_iter = volumes_write.into_iter();
+        let mut volumes_write_total_iter = volumes_write_total.into_iter();
 
-        for disk_with_speed in disks_with_speed.into_iter() {
-            let size = disks_size_iter.next().unwrap();
+        for volume_with_speed in volumes_with_speed.into_iter() {
+            let size = volumes_size_iter.next().unwrap();
 
-            let used = disks_used_iter.next().unwrap();
+            let used = volumes_used_iter.next().unwrap();
 
-            let used_percentage = disks_used_percentage_iter.next().unwrap();
+            let used_percentage = volumes_used_percentage_iter.next().unwrap();
 
-            let read = disks_read_iter.next().unwrap();
-            let read_total = disks_read_total_iter.next().unwrap();
+            let read = volumes_read_iter.next().unwrap();
+            let read_total = volumes_read_total_iter.next().unwrap();
 
-            let write = disks_write_iter.next().unwrap();
-            let write_total = disks_write_total_iter.next().unwrap();
+            let write = volumes_write_iter.next().unwrap();
+            let write_total = volumes_write_total_iter.next().unwrap();
 
             stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
-            write!(&mut stdout, "{1:<0$}", devices_len_inc, disk_with_speed.disk.device)?;
+            write!(&mut stdout, "{1:<0$}", devices_len_inc, volume_with_speed.volume.device)?;
 
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)).set_bold(true))?;
 
-            for _ in 0..(disks_read_len - read.len()) {
+            for _ in 0..(volumes_read_len - read.len()) {
                 write!(&mut stdout, " ")?;
             }
 
@@ -1930,7 +1930,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, "   ")?;
 
-            for _ in 0..(disks_read_total_len - read_total.len()) {
+            for _ in 0..(volumes_read_total_len - read_total.len()) {
                 write!(&mut stdout, " ")?;
             }
 
@@ -1938,7 +1938,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, "   ")?;
 
-            for _ in 0..(disks_write_len - write.len()) {
+            for _ in 0..(volumes_write_len - write.len()) {
                 write!(&mut stdout, " ")?;
             }
 
@@ -1946,7 +1946,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, "   ")?;
 
-            for _ in 0..(disks_write_total_len - write_total.len()) {
+            for _ in 0..(volumes_write_total_len - write_total.len()) {
                 write!(&mut stdout, " ")?;
             }
 
@@ -1962,9 +1962,9 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, " [")?; // 2
 
-            let f = progress_max as f64 / disk_with_speed.disk.size as f64;
+            let f = progress_max as f64 / volume_with_speed.volume.size as f64;
 
-            let progress_used = (disk_with_speed.disk.used as f64 * f).floor() as usize;
+            let progress_used = (volume_with_speed.volume.used as f64 * f).floor() as usize;
 
             stdout.set_color(ColorSpec::new().set_fg(Some(RED_COLOR)))?;
             for _ in 0..progress_used {
@@ -1978,7 +1978,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
             write!(&mut stdout, "] ")?; // 2
 
-            for _ in 0..(disks_used_len - used.len()) {
+            for _ in 0..(volumes_used_len - used.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
@@ -1988,7 +1988,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
             write!(&mut stdout, " / ")?; // 3
 
-            for _ in 0..(disks_size_len - size.len()) {
+            for _ in 0..(volumes_size_len - size.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
@@ -1997,7 +1997,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
 
             write!(&mut stdout, " (")?; // 2
 
-            for _ in 0..(disks_used_percentage_len - used_percentage.len()) {
+            for _ in 0..(volumes_used_percentage_len - used_percentage.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
@@ -2010,7 +2010,7 @@ fn draw_disk(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mou
             if mounts {
                 stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
 
-                for point in disk_with_speed.disk.points {
+                for point in volume_with_speed.volume.points {
                     for _ in 0..devices_len_inc {
                         write!(&mut stdout, " ")?;
                     }

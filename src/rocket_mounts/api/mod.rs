@@ -16,7 +16,7 @@ use crate::load_average::LoadAverage;
 use crate::cpu_info::{CPU, CPUStat};
 use crate::free::Free;
 use crate::network::NetworkWithSpeed;
-use crate::disk::DiskWithSpeed;
+use crate::volume::VolumeWithSpeed;
 
 static mut CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static mut NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
@@ -45,7 +45,7 @@ lazy_static! {
         Mutex::new(Some(vec![]))
     };
 
-    static ref DISKS_STAT: Mutex<Option<Vec<DiskWithSpeed>>> = {
+    static ref DISKS_STAT: Mutex<Option<Vec<VolumeWithSpeed>>> = {
         Mutex::new(Some(vec![]))
     };
 }
@@ -120,13 +120,13 @@ fn fetch_network_stat() {
     }
 }
 
-fn fetch_disks_stat() {
+fn fetch_volumes_stat() {
     if !unsafe { DISKS_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         DISKS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let disk_stat = DiskWithSpeed::get_disks_with_speed(unsafe { super::DETECT_INTERVAL }).unwrap();
+            let volume_stat = VolumeWithSpeed::get_volumes_with_speed(unsafe { super::DETECT_INTERVAL }).unwrap();
 
-            DISKS_STAT.lock().unwrap().replace(disk_stat);
+            DISKS_STAT.lock().unwrap().replace(volume_stat);
 
             unsafe { DISKS_STAT_DOING.swap(false, Ordering::Relaxed); }
         });
@@ -147,7 +147,7 @@ fn kernel_401() -> Status {
 fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat();
     fetch_network_stat();
-    fetch_disks_stat();
+    fetch_volumes_stat();
 
     detect_all_sleep();
 
@@ -255,19 +255,19 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
         json_network
     };
 
-    let json_disks = {
-        let disks_stat = DISKS_STAT.lock().unwrap();
+    let json_volumes = {
+        let volumes_stat = DISKS_STAT.lock().unwrap();
 
-        let disks_stat: &[DiskWithSpeed] = disks_stat.as_ref().unwrap();
+        let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
 
-        let mut json_disks = Vec::with_capacity(disks_stat.len());
+        let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
-        for disk_with_speed in disks_stat {
-            let read_total_string = Byte::from_bytes(disk_with_speed.disk.read_bytes as u128).get_appropriate_unit(false).to_string();
-            let write_total_string = Byte::from_bytes(disk_with_speed.disk.write_bytes as u128).get_appropriate_unit(false).to_string();
+        for volume_with_speed in volumes_stat {
+            let read_total_string = Byte::from_bytes(volume_with_speed.volume.read_bytes as u128).get_appropriate_unit(false).to_string();
+            let write_total_string = Byte::from_bytes(volume_with_speed.volume.write_bytes as u128).get_appropriate_unit(false).to_string();
 
             let read_rate_string = {
-                let mut s = Byte::from_bytes(disk_with_speed.speed.read as u128).get_appropriate_unit(false).to_string();
+                let mut s = Byte::from_bytes(volume_with_speed.speed.read as u128).get_appropriate_unit(false).to_string();
 
                 s.push_str("/s");
 
@@ -275,36 +275,36 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_bytes(disk_with_speed.speed.write as u128).get_appropriate_unit(false).to_string();
+                let mut s = Byte::from_bytes(volume_with_speed.speed.write as u128).get_appropriate_unit(false).to_string();
 
                 s.push_str("/s");
 
                 s
             };
 
-            json_disks.push(json!({
-                "device": disk_with_speed.disk.device,
+            json_volumes.push(json!({
+                "device": volume_with_speed.volume.device,
                 "read_total": {
-                    "value": disk_with_speed.disk.read_bytes,
+                    "value": volume_with_speed.volume.read_bytes,
                     "text": read_total_string
                 },
                 "write_total": {
-                    "value": disk_with_speed.disk.write_bytes,
+                    "value": volume_with_speed.volume.write_bytes,
                     "text": write_total_string
                 },
                 "read_rate": {
-                    "value": disk_with_speed.speed.read,
+                    "value": volume_with_speed.speed.read,
                     "text": read_rate_string
                 },
                 "write_rate": {
-                    "value": disk_with_speed.speed.write,
+                    "value": volume_with_speed.speed.write,
                     "text": download_rate_string
                 },
-                "mount_points": disk_with_speed.disk.points
+                "mount_points": volume_with_speed.volume.points
             }));
         }
 
-        json_disks
+        json_volumes
     };
 
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::JSONValue(json!({
@@ -350,7 +350,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
             },
         },
         "network": json_network,
-        "disks": json_disks,
+        "volumes": json_volumes,
     }))))
 }
 
