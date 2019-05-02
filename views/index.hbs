@@ -15,12 +15,17 @@
 </head>
 <body>
 
-<input id="auth" type="hidden" value="{{authKey}}">
+{{#if authKey}}
+    <input id="auth-key" type="hidden" value="{{authKey}}">
+{{/if}}
 
-<div class="d-flex mt-5 pt-1" id="wrapper">
+<input id="time-interval" type="hidden" value="{{timeInterval}}">
+
+<div class="d-flex mt-5 pt-2" id="wrapper">
     <div class="position-fixed bg-light border-right" id="sidebar-wrapper">
         <div class="list-group list-group-flush">
             <a href="javascript:void(0)" class="list-group-item list-group-item-action bg-light" @click="toLinuxInformation">Linux Information</a>
+            <a href="javascript:void(0)" class="list-group-item list-group-item-action bg-light" @click="toLoadAverage">Load Average</a>
             <a href="javascript:void(0)" class="list-group-item list-group-item-action bg-light" @click="toCPUs">CPUs</a>
             <a href="javascript:void(0)" class="list-group-item list-group-item-action bg-light" @click="toMemory">Memory</a>
             <a href="javascript:void(0)" class="list-group-item list-group-item-action bg-light" @click="toNetworks">Networks</a>
@@ -39,8 +44,185 @@
             <button class="btn btn-light ml-auto float-right" id="menu-github"><i class="fas fa-bug"></i></button>
         </nav>
 
-        <div id="monitor" class="container-fluid">
-            <p class="mt-3">This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces and block devices. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs.</p>
+        <div id="monitor" class="container-fluid pb-3">
+            <div class="text-right">
+                <small><i>Last Update Time: \{{last_update_time}}</i></small>
+            </div>
+
+            <div id="linux-information" class="card mt-1">
+                <div class="card-header">
+                    Linux Information
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="col-md-6 mb-3">
+                            <label for="kernel-version">Kernel Version:</label>
+                            <input id="kernel-version" class="form-control" :class="{'bg-white': kernel !== ''}" type="text" readonly v-model="kernel"/>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="hostname">Hostname:</label>
+                            <input id="hostname" class="form-control" :class="{'bg-white': hostname !== ''}" type="text" readonly v-model="hostname"/>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rtc-time">RTC time:</label>
+                            <input id="rtc-time" class="form-control" :class="{'bg-white': rtc_time !== ''}" type="text" readonly v-model="rtc_time"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="uptime">Uptime:</label>
+                            <input id="uptime" class="form-control" :class="{'bg-white': uptime.text !== ''}" type="text" readonly v-model="uptime.text"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="load-average" class="card mt-3">
+                <div class="card-header">
+                    Load Average
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="col-12 mb-3" v-if="logical_cores > 1">
+                            There are <code>\{{logical_cores}}</code> logical CPU cores.
+                        </div>
+                        <div class="col-12 mb-3" v-else-if="logical_cores === 1">
+                            There is only one logical CPU core.
+                        </div>
+                        <div class="col-12 mb-3" v-else>
+                            <img src="images/preload.svg" alt="Detecting..."/>
+                        </div>
+                        <div class="col-12">
+                            <div class="row mb-2">
+                                <div class="col-12 col-md-2 col-lg-2 col-xl-1"><label>One</label></div>
+                                <div class="col-7 col-md-6 col-lg-7 col-xl-8">
+                                    <div class="progress" style="height: 1.4rem;">
+                                        <div class="progress-bar progress-bar-animated" :class="{'bg-success': load_average_scale.one >= 50 && load_average_scale.one < 70, 'bg-warning': load_average_scale.one >= 70 && load_average_scale.one < 90, 'bg-danger': load_average_scale.one >= 90}" role="progressbar" aria-valuenow="Math.min(load_average_scale.one, 100)" aria-valuemin="0" :aria-valuemax="100" :style="{width:  Math.min(load_average_scale.one, 100).toFixed(2) + '%'}"></div>
+                                    </div>
+                                </div>
+                                <div class="col-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.one.toFixed(2)}} (\{{load_average_scale.one.toFixed(2)}}%)</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-12 col-md-2 col-lg-2 col-xl-1"><label>Five</label></div>
+                                <div class="col-7 col-md-6 col-lg-7 col-xl-8">
+                                    <div class="progress" style="height: 1.4rem;">
+                                        <div class="progress-bar progress-bar-animated" :class="{'bg-success': load_average_scale.five >= 50 && load_average_scale.five < 70, 'bg-warning': load_average_scale.five >= 70 && load_average_scale.five < 90, 'bg-danger': load_average_scale.five >= 90}" role="progressbar" aria-valuenow="Math.min(load_average_scale.five, 100)" aria-valuemin="0" :aria-valuemax="100" :style="{width:  Math.min(load_average_scale.five, 100).toFixed(2) + '%'}"></div>
+                                    </div>
+                                </div>
+                                <div class="col-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.five.toFixed(2)}} (\{{load_average_scale.five.toFixed(2)}}%)</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-12 col-md-2 col-lg-2 col-xl-1"><label>Fifteen</label></div>
+                                <div class="col-7 col-md-6 col-lg-7 col-xl-8">
+                                    <div class="progress" style="height: 1.4rem;">
+                                        <div class="progress-bar progress-bar-animated" :class="{'bg-success': load_average_scale.fifteen >= 50 && load_average_scale.fifteen < 70, 'bg-warning': load_average_scale.fifteen >= 70 && load_average_scale.fifteen < 90, 'bg-danger': load_average_scale.fifteen >= 90}" role="progressbar" aria-valuenow="Math.min(load_average_scale.fifteen, 100)" aria-valuemin="0" :aria-valuemax="100" :style="{width:  Math.min(load_average_scale.fifteen, 100).toFixed(2) + '%'}"></div>
+                                    </div>
+                                </div>
+                                <div class="col-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.fifteen.toFixed(2)}} (\{{load_average_scale.fifteen.toFixed(2)}}%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="cpus" class="card mt-3">
+                <div class="card-header">
+                    CPUs
+                </div>
+                <div class="card-body">
+                    <div class="col-12">
+                        <div class="row mb-2">
+                            <div class="col-12 col-md-1 col-lg-1"><label>CPU</label></div>
+                            <div class="col-8 col-md-8 col-lg-9">
+                                <div class="progress" style="height: 1.4rem;">
+                                    <div class="progress-bar progress-bar-animated" :class="{'bg-success': cpu >= 50 && cpu < 70, 'bg-warning': cpu >= 70 && cpu < 90, 'bg-danger': cpu >= 90}" role="progressbar" aria-valuenow="cpu" aria-valuemin="0" :aria-valuemax="100" :style="{width:  cpu.toFixed(2) + '%'}"></div>
+                                </div>
+                            </div>
+                            <div class="col-4 col-md-3 col-lg-2">\{{cpu.toFixed(2)}}%</div>
+                        </div>
+                    </div>
+                    <div class="col-12" v-if="cpus.length > 0">
+                        <div id="accordion">
+                            <div class="card" v-for="(cpu, index) in cpus">
+                                <div class="card-header" :id="'cpu-' + index + 'heading'">
+                                    <h5 class="mb-0">
+                                        <button class="btn btn-link" data-toggle="collapse" :data-target="'#cpu-' + index + 'collapse'" aria-expanded="true" :aria-controls="'cpu-' + index + 'collapse'">
+                                            \{{cpu.model_name}} <b class="text-nowrap">\{{cpu.cores}}C/\{{cpu.threads}}T \{{cpu.mhz.text}}</b>
+                                        </button>
+                                    </h5>
+                                </div>
+
+                                <div :id="'cpu-' + index + 'collapse'" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="col-md-12 mb-3">
+                                                <label :for="'cpu-' + index + 'model'">Model:</label>
+                                                <input :id="'cpu-' + index + 'model'" class="form-control bg-white" type="text" readonly v-model="cpu.model_name"/>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="col-md-6 mb-3">
+                                                <label :for="'cpu-' + index + 'physical-cores'">Physical Cores:</label>
+                                                <input :id="'cpu-' + index + 'physical-cores'" class="form-control bg-white" type="text" readonly v-model="cpu.cores"/>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label :for="'cpu-' + index + 'logical-cores'">Logical Cores:</label>
+                                                <input :id="'cpu-' + index + 'logical-cores'" class="form-control bg-white" type="text" readonly v-model="cpu.threads"/>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="col-md-12">
+                                                <label :for="'cpu-' + index + 'frequency'">Current Frequency:</label>
+                                                <input :id="'cpu-' + index + 'frequency'" class="form-control bg-white" type="text" readonly v-model="cpu.mhz.text"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12" v-else>
+                        <img src="images/preload.svg" alt="Detecting..."/>
+                    </div>
+                </div>
+            </div>
+            <div id="memory" class="card mt-3">
+                <div class="card-header">
+                    Memory
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="col-12">
+                            <div class="row mb-2">
+                                <div class="col-12 col-md-1 col-lg-1 col-xl-1"><label>Mem</label></div>
+                                <div class="col-2 col-sm-5 col-md-3 col-lg-5 col-xl-6">
+                                    <div class="progress" style="height: 1.4rem;">
+                                        <div class="progress-bar progress-bar-animated" :class="{'bg-success': memory_scale.used >= 50 && memory_scale.used < 70, 'bg-warning': memory_scale.used >= 70 && memory_scale.used < 90, 'bg-danger': memory_scale.used >= 90}" role="progressbar" aria-valuenow="memory_scale.used" aria-valuemin="0" :aria-valuemax="100" :style="{width:  memory_scale.used.toFixed(2) + '%'}"></div>
+                                        <div class="progress-bar progress-bar-animated bg-secondary" role="progressbar" aria-valuenow="memory_scale.buffer_cache" aria-valuemin="0" aria-valuemax="100" :style="{width:  memory_scale.buffer_cache.toFixed(2) + '%'}"></div>
+                                    </div>
+                                </div>
+                                <div class="col-10 col-sm-7 col-md-8 col-lg-6 col-xl-5">
+                                    \{{memory.used.text}} / \{{memory.total.text}} (\{{memory_scale.used.toFixed(2)}}%)
+                                    <br/>
+                                    <span class="text-secondary">\{{memory.buffer_cache.text}} / \{{memory.total.text}} (\{{memory_scale.buffer_cache.toFixed(2)}}%)</span>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-12 col-md-1 col-lg-1 col-xl-1"><label>Swap</label></div>
+                                <div class="col-2 col-sm-5 col-md-3 col-lg-5 col-xl-6">
+                                    <div class="progress" style="height: 1.4rem;">
+                                        <div class="progress-bar progress-bar-animated" :class="{'bg-success': swap_scale.used >= 50 && swap_scale.used < 70, 'bg-warning': swap_scale.used >= 70 && swap_scale.used < 90, 'bg-danger': swap_scale.used >= 90}" role="progressbar" aria-valuenow="swap_scale.used" aria-valuemin="0" :aria-valuemax="100" :style="{width:  swap_scale.used.toFixed(2) + '%'}"></div>
+                                        <div class="progress-bar progress-bar-animated bg-secondary" role="progressbar" aria-valuenow="swap_scale.cache" aria-valuemin="0" aria-valuemax="100" :style="{width:  swap_scale.cache.toFixed(2) + '%'}"></div>
+                                    </div>
+                                </div>
+                                <div class="col-10 col-sm-7 col-md-8 col-lg-6 col-xl-5">
+                                    \{{swap.used.text}} / \{{swap.total.text}} (\{{swap_scale.used.toFixed(2)}}%)
+                                    <br/>
+                                    <span class="text-secondary">\{{swap.cache.text}} / \{{swap.total.text}} (\{{swap_scale.cache.toFixed(2)}}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

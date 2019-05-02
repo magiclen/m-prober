@@ -22,6 +22,12 @@ fn index(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<HandlebarsRespons
 
     map.insert("version", JSONGetTextValue::Str(crate::CARGO_PKG_VERSION));
 
+    map.insert("timeInterval", JSONGetTextValue::from_u64(unsafe { super::DETECT_INTERVAL }.as_secs()));
+
+    if let Some(auth_key) = unsafe { super::AUTH_KEY.as_ref() } {
+        map.insert("authKey", JSONGetTextValue::from_str(auth_key));
+    }
+
     handlebars_response(handlebars_response!(etag_if_none_match, "index", &map))
 }
 

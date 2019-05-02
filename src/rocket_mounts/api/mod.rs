@@ -5,7 +5,7 @@ use std::time::{Instant, Duration};
 use crate::rocket::{Rocket, http::Status};
 use crate::rocket_simple_authorization::SimpleAuthorization;
 use crate::rocket_cache_response::CacheResponse;
-use crate::rocket_json_response::{JSONResponse, json_gettext::{serde_json::Value, JSONGetTextValue}};
+use crate::rocket_json_response::{JSONResponse, json_gettext::JSONGetTextValue};
 
 use crate::byte_unit::{Byte, ByteUnit};
 
@@ -135,7 +135,7 @@ fn fetch_volumes_stat() {
 
 #[get("/kernel")]
 fn kernel(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::JSONValue(Value::String(kernel::get_kernel_version().unwrap()))))
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(kernel::get_kernel_version().unwrap())))
 }
 
 #[get("/kernel", rank = 2)]
@@ -158,6 +158,8 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     let memory = Free::get_free().unwrap();
 
     let hostname = hostname::get_hostname().unwrap();
+
+    let kernel = kernel::get_kernel_version().unwrap();
 
     let uptime = time::get_uptime().unwrap();
 
@@ -309,6 +311,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
 
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::JSONValue(json!({
         "hostname": hostname,
+        "kernel": kernel,
         "uptime": {
             "seconds": uptime.as_secs(),
             "text": uptime_string
@@ -330,7 +333,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
                 "value": memory.mem.used,
                 "text": memory_used_string,
             },
-            "buff/cache": {
+            "buffer_cache": {
                 "value": memory.mem.buffers + memory.mem.cache,
                 "text": memory_buff_and_cache_string
             },

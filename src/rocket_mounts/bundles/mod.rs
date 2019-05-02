@@ -29,6 +29,8 @@ static_resources_initialize!(
 
     "favicon", "front-end/favicon.ico",
     "favicon-192", "front-end/favicon-192.png",
+
+    "preload", "front-end/images/preload.svg",
 );
 
 use crate::rocket_include_static_resources::{EtagIfNoneMatch, StaticResponse};
@@ -160,6 +162,11 @@ fn favicon_192(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticRespo
     static_response(etag_if_none_match, "favicon-192")
 }
 
+#[get("/images/preload.svg")]
+fn preload(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
+    static_response(etag_if_none_match, "preload")
+}
+
 pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
     rocket
         .mount("/", routes![css_bundle, js_bundle])
@@ -169,4 +176,5 @@ pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
         .mount("/", routes![fa_regular_400_eot, fa_regular_400_svg, fa_regular_400_ttf, fa_regular_400_woff, fa_regular_400_woff2])
         .mount("/", routes![fa_solid_900_eot, fa_solid_900_svg, fa_solid_900_ttf, fa_solid_900_woff, fa_solid_900_woff2])
         .mount("/", routes![favicon, favicon_192])
+        .mount("/", routes![preload])
 }
