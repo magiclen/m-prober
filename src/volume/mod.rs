@@ -10,7 +10,7 @@ use std::ffi::CString;
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
-const DISKSTATS_PATH: &'static str = "/proc/volumestats";
+const DISKSTATS_PATH: &'static str = "/proc/diskstats";
 
 const SECTOR_SIZE: u64 = 512;
 

@@ -1251,11 +1251,13 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
         stdout.write_all(&CLEAR_SCREEN_DATA)?;
     }
 
-    let (mem_used, mem_total, swap_used, swap_total) = {
-        let (mem_used, mem_total, swap_used, swap_total) = (
+    let (mem_used, mem_buffers_cache, mem_total, swap_used, swap_cache, swap_total) = {
+        let (mem_used, mem_buffers_cache, mem_total, swap_used, swap_cache, swap_total) = (
             Byte::from_bytes(free.mem.used as u128),
+            Byte::from_bytes((free.mem.buffers + free.mem.cache) as u128),
             Byte::from_bytes(free.mem.total as u128),
             Byte::from_bytes(free.swap.used as u128),
+            Byte::from_bytes(free.swap.cache as u128),
             Byte::from_bytes(free.swap.total as u128),
         );
 
@@ -1263,29 +1265,35 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
             Some(unit) => {
                 (
                     mem_used.get_adjusted_unit(unit).to_string(),
+                    mem_buffers_cache.get_adjusted_unit(unit).to_string(),
                     mem_total.get_adjusted_unit(unit).to_string(),
                     swap_used.get_adjusted_unit(unit).to_string(),
+                    swap_cache.get_adjusted_unit(unit).to_string(),
                     swap_total.get_adjusted_unit(unit).to_string(),
                 )
             }
             None => {
                 (
                     mem_used.get_appropriate_unit(true).to_string(),
+                    mem_buffers_cache.get_appropriate_unit(true).to_string(),
                     mem_total.get_appropriate_unit(true).to_string(),
                     swap_used.get_appropriate_unit(true).to_string(),
+                    swap_cache.get_appropriate_unit(true).to_string(),
                     swap_total.get_appropriate_unit(true).to_string(),
                 )
             }
         }
     };
 
-    let used_len = mem_used.len().max(swap_used.len());
+    let used_len = mem_used.len().max(swap_used.len()).max(mem_buffers_cache.len()).max(swap_cache.len());
     let total_len = mem_total.len().max(swap_total.len());
 
     let mem_percentage = format!("{:.2}%", free.mem.used as f64 * 100f64 / free.mem.total as f64);
+    let mem_buffers_cache_percentage = format!("{:.2}%", (free.mem.buffers as f64 + free.mem.cache as f64) * 100f64 / free.mem.total as f64);
     let swap_percentage = format!("{:.2}%", free.swap.used as f64 * 100f64 / free.swap.total as f64);
+    let swap_cache_percentage = format!("{:.2}%", free.swap.cache as f64 * 100f64 / free.swap.total as f64);
 
-    let percentage_len = mem_percentage.len().max(swap_percentage.len());
+    let percentage_len = mem_percentage.len().max(swap_percentage.len()).max(mem_buffers_cache_percentage.len()).max(swap_cache_percentage.len());
 
     let terminal_width = if let Some((Width(width), _)) = terminal_size() {
         (width as usize).max(MIN_TERMINAL_WIDTH)
@@ -1370,6 +1378,38 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
 
     writeln!(&mut stdout, "")?;
 
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+
+    for _ in 0..(progress_max + 10) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    for _ in 0..(used_len - mem_buffers_cache.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(mem_buffers_cache.as_bytes())?;
+
+    write!(&mut stdout, " / ")?; // 3
+
+    for _ in 0..(total_len - mem_total.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(mem_total.as_bytes())?;
+
+    write!(&mut stdout, " (")?; // 2
+
+    for _ in 0..(percentage_len - mem_buffers_cache_percentage.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(mem_buffers_cache_percentage.as_bytes())?;
+
+    write!(&mut stdout, ")")?; // 1
+
+    writeln!(&mut stdout, "")?;
+
     // Swap
 
     stdout.set_color(ColorSpec::new().set_fg(Some(LABEL_COLOR)))?;
@@ -1429,6 +1469,38 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
     }
 
     stdout.write_all(swap_percentage.as_bytes())?;
+
+    write!(&mut stdout, ")")?; // 1
+
+    writeln!(&mut stdout, "")?;
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(WHITE_COLOR)))?;
+
+    for _ in 0..(progress_max + 10) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    for _ in 0..(used_len - swap_cache.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(swap_cache.as_bytes())?;
+
+    write!(&mut stdout, " / ")?; // 3
+
+    for _ in 0..(total_len - swap_total.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(swap_total.as_bytes())?;
+
+    write!(&mut stdout, " (")?; // 2
+
+    for _ in 0..(percentage_len - swap_cache_percentage.len()) {
+        write!(&mut stdout, " ")?; // 1
+    }
+
+    stdout.write_all(swap_cache_percentage.as_bytes())?;
 
     write!(&mut stdout, ")")?; // 1
 
