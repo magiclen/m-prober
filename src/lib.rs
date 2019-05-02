@@ -343,7 +343,7 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
-            .subcommand(SubCommand::with_name("web").aliases(&["server", "http"])
+            .subcommand(SubCommand::with_name("web").aliases(&["w", "server", "http"])
                 .about("Starts a HTTP service to monitor this computer")
                 .display_order(8)
                 .arg(Arg::with_name("MONITOR")
