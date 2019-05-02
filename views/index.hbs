@@ -95,30 +95,30 @@
                         <div class="col-12">
                             <div class="row mb-2">
                                 <div class="col-12 col-md-2 col-lg-2 col-xl-1"><label class="text-info font-weight-bold">One</label></div>
-                                <div class="col-7 col-md-6 col-lg-7 col-xl-8">
+                                <div class="col-6 col-sm-7 col-md-6 col-lg-7 col-xl-8">
                                     <div class="progress" style="height: 1.4rem;">
                                         <div class="progress-bar progress-bar-animated" :class="{'bg-success': load_average_scale.one >= 50 && load_average_scale.one < 70, 'bg-warning': load_average_scale.one >= 70 && load_average_scale.one < 90, 'bg-danger': load_average_scale.one >= 90}" role="progressbar" :aria-valuenow="Math.min(load_average_scale.one, 100)" aria-valuemin="0" :aria-valuemax="100" :style="{width:  Math.min(load_average_scale.one, 100).toFixed(2) + '%'}"></div>
                                     </div>
                                 </div>
-                                <div class="col-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.one.toFixed(2)}} (\{{load_average_scale.one.toFixed(2)}}%)</div>
+                                <div class="col-6 col-sm-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.one.toFixed(2)}} (\{{load_average_scale.one.toFixed(2)}}%)</div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-12 col-md-2 col-lg-2 col-xl-1"><label class="text-info font-weight-bold">Five</label></div>
-                                <div class="col-7 col-md-6 col-lg-7 col-xl-8">
+                                <div class="col-6 col-sm-7 col-md-6 col-lg-7 col-xl-8">
                                     <div class="progress" style="height: 1.4rem;">
                                         <div class="progress-bar progress-bar-animated" :class="{'bg-success': load_average_scale.five >= 50 && load_average_scale.five < 70, 'bg-warning': load_average_scale.five >= 70 && load_average_scale.five < 90, 'bg-danger': load_average_scale.five >= 90}" role="progressbar" :aria-valuenow="Math.min(load_average_scale.five, 100)" aria-valuemin="0" :aria-valuemax="100" :style="{width:  Math.min(load_average_scale.five, 100).toFixed(2) + '%'}"></div>
                                     </div>
                                 </div>
-                                <div class="col-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.five.toFixed(2)}} (\{{load_average_scale.five.toFixed(2)}}%)</div>
+                                <div class="col-6 col-sm-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.five.toFixed(2)}} (\{{load_average_scale.five.toFixed(2)}}%)</div>
                             </div>
                             <div class="row">
                                 <div class="col-12 col-md-2 col-lg-2 col-xl-1"><label class="text-info font-weight-bold">Fifteen</label></div>
-                                <div class="col-7 col-md-6 col-lg-7 col-xl-8">
+                                <div class="col-6 col-sm-7 col-md-6 col-lg-7 col-xl-8">
                                     <div class="progress" style="height: 1.4rem;">
                                         <div class="progress-bar progress-bar-animated" :class="{'bg-success': load_average_scale.fifteen >= 50 && load_average_scale.fifteen < 70, 'bg-warning': load_average_scale.fifteen >= 70 && load_average_scale.fifteen < 90, 'bg-danger': load_average_scale.fifteen >= 90}" role="progressbar" :aria-valuenow="Math.min(load_average_scale.fifteen, 100)" aria-valuemin="0" :aria-valuemax="100" :style="{width:  Math.min(load_average_scale.fifteen, 100).toFixed(2) + '%'}"></div>
                                     </div>
                                 </div>
-                                <div class="col-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.fifteen.toFixed(2)}} (\{{load_average_scale.fifteen.toFixed(2)}}%)</div>
+                                <div class="col-6 col-sm-5 col-md-4 col-lg-3 col-xl-3">\{{load_average.fifteen.toFixed(2)}} (\{{load_average_scale.fifteen.toFixed(2)}}%)</div>
                             </div>
                         </div>
                     </div>
@@ -155,13 +155,13 @@
                                 <div :id="'cpu-' + index + 'collapse'" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
                                     <div class="card-body pb-2">
                                         <div class="row mb-2" v-for="(cpu_stat, index) in cpu.cpus_stat">
-                                            <div class="col-12 col-md-2 col-lg-1"><label class="text-info font-weight-bold">CPU\{{index}}</label></div>
-                                            <div class="col-4 col-sm-6 col-md-4 col-lg-7">
+                                            <div class="col-12 col-md-2 col-lg-1 col-xl-1"><label class="text-info font-weight-bold">CPU\{{index}}</label></div>
+                                            <div class="col-4 col-sm-6 col-md-4 col-lg-6 col-xl-7">
                                                 <div class="progress" style="height: 1.4rem;">
                                                     <div class="progress-bar progress-bar-animated" :class="{'bg-success': cpu_stat >= 50 && cpu_stat < 70, 'bg-warning': cpu_stat >= 70 && cpu_stat < 90, 'bg-danger': cpu_stat >= 90}" role="progressbar" :aria-valuenow="cpu" aria-valuemin="0" :aria-valuemax="100" :style="{width:  cpu_stat.toFixed(2) + '%'}"></div>
                                                 </div>
                                             </div>
-                                            <div class="col-8 col-sm-6 col-md-6 col-lg-4">\{{cpu_stat.toFixed(2)}}% (\{{cpu.mhzs[index].text}})</div>
+                                            <div class="col-8 col-sm-6 col-md-6 col-lg-5 col-xl-4">\{{cpu_stat.toFixed(2)}}% (\{{cpu.mhzs[index].text}})</div>
                                         </div>
                                     </div>
                                 </div>
