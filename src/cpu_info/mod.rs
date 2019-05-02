@@ -185,7 +185,7 @@ impl CPUStat {
         }
     }
 
-    pub fn get_all_cpus_stat() -> Result<Vec<CPUStat>, ScannerError> {
+    pub fn get_all_cpus_stat(with_average: bool) -> Result<Vec<CPUStat>, ScannerError> {
         let mut sc = Scanner::scan_path(STAT_PATH)?;
 
         let label = sc.next()?;
@@ -195,8 +195,40 @@ impl CPUStat {
         match label {
             Some(label) => {
                 if label.as_str().eq("cpu") {
-                    if sc.next_line()?.is_none() {
-                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of item `cpu` is correct.".to_string())));
+                    if with_average {
+                        if label.as_str().eq("cpu") {
+                            let user = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let nice = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let system = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let idle = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let iowait = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let irq = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let softirq = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let steal = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let guest = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+                            let guest_nice = sc.next_u64()?.ok_or(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, "The item `cpu` has incorrect value.".to_string())))?;
+
+                            let cpu_stat = CPUStat {
+                                user,
+                                nice,
+                                system,
+                                idle,
+                                iowait,
+                                irq,
+                                softirq,
+                                steal,
+                                guest,
+                                guest_nice,
+                            };
+
+                            cpus_stat.push(cpu_stat);
+                        } else {
+                            return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The item `cpu` is not found.".to_string())));
+                        }
+                    } else {
+                        if sc.next_line()?.is_none() {
+                            return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of item `cpu` is correct.".to_string())));
+                        }
                     }
 
                     let mut i = 0;
@@ -287,12 +319,12 @@ impl CPUStat {
         Ok(CPUStat::compute_percentage(pre_cpu_stat, cpu_stat))
     }
 
-    pub fn get_all_percentage(interval: Duration) -> Result<Vec<f64>, ScannerError> {
-        let pre_cpus_stat = CPUStat::get_all_cpus_stat()?;
+    pub fn get_all_percentage(with_average: bool, interval: Duration) -> Result<Vec<f64>, ScannerError> {
+        let pre_cpus_stat = CPUStat::get_all_cpus_stat(with_average)?;
 
         sleep(interval);
 
-        let mut cpus_stat = CPUStat::get_all_cpus_stat()?;
+        let mut cpus_stat = CPUStat::get_all_cpus_stat(with_average)?;
 
         let cpus_stat_len = cpus_stat.len();
 

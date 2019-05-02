@@ -37,8 +37,8 @@ lazy_static! {
 }
 
 lazy_static! {
-    static ref CPUS_STAT: Mutex<Option<f64>> = {
-        Mutex::new(Some(0f64))
+    static ref CPUS_STAT: Mutex<Option<Vec<f64>>> = {
+        Mutex::new(Some(vec![]))
     };
 
     static ref NETWORK_STAT: Mutex<Option<Vec<NetworkWithSpeed>>> = {
@@ -98,7 +98,7 @@ fn fetch_cpus_stat() {
     if !unsafe { CPUS_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         CPUS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let cpus_stat = CPUStat::get_average_percentage(unsafe { super::DETECT_INTERVAL }).unwrap();
+            let cpus_stat = CPUStat::get_all_percentage(true, unsafe { super::DETECT_INTERVAL }).unwrap();
 
             CPUS_STAT.lock().unwrap().replace(cpus_stat);
 
@@ -165,7 +165,9 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
 
     let time = RTCDateTime::get_rtc_date_time().unwrap();
 
-    let cpus_stat = CPUS_STAT.lock().unwrap().unwrap();
+    let cpus_stat = CPUS_STAT.lock().unwrap();
+
+    let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
     let uptime_string = time::format_duration(uptime);
 
@@ -175,7 +177,24 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
         for cpu in cpus {
             let cpus_mhz_len = cpu.cpus_mhz.len();
 
-            let mhz = cpu.cpus_mhz.iter().sum::<f64>() / cpus_mhz_len as f64;
+            let mut mhzs = Vec::with_capacity(cpus_mhz_len);
+
+            let mut mhz_sum = 0f64;
+
+            for mhz in cpu.cpus_mhz {
+                mhz_sum += mhz;
+
+                let adjusted_byte = Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+
+                let mhz_string = format!("{:.2} {}Hz", adjusted_byte.get_value(), &adjusted_byte.get_unit().as_str()[..1]);
+
+                mhzs.push(json!({
+                    "value": mhz,
+                    "text": mhz_string
+                }));
+            }
+
+            let mhz = mhz_sum / cpus_mhz_len as f64;
             let mhz_string = {
                 let adjusted_byte = Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
@@ -190,6 +209,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
                     "value": mhz,
                     "text": mhz_string
                 },
+                "mhzs": mhzs,
             }));
         }
 
@@ -322,8 +342,8 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
             "five": load_average.five,
             "fifteen": load_average.fifteen
         },
-        "cpu": cpus_stat,
         "cpus": json_cpus,
+        "cpus_stat": cpus_stat,
         "memory": {
             "total": {
                 "value": memory.mem.total,

@@ -1031,7 +1031,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
         let all_percentage: Vec<f64> = if only_information {
             Vec::new()
         } else {
-            CPUStat::get_all_percentage(match monitor {
+            CPUStat::get_all_percentage(false, match monitor {
                 Some(monitor) => monitor,
                 None => Duration::from_millis(DEFAULT_INTERVAL)
             })?
@@ -1105,7 +1105,7 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
                 let mut percentage_string_iter = percentage_string.into_iter();
                 let mut hz_string_iter = hz_string.into_iter();
 
-                for p in all_percentage[i..].into_iter().take(cpu.siblings) {
+                for (i, p) in all_percentage[i..].into_iter().take(cpu.siblings).enumerate() {
                     let percentage_string = percentage_string_iter.next().unwrap();
                     let hz_string = hz_string_iter.next().unwrap();
 
