@@ -215,7 +215,7 @@
                     Networks
                 </div>
                 <div class="table-responsive" v-if="network.length > 0">
-                    <table class="table table-borderless table-hover text-nowrap m-0">
+                    <table class="table table-borderless table-hover-light text-nowrap m-0">
                         <thead>
                         <tr>
                             <th scope="col"></th>
@@ -233,6 +233,71 @@
                             <td>\{{network.download_rate.text}}</td>
                             <td>\{{network.download_total.text}}</td>
                         </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-body" v-else>
+                    <img src="images/preload.svg" alt="Detecting..."/>
+                </div>
+            </div>
+
+            <div id="volumes" class="card mt-3">
+                <div class="card-header">
+                    Volumes
+                </div>
+                <div class="table-responsive" v-if="volumes.length > 0">
+                    <table class="table table-borderless table-hover-light text-nowrap m-0">
+                        <thead>
+                        <tr>
+                            <th scope="col"></th>
+                            <th scope="col">Reading Rate</th>
+                            <th scope="col">Read Data</th>
+                            <th scope="col">Writing Rate</th>
+                            <th scope="col">Written Data</th>
+                            <th scope="col">Mount Points</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <template v-for="volume in volumes">
+                            <tr>
+                                <th scope="row" class="text-info">\{{volume.device}}</th>
+                                <td>\{{volume.read_rate.text}}</td>
+                                <td>\{{volume.read_total.text}}</td>
+                                <td>\{{volume.write_rate.text}}</td>
+                                <td>\{{volume.write_total.text}}</td>
+                                <td>
+                                    <template v-if="volume.mount_points.length > 0">
+                                        \{{volume.mount_points[0]}}
+                                    </template>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td colspan="2">
+                                    <div class="progress" style="height: 1.4rem;">
+                                        <div class="progress-bar progress-bar-animated" :class="{'bg-success': volume.scale >= 50 && volume.scale < 70, 'bg-warning': volume.scale >= 70 && volume.scale < 90, 'bg-danger': volume.scale >= 90}" role="progressbar" :aria-valuenow="volume.scale" aria-valuemin="0" :aria-valuemax="100" :style="{width:  volume.scale.toFixed(2) + '%'}"></div>
+                                    </div>
+                                </td>
+                                <td colspan="2">
+                                    \{{volume.used.text}} / \{{volume.size.text}} (\{{volume.scale.toFixed(2)}}%)
+                                </td>
+                                <td>
+                                    <template v-if="volume.mount_points.length > 1">
+                                        \{{volume.mount_points[1]}}
+                                    </template>
+                                </td>
+                            </tr>
+                            <template v-if="volume.mount_points.length > 2">
+                                <tr v-for="i in [...Array(volume.mount_points.length - 2).keys()]">
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td>\{{volume.mount_points[i + 2]}}</td>
+                                </tr>
+                            </template>
+                        </template>
                         </tbody>
                     </table>
                 </div>

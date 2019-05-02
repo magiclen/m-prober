@@ -285,6 +285,9 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
         for volume_with_speed in volumes_stat {
+            let size_string =  Byte::from_bytes(volume_with_speed.volume.size as u128).get_appropriate_unit(false).to_string();
+            let used_string =  Byte::from_bytes(volume_with_speed.volume.used as u128).get_appropriate_unit(false).to_string();
+
             let read_total_string = Byte::from_bytes(volume_with_speed.volume.read_bytes as u128).get_appropriate_unit(false).to_string();
             let write_total_string = Byte::from_bytes(volume_with_speed.volume.write_bytes as u128).get_appropriate_unit(false).to_string();
 
@@ -306,6 +309,14 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
 
             json_volumes.push(json!({
                 "device": volume_with_speed.volume.device,
+                "size": {
+                    "value": volume_with_speed.volume.size,
+                    "text": size_string
+                },
+                "used": {
+                    "value": volume_with_speed.volume.used,
+                    "text": used_string
+                },
                 "read_total": {
                     "value": volume_with_speed.volume.read_bytes,
                     "text": read_total_string
