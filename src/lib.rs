@@ -170,7 +170,7 @@ impl Config {
             "volume -u kb                # Show current volume stats in KB",
             "volume -i                   # Only show volume information without I/O rates",
             "volume --mounts             # Show current volume stats including mount points",
-            "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 1 second.",
+            "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 3 seconds.",
             "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds.",
             "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer.",
             "web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key.",
@@ -352,7 +352,7 @@ impl Config {
                     .help("Automatically refreshes every N seconds")
                     .takes_value(true)
                     .value_name("SECONDS")
-                    .default_value("1")
+                    .default_value("3")
                 )
                 .arg(Arg::with_name("PORT")
                     .long("port")
