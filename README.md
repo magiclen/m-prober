@@ -88,7 +88,7 @@ cargo install mprober
 From [GitHub](https://github.com/magiclen/m-prober) (x86 and x86_64),
 
 ```bash
-(curl -s https://api.github.com/repos/magiclen/m-prober/releases/latest | sed -r -n 's/.*"browser_download_url": *"(.*/mprober_$(uname -m))".*/\1/p' | wget -qi -) && sudo mv mprober_$(uname -m) /usr/local/bin
+(curl -s https://api.github.com/repos/magiclen/m-prober/releases/latest | sed -r -n 's/.*"browser_download_url": *"(.*/mprober_$(uname -m))".*/\1/p' | wget -qi -) && sudo mv mprober_$(uname -m) /usr/local/bin/mprober && sudo chmod +x /usr/local/bin/mprober
 
 # sudo rm /usr/local/bin/mprober
 ```
