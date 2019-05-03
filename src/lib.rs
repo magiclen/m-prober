@@ -76,9 +76,17 @@ const CYAN_COLOR: Color = Color::Rgb(0, 177, 177);
 const WHITE_COLOR: Color = Color::Rgb(219, 219, 219);
 const RED_COLOR: Color = Color::Rgb(255, 95, 0);
 const YELLOW_COLOR: Color = Color::Rgb(216, 177, 0);
-const SKY_BLUE_COLOR: Color = Color::Rgb(107, 200, 200);
+const SKY_CYAN_COLOR: Color = Color::Rgb(107, 200, 200);
+
+const DARK_CYAN_COLOR: Color = Color::Rgb(0, 95, 95);
+const BLACK_COLOR: Color = Color::Rgb(28, 28, 28);
+const WINE_COLOR: Color = Color::Rgb(215, 0, 0);
+const ORANGE_COLOR: Color = Color::Rgb(215, 135, 0);
+const DARK_BLUE_COLOR: Color = Color::Rgb(0, 0, 95);
 
 const CLEAR_SCREEN_DATA: [u8; 11] = [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
+
+static mut LIGHT_MODE: bool = false;
 
 validated_customized_ranged_number!(WebMonitorInterval, u64, 1, 15);
 
@@ -90,7 +98,11 @@ lazy_static! {
     static ref COLOR_LABEL: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        color_spec.set_fg(Some(CYAN_COLOR));
+        if unsafe{ LIGHT_MODE } {
+            color_spec.set_fg(Some(DARK_CYAN_COLOR));
+        } else {
+            color_spec.set_fg(Some(CYAN_COLOR));
+        }
 
         color_spec
     };
@@ -98,7 +110,11 @@ lazy_static! {
     static ref COLOR_NORMAL_TEXT: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        color_spec.set_fg(Some(WHITE_COLOR));
+        if unsafe{ LIGHT_MODE } {
+            color_spec.set_fg(Some(BLACK_COLOR));
+        } else {
+            color_spec.set_fg(Some(WHITE_COLOR));
+        }
 
         color_spec
     };
@@ -106,7 +122,11 @@ lazy_static! {
     static ref COLOR_BOLD_TEXT: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
+        if unsafe{ LIGHT_MODE } {
+            color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
+        } else {
+            color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
+        }
 
         color_spec
     };
@@ -114,7 +134,11 @@ lazy_static! {
     static ref COLOR_USED: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        color_spec.set_fg(Some(RED_COLOR));
+        if unsafe{ LIGHT_MODE } {
+            color_spec.set_fg(Some(WINE_COLOR));
+        } else {
+            color_spec.set_fg(Some(RED_COLOR));
+        }
 
         color_spec
     };
@@ -122,7 +146,11 @@ lazy_static! {
     static ref COLOR_CACHE: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        color_spec.set_fg(Some(YELLOW_COLOR));
+        if unsafe{ LIGHT_MODE } {
+            color_spec.set_fg(Some(ORANGE_COLOR));
+        } else {
+            color_spec.set_fg(Some(YELLOW_COLOR));
+        }
 
         color_spec
     };
@@ -130,7 +158,11 @@ lazy_static! {
     static ref COLOR_BUFFERS: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        color_spec.set_fg(Some(SKY_BLUE_COLOR));
+        if unsafe{ LIGHT_MODE } {
+            color_spec.set_fg(Some(DARK_BLUE_COLOR));
+        } else {
+            color_spec.set_fg(Some(SKY_CYAN_COLOR));
+        }
 
         color_spec
     };
@@ -201,26 +233,32 @@ impl Config {
             "uptime                      # Show the uptime",
             "uptime -m                   # Show the uptime and refresh every second",
             "uptime -p                   # Show the uptime without colors",
+            "uptime -l                   # Show the uptime with darker colors (fitting in with light themes)",
             "uptime -s                   # Show the uptime in seconds",
             "time                        # Show the RTC (UTC) date and time",
             "time -m                     # Show the RTC (UTC) date and time and refresh every second",
             "time -p                     # Show the RTC (UTC) date and time without colors",
+            "time -l                     # Show the RTC (UTC) date and time with darker colors (fitting in with light themes)",
             "cpu                         # Show load average and current CPU stats on average",
             "cpu -m 1000                 # Show load average and CPU stats on average and refresh every 1000 milliseconds",
             "cpu -p                      # Show load average and current CPU stats on average without colors",
+            "cpu -l                      # Show load average and current CPU stats on average with darker colors (fitting in with light themes)",
             "cpu -s                      # Show load average and current stats of CPU cores separately",
             "cpu -i                      # Only show CPU information",
             "memory                      # Show current memory stats",
             "memory -m 1000              # Show memory stats and refresh every 1000 milliseconds",
             "memory -p                   # Show current memory stats without colors",
+            "memory -l                   # Show current memory stats with darker colors (fitting in with light themes)",
             "memory -u kb                # Show current memory stats in KB",
             "network                     # Show current network stats",
             "network -m 1000             # Show network stats and refresh every 1000 milliseconds",
             "network -p                  # Show current network stats without colors",
+            "network -l                  # Show current network stats with darker colors (fitting in with light themes)",
             "network -u kb               # Show current network stats in KB",
             "volume                      # Show current volume stats",
             "volume -m 1000              # Show current volume stats and refresh every 1000 milliseconds",
             "volume -p                   # Show current volume stats without colors",
+            "volume -l                   # Show current volume stats without colors",
             "volume -u kb                # Show current volume stats in KB",
             "volume -i                   # Only show volume information without I/O rates",
             "volume --mounts             # Show current volume stats including mount points",
@@ -269,6 +307,11 @@ impl Config {
                     .short("p")
                     .help("No colors")
                 )
+                .arg(Arg::with_name("LIGHT")
+                    .long("light")
+                    .short("l")
+                    .help("Darker colors")
+                )
                 .arg(Arg::with_name("SECOND")
                     .long("second")
                     .short("s")
@@ -289,6 +332,11 @@ impl Config {
                     .short("p")
                     .help("No colors")
                 )
+                .arg(Arg::with_name("LIGHT")
+                    .long("light")
+                    .short("l")
+                    .help("Darker colors")
+                )
                 .after_help("Enjoy it! https://magiclen.org")
             )
             .subcommand(SubCommand::with_name("cpu").aliases(&["c", "cpus", "core", "cores", "load", "processor", "processors"])
@@ -305,6 +353,11 @@ impl Config {
                     .long("plain")
                     .short("p")
                     .help("No colors")
+                )
+                .arg(Arg::with_name("LIGHT")
+                    .long("light")
+                    .short("l")
+                    .help("Darker colors")
                 )
                 .arg(Arg::with_name("SEPARATE")
                     .long("separate")
@@ -333,6 +386,11 @@ impl Config {
                     .short("p")
                     .help("No colors")
                 )
+                .arg(Arg::with_name("LIGHT")
+                    .long("light")
+                    .short("l")
+                    .help("Darker colors")
+                )
                 .arg(Arg::with_name("UNIT")
                     .long("unit")
                     .short("u")
@@ -356,6 +414,11 @@ impl Config {
                     .short("p")
                     .help("No colors")
                 )
+                .arg(Arg::with_name("LIGHT")
+                    .long("light")
+                    .short("l")
+                    .help("Darker colors")
+                )
                 .arg(Arg::with_name("UNIT")
                     .long("unit")
                     .short("u")
@@ -378,6 +441,11 @@ impl Config {
                     .long("plain")
                     .short("p")
                     .help("No colors")
+                )
+                .arg(Arg::with_name("LIGHT")
+                    .long("light")
+                    .short("l")
+                    .help("Darker colors")
                 )
                 .arg(Arg::with_name("UNIT")
                     .long("unit")
@@ -435,6 +503,10 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
+            unsafe {
+                LIGHT_MODE = sub_matches.is_present("LIGHT");
+            }
+
             let second = sub_matches.is_present("SECOND");
 
             Mode::Uptime {
@@ -446,6 +518,10 @@ impl Config {
             let monitor = sub_matches.is_present("MONITOR");
 
             let plain = sub_matches.is_present("PLAIN");
+
+            unsafe {
+                LIGHT_MODE = sub_matches.is_present("LIGHT");
+            }
 
             Mode::Time {
                 monitor,
@@ -462,6 +538,10 @@ impl Config {
             };
 
             let plain = sub_matches.is_present("PLAIN");
+
+            unsafe {
+                LIGHT_MODE = sub_matches.is_present("LIGHT");
+            }
 
             let separate = sub_matches.is_present("SEPARATE");
 
@@ -484,6 +564,10 @@ impl Config {
             };
 
             let plain = sub_matches.is_present("PLAIN");
+
+            unsafe {
+                LIGHT_MODE = sub_matches.is_present("LIGHT");
+            }
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
@@ -511,6 +595,10 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
+            unsafe {
+                LIGHT_MODE = sub_matches.is_present("LIGHT");
+            }
+
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
                     let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
@@ -536,6 +624,10 @@ impl Config {
             };
 
             let plain = sub_matches.is_present("PLAIN");
+
+            unsafe {
+                LIGHT_MODE = sub_matches.is_present("LIGHT");
+            }
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
