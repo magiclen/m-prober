@@ -222,6 +222,20 @@ const APP_NAME: &str = "M Prober (MagicLen Prober)";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
+const ENV_LIGHT_MODE: &str = "MPROBER_LIGHT";
+
+macro_rules! set_light_mode {
+    ($sub_matches:ident) => {
+        unsafe{
+            if $sub_matches.is_present("LIGHT") {
+                LIGHT_MODE = true;
+            } else {
+                LIGHT_MODE = env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+            }
+        }
+    };
+}
+
 impl Config {
     pub fn from_cli() -> Result<Config, String> {
         let arg0 = env::args().next().unwrap();
@@ -503,9 +517,7 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
-            unsafe {
-                LIGHT_MODE = sub_matches.is_present("LIGHT");
-            }
+            set_light_mode!(sub_matches);
 
             let second = sub_matches.is_present("SECOND");
 
@@ -519,9 +531,7 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
-            unsafe {
-                LIGHT_MODE = sub_matches.is_present("LIGHT");
-            }
+            set_light_mode!(sub_matches);
 
             Mode::Time {
                 monitor,
@@ -539,9 +549,7 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
-            unsafe {
-                LIGHT_MODE = sub_matches.is_present("LIGHT");
-            }
+            set_light_mode!(sub_matches);
 
             let separate = sub_matches.is_present("SEPARATE");
 
@@ -565,9 +573,7 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
-            unsafe {
-                LIGHT_MODE = sub_matches.is_present("LIGHT");
-            }
+            set_light_mode!(sub_matches);
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
@@ -595,9 +601,7 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
-            unsafe {
-                LIGHT_MODE = sub_matches.is_present("LIGHT");
-            }
+            set_light_mode!(sub_matches);
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
@@ -625,9 +629,7 @@ impl Config {
 
             let plain = sub_matches.is_present("PLAIN");
 
-            unsafe {
-                LIGHT_MODE = sub_matches.is_present("LIGHT");
-            }
+            set_light_mode!(sub_matches);
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
