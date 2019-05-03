@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{self, ErrorKind};
+use std::path::Path;
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
@@ -17,7 +18,17 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
         };
 
         if device_path.starts_with("/dev/") {
-            let device = device_path[5..].to_string();
+            let device = {
+                let device = &device_path[5..];
+
+                if device.starts_with("mapper/") {
+                    let device_path = Path::new(&device_path).canonicalize()?;
+
+                    device_path.file_name().unwrap().to_string_lossy().into_owned()
+                } else {
+                    device.to_string()
+                }
+            };
 
             let point = match sc.next()? {
                 Some(point) => point,
