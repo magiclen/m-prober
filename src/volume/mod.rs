@@ -112,7 +112,7 @@ impl Volume {
                                     return Err(ScannerError::IOError(io::Error::new(ErrorKind::Other, format!("Cannot get the stats of the path `{}`.", points[0]))));
                                 }
 
-                                (stats.f_bsize * stats.f_blocks, stats.f_bsize * (stats.f_blocks - stats.f_bavail))
+                                (stats.f_bsize as u64 * stats.f_blocks as u64, stats.f_bsize as u64 * (stats.f_blocks - stats.f_bavail) as u64)
                             };
 
                             let volume = Volume {
