@@ -223,6 +223,7 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 const ENV_LIGHT_MODE: &str = "MPROBER_LIGHT";
+const ENV_FORCE_PLAIN: &str = "MPROBER_FORCE_PLAIN";
 
 macro_rules! set_light_mode {
     ($sub_matches:ident) => {
@@ -515,7 +516,11 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("uptime") {
             let monitor = sub_matches.is_present("MONITOR");
 
-            let plain = sub_matches.is_present("PLAIN");
+            let plain = if sub_matches.is_present("PLAIN") {
+                true
+            } else {
+                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
+            };
 
             set_light_mode!(sub_matches);
 
@@ -529,7 +534,11 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("time") {
             let monitor = sub_matches.is_present("MONITOR");
 
-            let plain = sub_matches.is_present("PLAIN");
+            let plain = if sub_matches.is_present("PLAIN") {
+                true
+            } else {
+                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
+            };
 
             set_light_mode!(sub_matches);
 
@@ -547,7 +556,11 @@ impl Config {
                 None => None
             };
 
-            let plain = sub_matches.is_present("PLAIN");
+            let plain = if sub_matches.is_present("PLAIN") {
+                true
+            } else {
+                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
+            };
 
             set_light_mode!(sub_matches);
 
@@ -571,7 +584,11 @@ impl Config {
                 None => None
             };
 
-            let plain = sub_matches.is_present("PLAIN");
+            let plain = if sub_matches.is_present("PLAIN") {
+                true
+            } else {
+                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
+            };
 
             set_light_mode!(sub_matches);
 
@@ -599,7 +616,11 @@ impl Config {
                 None => None
             };
 
-            let plain = sub_matches.is_present("PLAIN");
+            let plain = if sub_matches.is_present("PLAIN") {
+                true
+            } else {
+                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
+            };
 
             set_light_mode!(sub_matches);
 
@@ -627,7 +648,11 @@ impl Config {
                 None => None
             };
 
-            let plain = sub_matches.is_present("PLAIN");
+            let plain = if sub_matches.is_present("PLAIN") {
+                true
+            } else {
+                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
+            };
 
             set_light_mode!(sub_matches);
 
