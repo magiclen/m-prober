@@ -191,7 +191,7 @@ mprober web
 
 In addition to `web`, `w`, `server`, and `http` are also acceptable.
 
-Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8000) vis a web browser such as Firefox or Chrome.
+Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8000) via a web browser such as Firefox or Chrome.
 
 ![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/web.png)
 
