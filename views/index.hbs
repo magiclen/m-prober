@@ -147,7 +147,7 @@
                                 <div class="card-header" :id="'cpu-' + index + 'heading'">
                                     <h5 class="mb-0">
                                         <button class="btn btn-link" data-toggle="collapse" :data-target="'#cpu-' + index + 'collapse'" aria-expanded="true" :aria-controls="'cpu-' + index + 'collapse'">
-                                            \{{cpu.model_name}} <b class="text-nowrap">\{{cpu.cores}}C/\{{cpu.threads}}T \{{cpu.mhz.text}}</b>
+                                            \{{cpu.model_name}} <b class="text-nowrap">\{{cpu.cores}}C/\{{cpu.threads}}T \{{cpu.mhz[0].text}}</b>
                                         </button>
                                     </h5>
                                 </div>
@@ -161,7 +161,7 @@
                                                     <div class="progress-bar progress-bar-animated" :class="{'bg-success': cpu_stat >= 50 && cpu_stat < 70, 'bg-warning': cpu_stat >= 70 && cpu_stat < 90, 'bg-danger': cpu_stat >= 90}" role="progressbar" :aria-valuenow="cpu" aria-valuemin="0" :aria-valuemax="100" :style="{width:  cpu_stat.toFixed(2) + '%'}"></div>
                                                 </div>
                                             </div>
-                                            <div class="col-8 col-sm-6 col-md-6 col-lg-5 col-xl-4">\{{cpu_stat.toFixed(2)}}% (\{{cpu.mhzs[index].text}})</div>
+                                            <div class="col-8 col-sm-6 col-md-6 col-lg-5 col-xl-4">\{{cpu_stat.toFixed(2)}}% (\{{cpu.mhz[index + 1].text}})</div>
                                         </div>
                                     </div>
                                 </div>

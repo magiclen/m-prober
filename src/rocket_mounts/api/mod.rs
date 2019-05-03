@@ -1,6 +1,7 @@
 use std::thread;
 use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use std::time::{Instant, Duration};
+use std::collections::linked_list::LinkedList;
 
 use crate::rocket::{Rocket, http::Status};
 use crate::rocket_simple_authorization::SimpleAuthorization;
@@ -16,37 +17,39 @@ use crate::load_average::LoadAverage;
 use crate::cpu_info::{CPU, CPUStat};
 use crate::free::Free;
 use crate::network::NetworkWithSpeed;
-use crate::volume::VolumeWithSpeed;
+use crate::volume::{Volume, VolumeWithSpeed};
 
 static mut CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static mut NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
-static mut DISKS_STAT_DOING: AtomicBool = AtomicBool::new(false);
+static mut VOLUMES_STAT_DOING: AtomicBool = AtomicBool::new(false);
+
+static DELAY_DURATION: Duration = Duration::from_millis(33);
 
 lazy_static! {
     static ref CPUS_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
         Mutex::new(Some(Instant::now()))
     };
 
-    static ref NETWORK_LATEST_DETECT: Mutex<Option<Instant>> = {
+    static ref NETWORK_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
         Mutex::new(Some(Instant::now()))
     };
 
-    static ref DISKS_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
+    static ref VOLUMES_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
         Mutex::new(Some(Instant::now()))
     };
 }
 
 lazy_static! {
     static ref CPUS_STAT: Mutex<Option<Vec<f64>>> = {
-        Mutex::new(Some(vec![]))
+        Mutex::new(None)
     };
 
     static ref NETWORK_STAT: Mutex<Option<Vec<NetworkWithSpeed>>> = {
-        Mutex::new(Some(vec![]))
+        Mutex::new(None)
     };
 
-    static ref DISKS_STAT: Mutex<Option<Vec<VolumeWithSpeed>>> = {
-        Mutex::new(Some(vec![]))
+    static ref VOLUMES_STAT: Mutex<Option<Vec<VolumeWithSpeed>>> = {
+        Mutex::new(None)
     };
 }
 
@@ -79,17 +82,113 @@ impl SimpleAuthorization for Auth {
 authorizer!(Auth);
 
 #[inline]
-fn detect_all_sleep() {
+fn detect_cpus_stat_sleep(strict: bool) {
     let now = Instant::now();
 
-    let latest = CPUS_STAT_LATEST_DETECT.lock().unwrap().unwrap().max(NETWORK_LATEST_DETECT.lock().unwrap().unwrap()).max(DISKS_STAT_LATEST_DETECT.lock().unwrap().unwrap());
+    let latest = CPUS_STAT_LATEST_DETECT.lock().unwrap().unwrap();
 
     if now > latest {
         let d: Duration = now - latest;
-        let detect_interval = unsafe { super::DETECT_INTERVAL };
+        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
 
         if d < detect_interval {
             thread::sleep(detect_interval - d);
+        }
+    }
+
+    if strict {
+        loop {
+            let cont = CPUS_STAT.lock().unwrap().is_none();
+
+            if cont {
+                thread::sleep(DELAY_DURATION);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+#[inline]
+fn detect_network_stat_sleep(strict: bool) {
+    let now = Instant::now();
+
+    let latest = NETWORK_STAT_LATEST_DETECT.lock().unwrap().unwrap();
+
+    if now > latest {
+        let d: Duration = now - latest;
+        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+
+        if d < detect_interval {
+            thread::sleep(detect_interval - d);
+        }
+    }
+
+    if strict {
+        loop {
+            let cont = NETWORK_STAT.lock().unwrap().is_none();
+
+            if cont {
+                thread::sleep(DELAY_DURATION);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+#[inline]
+fn detect_volumes_stat_sleep(strict: bool) {
+    let now = Instant::now();
+
+    let latest = VOLUMES_STAT_LATEST_DETECT.lock().unwrap().unwrap();
+
+    if now > latest {
+        let d: Duration = now - latest;
+        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+
+        if d < detect_interval {
+            thread::sleep(detect_interval - d);
+        }
+    }
+
+    if strict {
+        loop {
+            let cont = VOLUMES_STAT.lock().unwrap().is_none();
+
+            if cont {
+                thread::sleep(DELAY_DURATION);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+#[inline]
+fn detect_all_sleep(strict: bool) {
+    let now = Instant::now();
+
+    let latest = CPUS_STAT_LATEST_DETECT.lock().unwrap().unwrap().max(NETWORK_STAT_LATEST_DETECT.lock().unwrap().unwrap()).max(VOLUMES_STAT_LATEST_DETECT.lock().unwrap().unwrap());
+
+    if now > latest {
+        let d: Duration = now - latest;
+        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+
+        if d < detect_interval {
+            thread::sleep(detect_interval - d);
+        }
+    }
+
+    if strict {
+        loop {
+            let cont = CPUS_STAT.lock().unwrap().is_none() || NETWORK_STAT.lock().unwrap().is_none() || VOLUMES_STAT.lock().unwrap().is_none();
+
+            if cont {
+                thread::sleep(DELAY_DURATION);
+            } else {
+                break;
+            }
         }
     }
 }
@@ -109,7 +208,7 @@ fn fetch_cpus_stat() {
 
 fn fetch_network_stat() {
     if !unsafe { NETWORK_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
-        NETWORK_LATEST_DETECT.lock().unwrap().replace(Instant::now());
+        NETWORK_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
             let network_stat = NetworkWithSpeed::get_networks_with_speed(unsafe { super::DETECT_INTERVAL }).unwrap();
 
@@ -121,16 +220,26 @@ fn fetch_network_stat() {
 }
 
 fn fetch_volumes_stat() {
-    if !unsafe { DISKS_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
-        DISKS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
+    if !unsafe { VOLUMES_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
+        VOLUMES_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
             let volume_stat = VolumeWithSpeed::get_volumes_with_speed(unsafe { super::DETECT_INTERVAL }).unwrap();
 
-            DISKS_STAT.lock().unwrap().replace(volume_stat);
+            VOLUMES_STAT.lock().unwrap().replace(volume_stat);
 
-            unsafe { DISKS_STAT_DOING.swap(false, Ordering::Relaxed); }
+            unsafe { VOLUMES_STAT_DOING.swap(false, Ordering::Relaxed); }
         });
     }
+}
+
+#[get("/hostname")]
+fn hostname(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(hostname::get_hostname().unwrap())))
+}
+
+#[get("/hostname", rank = 2)]
+fn hostname_401() -> Status {
+    Status::Unauthorized
 }
 
 #[get("/kernel")]
@@ -143,13 +252,391 @@ fn kernel_401() -> Status {
     Status::Unauthorized
 }
 
+#[get("/uptime")]
+fn uptime(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_u64(time::get_uptime().unwrap().as_secs())))
+}
+
+#[get("/uptime", rank = 2)]
+fn uptime_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/time")]
+fn time(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    let rtc_date_time = RTCDateTime::get_rtc_date_time().unwrap();
+
+    let json_rtc_date_time = json!({
+        "date": rtc_date_time.rtc_date,
+        "time": rtc_date_time.rtc_time
+    });
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json_rtc_date_time)))
+}
+
+#[get("/time", rank = 2)]
+fn time_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/cpu")]
+fn cpu(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    let cpus = CPU::get_cpus().unwrap();
+
+    let load_average = LoadAverage::get_load_average().unwrap();
+
+    let json_cpus = {
+        let mut json_cpus = Vec::with_capacity(cpus.len());
+
+        for cpu in cpus {
+            json_cpus.push(json!({
+                "model_name": cpu.model_name,
+                "cores": cpu.cpu_cores,
+                "threads": cpu.siblings,
+                "mhz": cpu.cpus_mhz
+            }));
+        }
+
+        json_cpus
+    };
+
+    let json_load_average = json!({
+        "one": load_average.one,
+        "five": load_average.five,
+        "fifteen": load_average.fifteen
+    });
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!({
+        "load_average": json_load_average,
+        "cpus": json_cpus
+    }))))
+}
+
+#[get("/cpu", rank = 2)]
+fn cpu_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/cpu-detect")]
+fn cpu_detect(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    fetch_cpus_stat();
+
+    detect_cpus_stat_sleep(true);
+
+    let cpus_stat = CPUS_STAT.lock().unwrap();
+
+    let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
+
+    let load_average = LoadAverage::get_load_average().unwrap();
+
+    let cpus = CPU::get_cpus().unwrap();
+
+    let json_cpus = {
+        let mut json_cpus = Vec::with_capacity(cpus.len());
+
+        for cpu in cpus {
+            json_cpus.push(json!({
+                "model_name": cpu.model_name,
+                "cores": cpu.cpu_cores,
+                "threads": cpu.siblings,
+                "mhz": cpu.cpus_mhz
+            }));
+        }
+
+        json_cpus
+    };
+
+    let json_load_average = json!({
+        "one": load_average.one,
+        "five": load_average.five,
+        "fifteen": load_average.fifteen
+    });
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!({
+        "load_average": json_load_average,
+        "cpus": json_cpus,
+        "cpus_stat": cpus_stat
+    }))))
+}
+
+#[get("/cpu-detect", rank = 2)]
+fn cpu_detect_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/memory")]
+fn memory(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    let free = Free::get_free().unwrap();
+
+    let json_memory = json!({
+        "total": free.mem.total,
+        "used": free.mem.used,
+        "free": free.mem.free,
+        "shared": free.mem.shared,
+        "buffers": free.mem.buffers,
+        "cache": free.mem.cache,
+        "available": free.mem.available
+    });
+
+    let json_swap = json!({
+        "total": free.swap.total,
+        "used": free.swap.used,
+        "free": free.swap.free,
+        "cache": free.swap.cache
+    });
+
+    let json_free = json!({
+        "memory": json_memory,
+        "swap": json_swap
+    });
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!(json_free))))
+}
+
+#[get("/memory", rank = 2)]
+fn memory_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/network-detect")]
+fn network_detect(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    fetch_network_stat();
+
+    detect_network_stat_sleep(true);
+
+    let json_network = {
+        let network_stat = NETWORK_STAT.lock().unwrap();
+
+        let network_stat: &[NetworkWithSpeed] = network_stat.as_ref().unwrap();
+
+        let mut json_network = Vec::with_capacity(network_stat.len());
+
+        for network_with_speed in network_stat {
+            json_network.push(json!({
+                "interface": network_with_speed.network.interface,
+                "upload_total": network_with_speed.network.transmit_bytes,
+                "download_total": network_with_speed.network.receive_bytes,
+                "upload_rate": network_with_speed.speed.transmit,
+                "download_rate": network_with_speed.speed.receive
+            }));
+        }
+
+        json_network
+    };
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!(json_network))))
+}
+
+#[get("/network-detect", rank = 2)]
+fn network_detect_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/volume")]
+fn volume(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    let json_volumes = {
+        let volumes = Volume::get_volumes().unwrap();
+
+        let mut json_volumes = Vec::with_capacity(volumes.len());
+
+        for volume in volumes {
+            json_volumes.push(json!({
+                "device": volume.device,
+                "size": volume.size,
+                "used": volume.used,
+                "read_total": volume.read_bytes,
+                "write_total": volume.write_bytes,
+                "mount_points": volume.points
+            }));
+        }
+
+        json_volumes
+    };
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!(json_volumes))))
+}
+
+#[get("/volume", rank = 2)]
+fn volume_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/volume-detect")]
+fn volume_detect(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    fetch_volumes_stat();
+
+    detect_volumes_stat_sleep(true);
+
+    let json_volumes = {
+        let volumes_stat = VOLUMES_STAT.lock().unwrap();
+
+        let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
+
+        let mut json_volumes = Vec::with_capacity(volumes_stat.len());
+
+        for volume_with_speed in volumes_stat {
+            json_volumes.push(json!({
+                "device": volume_with_speed.volume.device,
+                "size": volume_with_speed.volume.size,
+                "used": volume_with_speed.volume.used,
+                "read_total": volume_with_speed.volume.read_bytes,
+                "write_total": volume_with_speed.volume.write_bytes,
+                "read_rate": volume_with_speed.speed.read,
+                "write_rate": volume_with_speed.speed.write,
+                "mount_points": volume_with_speed.volume.points
+            }));
+        }
+
+        json_volumes
+    };
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!(json_volumes))))
+}
+
+#[get("/volume-detect", rank = 2)]
+fn volume_detect_401() -> Status {
+    Status::Unauthorized
+}
+
+#[get("/all")]
+fn all(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
+    fetch_cpus_stat();
+    fetch_network_stat();
+    fetch_volumes_stat();
+
+    detect_all_sleep(true);
+
+    let cpus_stat = CPUS_STAT.lock().unwrap();
+
+    let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
+
+    let load_average = LoadAverage::get_load_average().unwrap();
+
+    let cpus = CPU::get_cpus().unwrap();
+
+    let free = Free::get_free().unwrap();
+
+    let hostname = hostname::get_hostname().unwrap();
+
+    let kernel = kernel::get_kernel_version().unwrap();
+
+    let uptime = time::get_uptime().unwrap();
+
+    let rtc_date_time = RTCDateTime::get_rtc_date_time().unwrap();
+
+    let json_cpus = {
+        let mut json_cpus = Vec::with_capacity(cpus.len());
+
+        for cpu in cpus {
+            json_cpus.push(json!({
+                "model_name": cpu.model_name,
+                "cores": cpu.cpu_cores,
+                "threads": cpu.siblings,
+                "mhz": cpu.cpus_mhz
+            }));
+        }
+
+        json_cpus
+    };
+
+    let json_load_average = json!({
+        "one": load_average.one,
+        "five": load_average.five,
+        "fifteen": load_average.fifteen
+    });
+
+    let json_memory = json!({
+        "total": free.mem.total,
+        "used": free.mem.used,
+        "free": free.mem.free,
+        "shared": free.mem.shared,
+        "buffers": free.mem.buffers,
+        "cache": free.mem.cache,
+        "available": free.mem.available
+    });
+
+    let json_swap = json!({
+        "total": free.swap.total,
+        "used": free.swap.used,
+        "free": free.swap.free,
+        "cache": free.swap.cache
+    });
+
+    let json_network = {
+        let network_stat = NETWORK_STAT.lock().unwrap();
+
+        let network_stat: &[NetworkWithSpeed] = network_stat.as_ref().unwrap();
+
+        let mut json_network = Vec::with_capacity(network_stat.len());
+
+        for network_with_speed in network_stat {
+            json_network.push(json!({
+                "interface": network_with_speed.network.interface,
+                "upload_total": network_with_speed.network.transmit_bytes,
+                "download_total": network_with_speed.network.receive_bytes,
+                "upload_rate": network_with_speed.speed.transmit,
+                "download_rate": network_with_speed.speed.receive
+            }));
+        }
+
+        json_network
+    };
+
+    let json_volumes = {
+        let volumes_stat = VOLUMES_STAT.lock().unwrap();
+
+        let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
+
+        let mut json_volumes = Vec::with_capacity(volumes_stat.len());
+
+        for volume_with_speed in volumes_stat {
+            json_volumes.push(json!({
+                "device": volume_with_speed.volume.device,
+                "size": volume_with_speed.volume.size,
+                "used": volume_with_speed.volume.used,
+                "read_total": volume_with_speed.volume.read_bytes,
+                "write_total": volume_with_speed.volume.write_bytes,
+                "read_rate": volume_with_speed.speed.read,
+                "write_rate": volume_with_speed.speed.write,
+                "mount_points": volume_with_speed.volume.points
+            }));
+        }
+
+        json_volumes
+    };
+
+    let json_rtc_date_time = json!({
+        "date": rtc_date_time.rtc_date,
+        "time": rtc_date_time.rtc_time
+    });
+
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!({
+        "hostname": hostname,
+        "kernel": kernel,
+        "uptime": uptime.as_secs(),
+        "rtc_time": json_rtc_date_time,
+        "load_average": json_load_average,
+        "cpus": json_cpus,
+        "cpus_stat": cpus_stat,
+        "memory": json_memory,
+        "swap": json_swap,
+        "network": json_network,
+        "volumes": json_volumes,
+    }))))
+}
+
+#[get("/all", rank = 2)]
+fn all_401() -> Status {
+    Status::Unauthorized
+}
+
 #[get("/monitor")]
 fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat();
     fetch_network_stat();
     fetch_volumes_stat();
 
-    detect_all_sleep();
+    detect_all_sleep(false);
 
     let load_average = LoadAverage::get_load_average().unwrap();
 
@@ -177,7 +664,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
         for cpu in cpus {
             let cpus_mhz_len = cpu.cpus_mhz.len();
 
-            let mut mhzs = Vec::with_capacity(cpus_mhz_len);
+            let mut mhz_list = LinkedList::new();
 
             let mut mhz_sum = 0f64;
 
@@ -188,7 +675,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
 
                 let mhz_string = format!("{:.2} {}Hz", adjusted_byte.get_value(), &adjusted_byte.get_unit().as_str()[..1]);
 
-                mhzs.push(json!({
+                mhz_list.push_back(json!({
                     "value": mhz,
                     "text": mhz_string
                 }));
@@ -201,15 +688,16 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
                 format!("{:.2} {}Hz", adjusted_byte.get_value(), &adjusted_byte.get_unit().as_str()[..1])
             };
 
+            mhz_list.push_front(json!({
+                "value": mhz,
+                "text": mhz_string
+            }));
+
             json_cpus.push(json!({
                 "model_name": cpu.model_name,
                 "cores": cpu.cpu_cores,
                 "threads": cpu.siblings,
-                "mhz": {
-                    "value": mhz,
-                    "text": mhz_string
-                },
-                "mhzs": mhzs,
+                "mhz": mhz_list
             }));
         }
 
@@ -278,15 +766,15 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     };
 
     let json_volumes = {
-        let volumes_stat = DISKS_STAT.lock().unwrap();
+        let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
         let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
         for volume_with_speed in volumes_stat {
-            let size_string =  Byte::from_bytes(volume_with_speed.volume.size as u128).get_appropriate_unit(false).to_string();
-            let used_string =  Byte::from_bytes(volume_with_speed.volume.used as u128).get_appropriate_unit(false).to_string();
+            let size_string = Byte::from_bytes(volume_with_speed.volume.size as u128).get_appropriate_unit(false).to_string();
+            let used_string = Byte::from_bytes(volume_with_speed.volume.used as u128).get_appropriate_unit(false).to_string();
 
             let read_total_string = Byte::from_bytes(volume_with_speed.volume.read_bytes as u128).get_appropriate_unit(false).to_string();
             let write_total_string = Byte::from_bytes(volume_with_speed.volume.write_bytes as u128).get_appropriate_unit(false).to_string();
@@ -344,7 +832,7 @@ fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
         "hostname": hostname,
         "kernel": kernel,
         "uptime": {
-            "seconds": uptime.as_secs(),
+            "value": uptime.as_secs(),
             "text": uptime_string
         },
         "rtc_time": format!("{} {}", time.rtc_date, time.rtc_time),
@@ -395,6 +883,16 @@ fn monitor_401() -> Status {
 
 pub fn mounts(rocket: Rocket) -> Rocket {
     rocket
+        .mount("/api", routes![hostname, hostname_401])
         .mount("/api", routes![kernel, kernel_401])
+        .mount("/api", routes![uptime, uptime_401])
+        .mount("/api", routes![time, time_401])
+        .mount("/api", routes![cpu, cpu_401])
+        .mount("/api", routes![cpu_detect, cpu_detect_401])
+        .mount("/api", routes![memory, memory_401])
+        .mount("/api", routes![network_detect, network_detect_401])
+        .mount("/api", routes![volume, volume_401])
+        .mount("/api", routes![volume_detect, volume_detect_401])
+        .mount("/api", routes![all, all_401])
         .mount("/api", routes![monitor, monitor_401])
 }
