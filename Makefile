@@ -6,7 +6,7 @@ all: x86_64
 
 x86_64: $(EXE_x86_64)
 
-x86: $(EXE_i686)
+i686: $(EXE_i686)
 
 $(EXE_x86_64): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | sed 's/ /\\ /g') $(shell find ./front-end ./views -type f | sed 's/ /\\ /g')
 	cargo build --release --target x86_64-unknown-linux-musl

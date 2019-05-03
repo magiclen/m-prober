@@ -11,7 +11,7 @@ use crate::base64;
 static mut AUTH_KEY: Option<String> = None;
 static mut DETECT_INTERVAL: Duration = Duration::from_secs(0);
 
-pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>) {
+pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: bool) {
     unsafe {
         DETECT_INTERVAL = monitor;
     }
@@ -36,13 +36,17 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>) {
 
     let rocket = rocket::custom(config.unwrap());
 
-    let rocket = rocket.manage(monitor);
-
     let rocket = api::mounts(rocket);
 
-    let rocket = bundles::mounts(rocket);
+    let rocket = if only_api {
+        rocket
+    } else {
+        let rocket = bundles::mounts(rocket);
 
-    let rocket = monitor::mounts(rocket);
+        let rocket = monitor::mounts(rocket);
+
+        rocket
+    };
 
     rocket.launch();
 }

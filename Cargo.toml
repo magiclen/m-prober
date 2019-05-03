@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.8.3"
+version = "0.9.0"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
@@ -11,6 +11,9 @@ description= "This program aims to collect Linux system information including ho
 readme = "README.md"
 license = "MIT"
 exclude = ["doc-images"]
+
+[badges]
+travis-ci = { repository = "magiclen/m-prober", branch = "master" }
 
 [profile.release]
 panic = "abort"

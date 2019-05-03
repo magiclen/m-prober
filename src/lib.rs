@@ -196,7 +196,7 @@ pub enum Mode {
     CPU {
         monitor: Option<Duration>,
         separate: bool,
-        information: bool,
+        only_information: bool,
     },
     Memory {
         monitor: Option<Duration>,
@@ -209,13 +209,14 @@ pub enum Mode {
     Volume {
         monitor: Option<Duration>,
         unit: Option<ByteUnit>,
-        information: bool,
+        only_information: bool,
         mounts: bool,
     },
     Web {
         monitor: Duration,
         port: u16,
         auth_key: Option<String>,
+        only_api: bool,
     },
 }
 
@@ -302,10 +303,11 @@ impl Config {
             "volume -u kb                # Show current volume stats in KB",
             "volume -i                   # Only show volume information without I/O rates",
             "volume --mounts             # Show current volume stats including mount points",
-            "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 3 seconds.",
-            "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds.",
-            "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer.",
-            "web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key.",
+            "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 3 seconds",
+            "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds",
+            "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer",
+            "web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key",
+            "web --only-api              # Start a HTTP service on port 8000 to serve only HTTP APIs",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -324,7 +326,7 @@ impl Config {
                 .concat()
             ).as_str()
             )
-            .subcommand(SubCommand::with_name("hostname").aliases(&["h", "host", "name", "servername", "server"])
+            .subcommand(SubCommand::with_name("hostname").aliases(&["h", "host", "name", "servername"])
                 .about("Shows the hostname")
                 .display_order(0)
                 .after_help("Enjoy it! https://magiclen.org")
@@ -404,14 +406,14 @@ impl Config {
                     .short("s")
                     .help("Separates each CPU")
                 )
-                .arg(Arg::with_name("INFORMATION")
-                    .long("information")
+                .arg(Arg::with_name("ONLY_INFORMATION")
+                    .long("only-information")
                     .short("i")
                     .help("Shows only information about CPUs")
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
-            .subcommand(SubCommand::with_name("memory").aliases(&["m", "mem", "free", "memories", "swap", "ram", "dram", "ddr", "cache", "buffer", "buf"])
+            .subcommand(SubCommand::with_name("memory").aliases(&["m", "mem", "f", "free", "memories", "swap", "ram", "dram", "ddr", "cache", "buffer", "buffers", "buf", "buff"])
                 .about("Shows memory stats")
                 .display_order(5)
                 .arg(Arg::with_name("MONITOR")
@@ -493,8 +495,8 @@ impl Config {
                     .help("Forces to use a fixed unit")
                     .takes_value(true)
                 )
-                .arg(Arg::with_name("INFORMATION")
-                    .long("information")
+                .arg(Arg::with_name("ONLY_INFORMATION")
+                    .long("only-information")
                     .short("i")
                     .help("Shows only information about volumes without I/O rates")
                 )
@@ -528,6 +530,11 @@ impl Config {
                     .short("a")
                     .help("Assigns an auth key")
                     .takes_value(true)
+                )
+                .arg(Arg::with_name("ONLY_API")
+                    .long("only-api")
+                    .aliases(&["only-apis"])
+                    .help("Disables the web page")
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
@@ -569,14 +576,14 @@ impl Config {
 
             let separate = sub_matches.is_present("SEPARATE");
 
-            let information = sub_matches.is_present("INFORMATION");
+            let only_information = sub_matches.is_present("ONLY_INFORMATION");
 
             set_color_mode!(sub_matches);
 
             Mode::CPU {
                 monitor,
                 separate,
-                information,
+                only_information,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("memory") {
             let monitor = match sub_matches.value_of("MONITOR") {
@@ -647,7 +654,7 @@ impl Config {
                 None => None
             };
 
-            let information = sub_matches.is_present("INFORMATION");
+            let only_information = sub_matches.is_present("ONLY_INFORMATION");
 
             let mounts = sub_matches.is_present("MOUNTS");
 
@@ -656,7 +663,7 @@ impl Config {
             Mode::Volume {
                 monitor,
                 unit,
-                information,
+                only_information,
                 mounts,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("web") {
@@ -680,10 +687,13 @@ impl Config {
 
             let auth_key = sub_matches.value_of("AUTH_KEY").map(|s| s.to_string());
 
+            let only_api = sub_matches.is_present("ONLY_API");
+
             Mode::Web {
                 monitor,
                 port,
                 auth_key,
+                only_api,
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -769,7 +779,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                 draw_time(false).map_err(|err| err.to_string())?;
             }
         }
-        Mode::CPU { monitor, separate, information } => {
+        Mode::CPU { monitor, separate, only_information } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -787,20 +797,20 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_cpu_info(separate, information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_cpu_info(separate, only_information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
                     loop {
-                        if information {
+                        if only_information {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_cpu_info(separate, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_cpu_info(separate, only_information, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_cpu_info(separate, information, None).map_err(|err| err.to_string())?;
+                    draw_cpu_info(separate, only_information, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -866,7 +876,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
-        Mode::Volume { monitor, unit, information, mounts } => {
+        Mode::Volume { monitor, unit, only_information, mounts } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -884,25 +894,25 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_volume(unit, information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_volume(unit, only_information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
                     loop {
-                        if information {
+                        if only_information {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_volume(unit, information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_volume(unit, only_information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_volume(unit, information, mounts, None).map_err(|err| err.to_string())?;
+                    draw_volume(unit, only_information, mounts, None).map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::Web { monitor, port, auth_key } => {
-            rocket_mounts::launch(monitor, port, auth_key);
+        Mode::Web { monitor, port, auth_key, only_api } => {
+            rocket_mounts::launch(monitor, port, auth_key, only_api);
         }
     }
 
