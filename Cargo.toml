@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
@@ -27,7 +27,6 @@ libc = "0.2"
 
 rand = "0.6"
 base64 = "0.10"
-enum-ordinalize = "2"
 lazy-static-include = "2"
 crc-any = "1"
 serde_json = "1"

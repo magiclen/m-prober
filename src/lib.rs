@@ -19,7 +19,6 @@ extern crate libc;
 
 extern crate rand;
 extern crate base64;
-extern crate enum_ordinalize;
 #[macro_use]
 extern crate serde_json;
 #[macro_use]
@@ -87,6 +86,7 @@ const DARK_BLUE_COLOR: Color = Color::Rgb(0, 0, 95);
 const CLEAR_SCREEN_DATA: [u8; 11] = [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
 
 static mut LIGHT_MODE: bool = false;
+static mut FORCE_PLAIN_MODE: bool = false;
 
 validated_customized_ranged_number!(WebMonitorInterval, u64, 1, 15);
 
@@ -98,10 +98,12 @@ lazy_static! {
     static ref COLOR_LABEL: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if unsafe{ LIGHT_MODE } {
-            color_spec.set_fg(Some(DARK_CYAN_COLOR));
-        } else {
-            color_spec.set_fg(Some(CYAN_COLOR));
+        if !unsafe{ FORCE_PLAIN_MODE } {
+            if unsafe{ LIGHT_MODE } {
+                color_spec.set_fg(Some(DARK_CYAN_COLOR));
+            } else {
+                color_spec.set_fg(Some(CYAN_COLOR));
+            }
         }
 
         color_spec
@@ -110,10 +112,12 @@ lazy_static! {
     static ref COLOR_NORMAL_TEXT: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if unsafe{ LIGHT_MODE } {
-            color_spec.set_fg(Some(BLACK_COLOR));
-        } else {
-            color_spec.set_fg(Some(WHITE_COLOR));
+        if !unsafe{ FORCE_PLAIN_MODE } {
+            if unsafe{ LIGHT_MODE } {
+                color_spec.set_fg(Some(BLACK_COLOR));
+            } else {
+                color_spec.set_fg(Some(WHITE_COLOR));
+            }
         }
 
         color_spec
@@ -122,10 +126,12 @@ lazy_static! {
     static ref COLOR_BOLD_TEXT: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if unsafe{ LIGHT_MODE } {
-            color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
-        } else {
-            color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
+        if !unsafe{ FORCE_PLAIN_MODE } {
+            if unsafe{ LIGHT_MODE } {
+                color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
+            } else {
+                color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
+            }
         }
 
         color_spec
@@ -134,10 +140,12 @@ lazy_static! {
     static ref COLOR_USED: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if unsafe{ LIGHT_MODE } {
-            color_spec.set_fg(Some(WINE_COLOR));
-        } else {
-            color_spec.set_fg(Some(RED_COLOR));
+        if !unsafe{ FORCE_PLAIN_MODE } {
+            if unsafe{ LIGHT_MODE } {
+                color_spec.set_fg(Some(WINE_COLOR));
+            } else {
+                color_spec.set_fg(Some(RED_COLOR));
+            }
         }
 
         color_spec
@@ -146,10 +154,12 @@ lazy_static! {
     static ref COLOR_CACHE: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if unsafe{ LIGHT_MODE } {
-            color_spec.set_fg(Some(ORANGE_COLOR));
-        } else {
-            color_spec.set_fg(Some(YELLOW_COLOR));
+        if !unsafe{ FORCE_PLAIN_MODE } {
+            if unsafe{ LIGHT_MODE } {
+                color_spec.set_fg(Some(ORANGE_COLOR));
+            } else {
+                color_spec.set_fg(Some(YELLOW_COLOR));
+            }
         }
 
         color_spec
@@ -158,10 +168,12 @@ lazy_static! {
     static ref COLOR_BUFFERS: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if unsafe{ LIGHT_MODE } {
-            color_spec.set_fg(Some(DARK_BLUE_COLOR));
-        } else {
-            color_spec.set_fg(Some(SKY_CYAN_COLOR));
+        if !unsafe{ FORCE_PLAIN_MODE } {
+            if unsafe{ LIGHT_MODE } {
+                color_spec.set_fg(Some(DARK_BLUE_COLOR));
+            } else {
+                color_spec.set_fg(Some(SKY_CYAN_COLOR));
+            }
         }
 
         color_spec
@@ -176,32 +188,26 @@ pub enum Mode {
     Kernel,
     Uptime {
         monitor: bool,
-        plain: bool,
         second: bool,
     },
     Time {
         monitor: bool,
-        plain: bool,
     },
     CPU {
         monitor: Option<Duration>,
-        plain: bool,
         separate: bool,
         information: bool,
     },
     Memory {
         monitor: Option<Duration>,
-        plain: bool,
         unit: Option<ByteUnit>,
     },
     Network {
         monitor: Option<Duration>,
-        plain: bool,
         unit: Option<ByteUnit>,
     },
     Volume {
         monitor: Option<Duration>,
-        plain: bool,
         unit: Option<ByteUnit>,
         information: bool,
         mounts: bool,
@@ -225,13 +231,32 @@ const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const ENV_LIGHT_MODE: &str = "MPROBER_LIGHT";
 const ENV_FORCE_PLAIN: &str = "MPROBER_FORCE_PLAIN";
 
-macro_rules! set_light_mode {
+macro_rules! set_color_mode {
     ($sub_matches:ident) => {
         unsafe{
-            if $sub_matches.is_present("LIGHT") {
-                LIGHT_MODE = true;
+            if $sub_matches.is_present("PLAIN") {
+                FORCE_PLAIN_MODE = true;
             } else {
-                LIGHT_MODE = env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+                match env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")) {
+                    Some(b) => {
+                        if b {
+                            FORCE_PLAIN_MODE = true;
+                        } else {
+                            if $sub_matches.is_present("LIGHT") {
+                                LIGHT_MODE = true;
+                            } else {
+                                LIGHT_MODE = env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+                            }
+                        }
+                    }
+                    None => {
+                        if $sub_matches.is_present("LIGHT") {
+                            LIGHT_MODE = true;
+                        } else {
+                            LIGHT_MODE = env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+                        }
+                    }
+                }
             }
         }
     };
@@ -516,35 +541,21 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("uptime") {
             let monitor = sub_matches.is_present("MONITOR");
 
-            let plain = if sub_matches.is_present("PLAIN") {
-                true
-            } else {
-                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
-            };
-
-            set_light_mode!(sub_matches);
-
             let second = sub_matches.is_present("SECOND");
+
+            set_color_mode!(sub_matches);
 
             Mode::Uptime {
                 monitor,
-                plain,
                 second,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("time") {
             let monitor = sub_matches.is_present("MONITOR");
 
-            let plain = if sub_matches.is_present("PLAIN") {
-                true
-            } else {
-                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
-            };
-
-            set_light_mode!(sub_matches);
+            set_color_mode!(sub_matches);
 
             Mode::Time {
                 monitor,
-                plain,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("cpu") {
             let monitor = match sub_matches.value_of("MONITOR") {
@@ -556,21 +567,14 @@ impl Config {
                 None => None
             };
 
-            let plain = if sub_matches.is_present("PLAIN") {
-                true
-            } else {
-                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
-            };
-
-            set_light_mode!(sub_matches);
-
             let separate = sub_matches.is_present("SEPARATE");
 
             let information = sub_matches.is_present("INFORMATION");
 
+            set_color_mode!(sub_matches);
+
             Mode::CPU {
                 monitor,
-                plain,
                 separate,
                 information,
             }
@@ -584,14 +588,6 @@ impl Config {
                 None => None
             };
 
-            let plain = if sub_matches.is_present("PLAIN") {
-                true
-            } else {
-                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
-            };
-
-            set_light_mode!(sub_matches);
-
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
                     let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
@@ -601,9 +597,10 @@ impl Config {
                 None => None
             };
 
+            set_color_mode!(sub_matches);
+
             Mode::Memory {
                 monitor,
-                plain,
                 unit,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("network") {
@@ -616,14 +613,6 @@ impl Config {
                 None => None
             };
 
-            let plain = if sub_matches.is_present("PLAIN") {
-                true
-            } else {
-                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
-            };
-
-            set_light_mode!(sub_matches);
-
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
                     let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
@@ -633,9 +622,10 @@ impl Config {
                 None => None
             };
 
+            set_color_mode!(sub_matches);
+
             Mode::Network {
                 monitor,
-                plain,
                 unit,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("volume") {
@@ -647,14 +637,6 @@ impl Config {
                 }
                 None => None
             };
-
-            let plain = if sub_matches.is_present("PLAIN") {
-                true
-            } else {
-                env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")).unwrap_or(false)
-            };
-
-            set_light_mode!(sub_matches);
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
@@ -669,9 +651,10 @@ impl Config {
 
             let mounts = sub_matches.is_present("MOUNTS");
 
+            set_color_mode!(sub_matches);
+
             Mode::Volume {
                 monitor,
-                plain,
                 unit,
                 information,
                 mounts,
@@ -730,7 +713,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 
             println!("{}", hostname);
         }
-        Mode::Uptime { monitor, plain, second } => {
+        Mode::Uptime { monitor, second } => {
             if monitor {
                 thread::spawn(move || {
                     loop {
@@ -750,15 +733,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                 let sleep_interval = Duration::from_secs(1);
 
                 loop {
-                    draw_uptime(!plain, second, true).map_err(|err| err.to_string())?;
+                    draw_uptime(second, true).map_err(|err| err.to_string())?;
 
                     thread::sleep(sleep_interval);
                 }
             } else {
-                draw_uptime(!plain, second, false).map_err(|err| err.to_string())?;
+                draw_uptime(second, false).map_err(|err| err.to_string())?;
             }
         }
-        Mode::Time { monitor, plain } => {
+        Mode::Time { monitor } => {
             if monitor {
                 thread::spawn(move || {
                     loop {
@@ -778,15 +761,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                 let sleep_interval = Duration::from_secs(1);
 
                 loop {
-                    draw_time(!plain, true).map_err(|err| err.to_string())?;
+                    draw_time(true).map_err(|err| err.to_string())?;
 
                     thread::sleep(sleep_interval);
                 }
             } else {
-                draw_time(!plain, false).map_err(|err| err.to_string())?;
+                draw_time(false).map_err(|err| err.to_string())?;
             }
         }
-        Mode::CPU { monitor, plain, separate, information } => {
+        Mode::CPU { monitor, separate, information } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -804,7 +787,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_cpu_info(!plain, separate, information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_cpu_info(separate, information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -813,15 +796,15 @@ pub fn run(config: Config) -> Result<i32, String> {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_cpu_info(!plain, separate, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_cpu_info(separate, information, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_cpu_info(!plain, separate, information, None).map_err(|err| err.to_string())?;
+                    draw_cpu_info(separate, information, None).map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::Memory { monitor, plain, unit } => {
+        Mode::Memory { monitor, unit } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -842,17 +825,17 @@ pub fn run(config: Config) -> Result<i32, String> {
                     let sleep_interval = monitor;
 
                     loop {
-                        draw_memory(!plain, unit, true).map_err(|err| err.to_string())?;
+                        draw_memory(unit, true).map_err(|err| err.to_string())?;
 
                         thread::sleep(sleep_interval);
                     }
                 }
                 None => {
-                    draw_memory(!plain, unit, false).map_err(|err| err.to_string())?;
+                    draw_memory(unit, false).map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::Network { monitor, plain, unit } => {
+        Mode::Network { monitor, unit } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -870,20 +853,20 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_network(!plain, unit, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_network(unit, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
                     loop {
-                        draw_network(!plain, unit, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_network(unit, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_network(!plain, unit, None).map_err(|err| err.to_string())?;
+                    draw_network(unit, None).map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::Volume { monitor, plain, unit, information, mounts } => {
+        Mode::Volume { monitor, unit, information, mounts } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
@@ -901,7 +884,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         process::exit(0);
                     });
 
-                    draw_volume(!plain, unit, information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_volume(unit, information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -910,11 +893,11 @@ pub fn run(config: Config) -> Result<i32, String> {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_volume(!plain, unit, information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_volume(unit, information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_volume(!plain, unit, information, mounts, None).map_err(|err| err.to_string())?;
+                    draw_volume(unit, information, mounts, None).map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -926,13 +909,13 @@ pub fn run(config: Config) -> Result<i32, String> {
     Ok(0)
 }
 
-fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), ScannerError> {
+fn draw_uptime(second: bool, monitor: bool) -> Result<(), ScannerError> {
     let uptime = time::get_uptime()?;
 
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
     };
 
     let mut stdout = output.buffer();
@@ -971,13 +954,13 @@ fn draw_uptime(colorful: bool, second: bool, monitor: bool) -> Result<(), Scanne
     Ok(())
 }
 
-fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
+fn draw_time(monitor: bool) -> Result<(), ScannerError> {
     let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time()?;
 
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
     };
 
     let mut stdout = output.buffer();
@@ -1014,11 +997,11 @@ fn draw_time(colorful: bool, monitor: bool) -> Result<(), ScannerError> {
 
 // TODO
 
-fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
+fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
     };
 
     let mut stdout = output.buffer();
@@ -1415,13 +1398,13 @@ fn draw_cpu_info(colorful: bool, separate: bool, only_information: bool, monitor
     Ok(())
 }
 
-fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError> {
+fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError> {
     let free = Free::get_free()?;
 
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
     };
 
     let mut stdout = output.buffer();
@@ -1495,10 +1478,10 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
 
     stdout.set_color(&*COLOR_CACHE)?;
     for _ in 0..progress_cache {
-        if colorful {
-            write!(&mut stdout, "|")?; // 1
-        } else {
+        if unsafe { FORCE_PLAIN_MODE } {
             write!(&mut stdout, "$")?; // 1
+        } else {
+            write!(&mut stdout, "|")?; // 1
         }
     }
 
@@ -1506,10 +1489,10 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
 
     stdout.set_color(&*COLOR_BUFFERS)?;
     for _ in 0..progress_buffers {
-        if colorful {
-            write!(&mut stdout, "|")?; // 1
-        } else {
+        if unsafe { FORCE_PLAIN_MODE } {
             write!(&mut stdout, "#")?; // 1
+        } else {
+            write!(&mut stdout, "|")?; // 1
         }
     }
 
@@ -1570,10 +1553,10 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
 
     stdout.set_color(&*COLOR_CACHE)?;
     for _ in 0..progress_cache {
-        if colorful {
-            write!(&mut stdout, "|")?; // 1
-        } else {
+        if unsafe { FORCE_PLAIN_MODE } {
             write!(&mut stdout, "$")?; // 1
+        } else {
+            write!(&mut stdout, "|")?; // 1
         }
     }
 
@@ -1619,7 +1602,7 @@ fn draw_memory(colorful: bool, unit: Option<ByteUnit>, monitor: bool) -> Result<
     Ok(())
 }
 
-fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
+fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let networks_with_speed = NetworkWithSpeed::get_networks_with_speed(match monitor {
         Some(monitor) => monitor,
         None => Duration::from_millis(DEFAULT_INTERVAL)
@@ -1627,10 +1610,10 @@ fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration
 
     let networks_with_speed_len = networks_with_speed.len();
 
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
     };
 
     let mut stdout = output.buffer();
@@ -1769,11 +1752,11 @@ fn draw_network(colorful: bool, unit: Option<ByteUnit>, monitor: Option<Duration
     Ok(())
 }
 
-fn draw_volume(colorful: bool, unit: Option<ByteUnit>, only_information: bool, mounts: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
-    let output = if colorful {
-        BufferWriter::stdout(ColorChoice::Always)
-    } else {
+fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
     };
 
     let mut stdout = output.buffer();
