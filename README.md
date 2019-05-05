@@ -595,7 +595,8 @@ Also, you may want to disable the web page. Just add a `--only-api` flag.
 ## TODO
 
 1. Benchmark
-1. Terminal monitor
+1. Process snapshot (like the `ps` command)
+1. Terminal monitor (like the `top` command)
 1. Database Detection
 
 ## License
