@@ -55,13 +55,13 @@ lazy_static! {
 
 pub struct Auth;
 
-impl SimpleAuthorization for Auth {
+impl<'a> SimpleAuthorization<'a> for Auth {
     #[inline]
-    fn has_authority<S: AsRef<str>>(key: Option<S>) -> Option<Option<String>> {
+    fn has_authority(key: Option<&'a str>) -> Option<Option<&'a str>> {
         match unsafe { super::AUTH_KEY.as_ref() } {
             Some(auth_key) => {
                 match key {
-                    Some(key) => if key.as_ref().eq(auth_key) {
+                    Some(key) => if key.eq(auth_key) {
                         Some(None)
                     } else {
                         None
@@ -74,7 +74,7 @@ impl SimpleAuthorization for Auth {
     }
 
     #[inline]
-    fn create_auth(_key: Option<String>) -> Auth {
+    fn create_auth(_key: Option<&'a str>) -> Auth {
         Auth
     }
 }
