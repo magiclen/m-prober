@@ -37,7 +37,7 @@ serde_json = "1"
 handlebars = "1"
 
 rocket = "0.4"
-rocket-simple-authorization = "0.6"
+rocket-simple-authorization = "0.7"
 rocket-cache-response = "0.5"
 rocket-json-response = "0.3"
 rocket-include-static-resources = "0.7"
