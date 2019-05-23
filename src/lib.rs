@@ -21,8 +21,6 @@ extern crate rand;
 extern crate base64;
 #[macro_use]
 extern crate serde_json;
-#[macro_use]
-extern crate handlebars;
 
 #[macro_use]
 extern crate rocket;

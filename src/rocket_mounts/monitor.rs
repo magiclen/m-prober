@@ -8,10 +8,6 @@ use crate::rocket_json_response::{json_gettext::JSONGetTextValue};
 
 const HANDLEBARS_RESOURCES_CACHE_MAX_AGE: u32 = 259200;
 
-handlebars_resources_initialize!(
-    "index", "views/index.hbs",
-);
-
 fn handlebars_response(responder: HandlebarsResponse) -> CacheResponse<HandlebarsResponse> {
     CacheResponse::public_only_release(responder, HANDLEBARS_RESOURCES_CACHE_MAX_AGE, false)
 }
