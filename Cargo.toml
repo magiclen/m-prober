@@ -39,7 +39,7 @@ handlebars = "1"
 rocket = "0.4"
 rocket-simple-authorization = "0.7"
 rocket-cache-response = "0.5"
-rocket-json-response = "0.3"
+rocket-json-response = "0.4"
 rocket-include-static-resources = "0.7"
 rocket-include-handlebars = "0.8"
 
