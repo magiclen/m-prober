@@ -6,8 +6,6 @@ use std::time::Duration;
 
 use crate::rocket::{Config, config::Environment};
 
-use crate::rocket_include_handlebars::HandlebarsResponse;
-
 use crate::rand::{self, RngCore};
 use crate::base64;
 
@@ -39,21 +37,14 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: 
 
     let rocket = rocket::custom(config.unwrap());
 
-    let rocket = rocket.attach(HandlebarsResponse::fairing(|handlebars| {
-        handlebars_resources_initialize!(
-            handlebars,
-            "index", "views/index.hbs",
-        );
-    }));
-
     let rocket = api::mounts(rocket);
 
     let rocket = if only_api {
         rocket
     } else {
-        let rocket = bundles::mounts(rocket);
+        let rocket = bundles::rocket_handler(rocket);
 
-        let rocket = monitor::mounts(rocket);
+        let rocket = monitor::rocket_handler(rocket);
 
         rocket
     };

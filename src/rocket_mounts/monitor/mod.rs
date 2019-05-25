@@ -27,7 +27,13 @@ fn index(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<HandlebarsRespons
     handlebars_response(handlebars_response!(etag_if_none_match, "index", &map))
 }
 
-pub fn mounts(rocket: Rocket) -> Rocket {
+pub fn rocket_handler(rocket: Rocket) -> Rocket {
     rocket
+        .attach(HandlebarsResponse::fairing(|handlebars| {
+            handlebars_resources_initialize!(
+                handlebars,
+                "index", "views/index.hbs",
+            );
+        }))
         .mount("/", routes![index])
 }
