@@ -1,5 +1,5 @@
 mod api;
-mod bundles;
+mod static_resources;
 mod monitor;
 
 use std::time::Duration;
@@ -42,7 +42,7 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: 
     let rocket = if only_api {
         rocket
     } else {
-        let rocket = bundles::rocket_handler(rocket);
+        let rocket = static_resources::rocket_handler(rocket);
 
         let rocket = monitor::rocket_handler(rocket);
 

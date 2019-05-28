@@ -8,15 +8,19 @@
     <link rel="stylesheet" href="css/font-roboto-mono.min.css">
     <script src="js/bundle.min.js"></script>
 
-    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="favicon.ico">
-    <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon-180-i.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <link rel="manifest" href="web-app.manifest">
+    <meta name="msapplication-TileColor" content="#FFFFFF">
+    <meta name="theme-color" content="#FFFFFF">
 
     <title>M Prober v{{version}}</title>
 </head>
 <body>
 
 {{#if authKey}}
-<input id="auth-key" type="hidden" value="{{authKey}}">
+    <input id="auth-key" type="hidden" value="{{authKey}}">
 {{/if}}
 
 <input id="time-interval" type="hidden" value="{{timeInterval}}">
