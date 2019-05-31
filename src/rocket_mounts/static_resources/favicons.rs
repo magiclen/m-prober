@@ -34,24 +34,9 @@ fn favicon_512(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticRespo
     static_response(etag_if_none_match, "favicon-512")
 }
 
-#[get("/favicon-310.png")]
-fn favicon_310(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-310")
-}
-
 #[get("/favicon-192.png")]
 fn favicon_192(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
     static_response(etag_if_none_match, "favicon-192")
-}
-
-#[get("/favicon-150.png")]
-fn favicon_150(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-150")
-}
-
-#[get("/favicon-70.png")]
-fn favicon_70(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-70")
 }
 
 #[get("/favicon-32.png")]
@@ -69,12 +54,28 @@ fn favicon_180_i(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticRes
     static_response(etag_if_none_match, "favicon-180-i")
 }
 
+#[get("/mstile-310.png")]
+fn mstile_310(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
+    static_response(etag_if_none_match, "mstile-310")
+}
+
+#[get("/mstile-150.png")]
+fn mstile_150(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
+    static_response(etag_if_none_match, "mstile-150")
+}
+
+#[get("/mstile-70.png")]
+fn mstile_70(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
+    static_response(etag_if_none_match, "mstile-70")
+}
+
 pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
     rocket
         .mount("/", routes![web_app_manifest])
         .mount("/", routes![browser_config])
         .mount("/", routes![favicon_monochrome])
         .mount("/", routes![favicon])
-        .mount("/", routes![favicon_512, favicon_310, favicon_192, favicon_150, favicon_70, favicon_32, favicon_16])
+        .mount("/", routes![favicon_512, favicon_192, favicon_32, favicon_16])
         .mount("/", routes![favicon_180_i])
+        .mount("/", routes![mstile_310, mstile_150, mstile_70])
 }

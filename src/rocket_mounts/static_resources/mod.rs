@@ -42,13 +42,13 @@ pub fn rocket_handler(rocket: Rocket) -> Rocket {
             "favicon-monochrome", "front-end/favicon-monochrome.svg",
             "favicon", "front-end/favicon.ico",
             "favicon-512", "front-end/favicon-512.png",
-            "favicon-310", "front-end/favicon-310.png",
             "favicon-192", "front-end/favicon-192.png",
-            "favicon-150", "front-end/favicon-150.png",
-            "favicon-70", "front-end/favicon-70.png",
             "favicon-32", "front-end/favicon-32.png",
             "favicon-16", "front-end/favicon-16.png",
             "favicon-180-i", "front-end/favicon-180-i.png",
+            "mstile-310", "front-end/mstile-310.png",
+            "mstile-150", "front-end/mstile-150.png",
+            "mstile-70", "front-end/mstile-70.png",
         );
     }));
 
