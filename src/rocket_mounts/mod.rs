@@ -3,24 +3,43 @@ mod static_resources;
 mod monitor;
 
 use std::time::Duration;
+use std::ops::Deref;
 
 use crate::rocket::{Config, config::Environment};
 
 use crate::rand::{self, RngCore};
 use crate::base64;
 
-static mut AUTH_KEY: Option<String> = None;
-static mut DETECT_INTERVAL: Duration = Duration::from_secs(0);
+#[derive(Debug)]
+struct DetectInterval(Duration);
+
+impl DetectInterval {
+    #[inline]
+    fn get_value(&self) -> Duration {
+        self.0
+    }
+}
+
+impl Deref for DetectInterval {
+    type Target = Duration;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
+struct AuthKey(Option<String>);
+
+impl AuthKey {
+    #[inline]
+    fn get_value(&self) -> Option<&str> {
+        self.0.as_ref().map(|v| v.as_str())
+    }
+}
 
 pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: bool) {
-    unsafe {
-        DETECT_INTERVAL = monitor;
-    }
-
-    unsafe {
-        AUTH_KEY = auth_key;
-    }
-
     let mut config = Config::build(if cfg!(debug_assertions) {
         Environment::Development
     } else {
@@ -35,7 +54,7 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: 
 
     config.port = port;
 
-    let rocket = rocket::custom(config.unwrap());
+    let rocket = rocket::custom(config.unwrap()).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
 
     let rocket = api::mounts(rocket);
 

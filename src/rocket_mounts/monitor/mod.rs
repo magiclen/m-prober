@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::rocket::Rocket;
+use crate::rocket::{Rocket, State};
 
 use crate::rocket_cache_response::CacheResponse;
 use crate::rocket_include_handlebars::{EtagIfNoneMatch, HandlebarsResponse};
@@ -13,14 +13,14 @@ fn handlebars_response(responder: HandlebarsResponse) -> CacheResponse<Handlebar
 }
 
 #[get("/")]
-fn index(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<HandlebarsResponse> {
+fn index(etag_if_none_match: EtagIfNoneMatch, detect_interval: State<super::DetectInterval>, auth_key: State<super::AuthKey>) -> CacheResponse<HandlebarsResponse> {
     let mut map = HashMap::new();
 
     map.insert("version", JSONGetTextValue::Str(crate::CARGO_PKG_VERSION));
 
-    map.insert("timeInterval", JSONGetTextValue::from_u64(unsafe { super::DETECT_INTERVAL }.as_secs()));
+    map.insert("timeInterval", JSONGetTextValue::from_u64(detect_interval.as_secs()));
 
-    if let Some(auth_key) = unsafe { super::AUTH_KEY.as_ref() } {
+    if let Some(auth_key) = auth_key.get_value() {
         map.insert("authKey", JSONGetTextValue::from_str(auth_key));
     }
 

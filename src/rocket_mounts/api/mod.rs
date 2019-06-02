@@ -3,7 +3,7 @@ use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use std::time::{Instant, Duration};
 use std::collections::linked_list::LinkedList;
 
-use crate::rocket::{Rocket, http::Status};
+use crate::rocket::{Rocket, State, http::Status, request::Request};
 use crate::rocket_simple_authorization::SimpleAuthorization;
 use crate::rocket_cache_response::CacheResponse;
 use crate::rocket_json_response::{JSONResponse, json_gettext::JSONGetTextValue};
@@ -55,10 +55,12 @@ lazy_static! {
 
 pub struct Auth;
 
-impl<'a> SimpleAuthorization<'a> for Auth {
+impl<'a, 'r> SimpleAuthorization<'a, 'r> for Auth {
     #[inline]
-    fn has_authority(key: Option<&'a str>) -> Option<Option<&'a str>> {
-        match unsafe { super::AUTH_KEY.as_ref() } {
+    fn has_authority(request: &'a Request<'r>, key: Option<&'a str>) -> Option<Option<&'a str>> {
+        let auth_key = request.guard::<State<super::AuthKey>>().unwrap();
+
+        match auth_key.get_value() {
             Some(auth_key) => {
                 match key {
                     Some(key) => if key.eq(auth_key) {
@@ -82,14 +84,14 @@ impl<'a> SimpleAuthorization<'a> for Auth {
 authorizer!(Auth);
 
 #[inline]
-fn detect_cpus_stat_sleep(strict: bool) {
+fn detect_cpus_stat_sleep(detect_interval: Duration, strict: bool) {
     let now = Instant::now();
 
     let latest = CPUS_STAT_LATEST_DETECT.lock().unwrap().unwrap();
 
     if now > latest {
         let d: Duration = now - latest;
-        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+        let detect_interval = detect_interval + DELAY_DURATION;
 
         if d < detect_interval {
             thread::sleep(detect_interval - d);
@@ -110,14 +112,14 @@ fn detect_cpus_stat_sleep(strict: bool) {
 }
 
 #[inline]
-fn detect_network_stat_sleep(strict: bool) {
+fn detect_network_stat_sleep(detect_interval: Duration, strict: bool) {
     let now = Instant::now();
 
     let latest = NETWORK_STAT_LATEST_DETECT.lock().unwrap().unwrap();
 
     if now > latest {
         let d: Duration = now - latest;
-        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+        let detect_interval = detect_interval + DELAY_DURATION;
 
         if d < detect_interval {
             thread::sleep(detect_interval - d);
@@ -138,14 +140,14 @@ fn detect_network_stat_sleep(strict: bool) {
 }
 
 #[inline]
-fn detect_volumes_stat_sleep(strict: bool) {
+fn detect_volumes_stat_sleep(detect_interval: Duration, strict: bool) {
     let now = Instant::now();
 
     let latest = VOLUMES_STAT_LATEST_DETECT.lock().unwrap().unwrap();
 
     if now > latest {
         let d: Duration = now - latest;
-        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+        let detect_interval = detect_interval + DELAY_DURATION;
 
         if d < detect_interval {
             thread::sleep(detect_interval - d);
@@ -166,14 +168,14 @@ fn detect_volumes_stat_sleep(strict: bool) {
 }
 
 #[inline]
-fn detect_all_sleep(strict: bool) {
+fn detect_all_sleep(detect_interval: Duration, strict: bool) {
     let now = Instant::now();
 
     let latest = CPUS_STAT_LATEST_DETECT.lock().unwrap().unwrap().max(NETWORK_STAT_LATEST_DETECT.lock().unwrap().unwrap()).max(VOLUMES_STAT_LATEST_DETECT.lock().unwrap().unwrap());
 
     if now > latest {
         let d: Duration = now - latest;
-        let detect_interval = unsafe { super::DETECT_INTERVAL } + DELAY_DURATION;
+        let detect_interval = detect_interval + DELAY_DURATION;
 
         if d < detect_interval {
             thread::sleep(detect_interval - d);
@@ -193,11 +195,11 @@ fn detect_all_sleep(strict: bool) {
     }
 }
 
-fn fetch_cpus_stat() {
+fn fetch_cpus_stat(detect_interval: Duration) {
     if !unsafe { CPUS_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         CPUS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let cpus_stat = CPUStat::get_all_percentage(true, unsafe { super::DETECT_INTERVAL }).unwrap();
+            let cpus_stat = CPUStat::get_all_percentage(true, detect_interval).unwrap();
 
             CPUS_STAT.lock().unwrap().replace(cpus_stat);
 
@@ -206,11 +208,11 @@ fn fetch_cpus_stat() {
     }
 }
 
-fn fetch_network_stat() {
+fn fetch_network_stat(detect_interval: Duration) {
     if !unsafe { NETWORK_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         NETWORK_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let network_stat = NetworkWithSpeed::get_networks_with_speed(unsafe { super::DETECT_INTERVAL }).unwrap();
+            let network_stat = NetworkWithSpeed::get_networks_with_speed(detect_interval).unwrap();
 
             NETWORK_STAT.lock().unwrap().replace(network_stat);
 
@@ -219,11 +221,11 @@ fn fetch_network_stat() {
     }
 }
 
-fn fetch_volumes_stat() {
+fn fetch_volumes_stat(detect_interval: Duration) {
     if !unsafe { VOLUMES_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         VOLUMES_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let volume_stat = VolumeWithSpeed::get_volumes_with_speed(unsafe { super::DETECT_INTERVAL }).unwrap();
+            let volume_stat = VolumeWithSpeed::get_volumes_with_speed(detect_interval).unwrap();
 
             VOLUMES_STAT.lock().unwrap().replace(volume_stat);
 
@@ -318,10 +320,10 @@ fn cpu_401() -> Status {
 }
 
 #[get("/cpu-detect")]
-fn cpu_detect(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    fetch_cpus_stat();
+fn cpu_detect(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+    fetch_cpus_stat(detect_interval.get_value());
 
-    detect_cpus_stat_sleep(true);
+    detect_cpus_stat_sleep(detect_interval.get_value(), true);
 
     let cpus_stat = CPUS_STAT.lock().unwrap();
 
@@ -399,10 +401,10 @@ fn memory_401() -> Status {
 }
 
 #[get("/network-detect")]
-fn network_detect(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    fetch_network_stat();
+fn network_detect(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+    fetch_network_stat(detect_interval.get_value());
 
-    detect_network_stat_sleep(true);
+    detect_network_stat_sleep(detect_interval.get_value(), true);
 
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
@@ -462,10 +464,10 @@ fn volume_401() -> Status {
 }
 
 #[get("/volume-detect")]
-fn volume_detect(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    fetch_volumes_stat();
+fn volume_detect(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+    fetch_volumes_stat(detect_interval.get_value());
 
-    detect_volumes_stat_sleep(true);
+    detect_volumes_stat_sleep(detect_interval.get_value(), true);
 
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
@@ -499,12 +501,12 @@ fn volume_detect_401() -> Status {
 }
 
 #[get("/all")]
-fn all(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    fetch_cpus_stat();
-    fetch_network_stat();
-    fetch_volumes_stat();
+fn all(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+    fetch_cpus_stat(detect_interval.get_value());
+    fetch_network_stat(detect_interval.get_value());
+    fetch_volumes_stat(detect_interval.get_value());
 
-    detect_all_sleep(true);
+    detect_all_sleep(detect_interval.get_value(), true);
 
     let cpus_stat = CPUS_STAT.lock().unwrap();
 
@@ -631,12 +633,12 @@ fn all_401() -> Status {
 }
 
 #[get("/monitor")]
-fn monitor(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    fetch_cpus_stat();
-    fetch_network_stat();
-    fetch_volumes_stat();
+fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+    fetch_cpus_stat(detect_interval.get_value());
+    fetch_network_stat(detect_interval.get_value());
+    fetch_volumes_stat(detect_interval.get_value());
 
-    detect_all_sleep(false);
+    detect_all_sleep(detect_interval.get_value(), false);
 
     let load_average = LoadAverage::get_load_average().unwrap();
 
@@ -895,4 +897,77 @@ pub fn mounts(rocket: Rocket) -> Rocket {
         .mount("/api", routes![volume_detect, volume_detect_401])
         .mount("/api", routes![all, all_401])
         .mount("/api", routes![monitor, monitor_401])
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use std::time::Duration;
+
+    use rocket::local::Client;
+    use rocket::http::Header;
+
+    const TEST_DETECT_INTERVAL: u64 = 1000;
+    const TEST_AUTH_KEY: &'static str = "magic";
+
+    fn create_basic_rocket(has_auth_key: bool) -> Rocket {
+        let rocket = rocket::ignite().manage(super::super::DetectInterval(Duration::from_millis(TEST_DETECT_INTERVAL)));
+
+        if has_auth_key {
+            rocket.manage(super::super::AuthKey(Some(TEST_AUTH_KEY.to_string())))
+        } else {
+            rocket.manage(super::super::AuthKey(None))
+        }
+    }
+
+    #[test]
+    fn test_no_need_auth() {
+        let rocket = create_basic_rocket(false).mount("/api", routes![hostname, hostname_401]);
+
+        let client = Client::new(rocket).unwrap();
+
+        {
+            let mut req = client.get("/api/hostname");
+
+            req.add_header(Header::new("Authorization", TEST_AUTH_KEY));
+
+            let res = req.dispatch();
+
+            assert_eq!(Status::Ok, res.status());
+        }
+
+        {
+            let req = client.get("/api/hostname");
+
+            let res = req.dispatch();
+
+            assert_eq!(Status::Ok, res.status());
+        }
+    }
+
+    #[test]
+    fn test_need_auth() {
+        let rocket = create_basic_rocket(true).mount("/api", routes![hostname, hostname_401]);
+
+        let client = Client::new(rocket).unwrap();
+
+        {
+            let mut req = client.get("/api/hostname");
+
+            req.add_header(Header::new("Authorization", TEST_AUTH_KEY));
+
+            let res = req.dispatch();
+
+            assert_eq!(Status::Ok, res.status());
+        }
+
+        {
+            let req = client.get("/api/hostname");
+
+            let res = req.dispatch();
+
+            assert_eq!(Status::Unauthorized, res.status());
+        }
+    }
 }
