@@ -19,6 +19,7 @@ extern crate rand;
 extern crate base64;
 #[macro_use]
 extern crate serde_json;
+extern crate benchmarking;
 
 #[macro_use]
 extern crate rocket;
@@ -40,6 +41,7 @@ mod kernel;
 mod network;
 mod volume;
 mod rocket_mounts;
+mod benchmark;
 
 use std::time::Duration;
 use std::env;
@@ -62,6 +64,7 @@ use load_average::LoadAverage;
 use time::RTCDateTime;
 use network::NetworkWithSpeed;
 use volume::{Volume, VolumeWithSpeed};
+use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -213,6 +216,9 @@ pub enum Mode {
         port: u16,
         auth_key: Option<String>,
         only_api: bool,
+    },
+    Benchmark {
+        benchmark_config: BenchmarkConfig
     },
 }
 
@@ -534,6 +540,52 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
+            .subcommand(SubCommand::with_name("benchmark").aliases(&["b", "bench"])
+                .about("Runs benchmarks to measure the performance of this environment")
+                .display_order(9)
+                .arg(Arg::with_name("WARMING_UP_DURATION")
+                    .display_order(0)
+                    .long("warming-up-duration")
+                    .help("Assigns a duration for warming up")
+                    .takes_value(true)
+                    .value_name("MILLI_SECONDS")
+                    .default_value("3000")
+                )
+                .arg(Arg::with_name("BENCHMARK_DURATION")
+                    .display_order(1)
+                    .long("benchmark-duration")
+                    .help("Assigns a duration for each benchmarking")
+                    .takes_value(true)
+                    .value_name("MILLI_SECONDS")
+                    .default_value("5000")
+                )
+                .arg(Arg::with_name("VERBOSE")
+                    .display_order(2)
+                    .long("verbose")
+                    .help("Shows more information in stderr")
+                )
+                .arg(Arg::with_name("DISABLE_CPU")
+                    .display_order(10)
+                    .long("disable-cpu")
+                    .help("Not to bench CPUs")
+                )
+                .arg(Arg::with_name("ENABLE_CPU")
+                    .display_order(100)
+                    .long("enable-cpu")
+                    .help("Allows to bench CPUs (disables others by default)")
+                )
+                .arg(Arg::with_name("DISABLE_MEMORY")
+                    .display_order(11)
+                    .long("disable-memory")
+                    .help("Not to bench memory")
+                )
+                .arg(Arg::with_name("ENABLE_MEMORY")
+                    .display_order(101)
+                    .long("enable-memory")
+                    .help("Allows to bench memory (disables others by default)")
+                )
+                .after_help("Enjoy it! https://magiclen.org")
+            )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
@@ -690,6 +742,70 @@ impl Config {
                 port,
                 auth_key,
                 only_api,
+            }
+        } else if let Some(sub_matches) = matches.subcommand_matches("benchmark") {
+            let warming_up_duration = match sub_matches.value_of("WARMING_UP_DURATION") {
+                Some(millisecond) => {
+                    let millisecond: u64 = millisecond.parse().map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", millisecond))?;
+
+                    Duration::from_millis(millisecond)
+                }
+                None => unreachable!()
+            };
+
+            let benchmark_duration = match sub_matches.value_of("BENCHMARK_DURATION") {
+                Some(millisecond) => {
+                    let millisecond: u64 = millisecond.parse().map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", millisecond))?;
+
+                    Duration::from_millis(millisecond)
+                }
+                None => unreachable!()
+            };
+
+            let print_out = if sub_matches.is_present("VERBOSE") {
+                BenchmarkLog::Verbose
+            } else {
+                BenchmarkLog::Normal
+            };
+
+            let disable_cpu = sub_matches.is_present("DISABLE_CPU");
+            let enable_cpu = sub_matches.is_present("ENABLE_CPU");
+
+            if enable_cpu && disable_cpu {
+                return Err(String::from("Cannot determine whether to enable benching CPU or not."));
+            }
+
+            let disable_memory = sub_matches.is_present("DISABLE_MEMORY");
+            let enable_memory = sub_matches.is_present("ENABLE_MEMORY");
+
+            if disable_memory && enable_memory {
+                return Err(String::from("Cannot determine whether to enable benching memory or not."));
+            }
+
+            let default = !(enable_cpu || enable_memory);
+
+            let cpu = if disable_cpu {
+                false
+            } else {
+                default || enable_cpu
+            };
+
+            let memory = if disable_memory {
+                false
+            } else {
+                default || enable_memory
+            };
+
+            let benchmark_config = BenchmarkConfig {
+                warming_up_duration,
+                benchmark_duration,
+                print_out,
+                cpu,
+                memory,
+            };
+
+            Mode::Benchmark {
+                benchmark_config
             }
         } else {
             return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
@@ -909,6 +1025,9 @@ pub fn run(config: Config) -> Result<i32, String> {
         }
         Mode::Web { monitor, port, auth_key, only_api } => {
             rocket_mounts::launch(monitor, port, auth_key, only_api);
+        }
+        Mode::Benchmark { benchmark_config } => {
+            run_benchmark(&benchmark_config).map_err(|err| err.to_string())?;
         }
     }
 
