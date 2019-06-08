@@ -170,18 +170,20 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                     let mut sum = 0;
 
-                    measurer.measure_for_loop(0..1000_000, |loop_seq, _| {
-                        let sub_result = 4.0 / divisor;
+                    for i in 0..1000_000 {
+                        measurer.measure(|| {
+                            let sub_result = 4.0 / divisor;
 
-                        if loop_seq % 2 == 0 {
-                            result += sub_result;
-                        } else {
-                            result -= sub_result;
-                        }
+                            if i % 2 == 0 {
+                                result += sub_result;
+                            } else {
+                                result -= sub_result;
+                            }
 
-                        divisor += 2.0;
-                        sum += loop_seq;
-                    });
+                            divisor += 2.0;
+                            sum += i;
+                        });
+                    }
                 })?;
 
                 let speed = bench_result.speed();
@@ -208,18 +210,20 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                 let mut sum = 0;
 
-                measurer.measure_for_loop(0..1000_000, |loop_seq, _| {
-                    let sub_result = 4.0 / divisor;
+                for i in 0..1000_000 {
+                    measurer.measure(|| {
+                        let sub_result = 4.0 / divisor;
 
-                    if loop_seq % 2 == 0 {
-                        result += sub_result;
-                    } else {
-                        result -= sub_result;
-                    }
+                        if i % 2 == 0 {
+                            result += sub_result;
+                        } else {
+                            result -= sub_result;
+                        }
 
-                    divisor += 2.0;
-                    sum += loop_seq;
-                });
+                        divisor += 2.0;
+                        sum += i;
+                    });
+                }
             })?;
 
             let speed = bench_result.speed();
@@ -261,11 +265,13 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                     buffer.set_len(MEM_SIZE);
                 }
 
-                measurer.measure_for_loop(0..(MEM_SIZE / BUFFER_SIZE), |_, i| { // copy
+                for i in 0..(MEM_SIZE / BUFFER_SIZE) {
                     let i = i * BUFFER_SIZE;
 
-                    buffer[i..(i + BUFFER_SIZE)].copy_from_slice(&random);
-                });
+                    measurer.measure(|| {
+                        buffer[i..(i + BUFFER_SIZE)].copy_from_slice(&random);
+                    });
+                }
 
                 buffer
             })?;
