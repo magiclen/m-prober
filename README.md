@@ -185,6 +185,20 @@ Environment variables, `MPROBER_LIGHT` and `MPROBER_FORCE_PLAIN` can be used to 
 
 ![colors.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/colors.png)
 
+#### Benchmark
+
+To benchmark the performance of CPU, memory and volumes,
+
+```bash
+mprober benchmark
+```
+
+In addition to `benchmark`, `b`, `bench`, and `performance` are also acceptable.
+
+Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run.
+
+![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/benchmark.png)
+
 ### Web (HTTP)
 
 #### Launching the Server
@@ -200,20 +214,6 @@ Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8
 ![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/web.png)
 
 To change the listening port, use the `-p <port>` option. To change the detecting time interval, use the `-m <SECONDS>` option, where the `<SECONDS>` is ranged from `1` to `15`.
-
-### Benchmark
-
-To benchmark the performance of CPU, memory and volumes,
-
-```bash
-mprober benchmark
-```
-
-In addition to `benchmark`, `b`, `bench`, and `performance` are also acceptable.
-
-Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run.
-
-![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/benchmark.png)
 
 #### HTTP APIs
 
