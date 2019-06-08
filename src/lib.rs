@@ -312,6 +312,9 @@ impl Config {
             "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer",
             "web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key",
             "web --only-api              # Start a HTTP service on port 8000 to serve only HTTP APIs",
+            "benchmark                   # Run benchmarks",
+            "benchmark --disable-cpu     # Run benchmarks except for benchmarking CPU",
+            "benchmark --enable-memory   # Benchmark the memory",
         ];
 
         let terminal_width = if let Some((Width(width), _)) = terminal_size() {
@@ -542,7 +545,7 @@ impl Config {
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
-            .subcommand(SubCommand::with_name("benchmark").aliases(&["b", "bench"])
+            .subcommand(SubCommand::with_name("benchmark").aliases(&["b", "bench", "performance"])
                 .about("Runs benchmarks to measure the performance of this environment")
                 .display_order(9)
                 .arg(Arg::with_name("WARMING_UP_DURATION")

@@ -48,6 +48,9 @@ EXAMPLES:
   mprober web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer
   mprober web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key
   mprober web --only-api              # Start a HTTP service on port 8000 to serve only HTTP APIs
+  mprober benchmark                   # Run benchmarks
+  mprober benchmark --disable-cpu     # Run benchmarks except for benchmarking CPU
+  mprober benchmark --enable-memory   # Benchmark the memory
 
 USAGE:
     mprober [SUBCOMMAND]
@@ -57,16 +60,17 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    hostname    Shows the hostname
-    kernel      Shows the kernel version
-    uptime      Shows the uptime
-    time        Shows the RTC (UTC) date and time
-    cpu         Shows CPU stats
-    memory      Shows memory stats
-    network     Shows network stats
-    volume      Shows volume stats
-    web         Starts a HTTP service to monitor this computer
-    help        Prints this message or the help of the given subcommand(s)
+    hostname     Shows the hostname
+    kernel       Shows the kernel version
+    uptime       Shows the uptime
+    time         Shows the RTC (UTC) date and time
+    cpu          Shows CPU stats
+    memory       Shows memory stats
+    network      Shows network stats
+    volume       Shows volume stats
+    web          Starts a HTTP service to monitor this computer
+    benchmark    Runs benchmarks to measure the performance of this environment
+    help         Prints this message or the help of the given subcommand(s)
 ```
 
 ## Requirements
@@ -196,6 +200,20 @@ Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8
 ![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/web.png)
 
 To change the listening port, use the `-p <port>` option. To change the detecting time interval, use the `-m <SECONDS>` option, where the `<SECONDS>` is ranged from `1` to `15`.
+
+### Benchmark
+
+To benchmark the performance of CPU, memory and volumes,
+
+```bash
+mprober benchmark
+```
+
+In addition to `benchmark`, `b`, `bench`, and `performance` are also acceptable.
+
+Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run.
+
+![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/benchmark.png)
 
 #### HTTP APIs
 
