@@ -1,5 +1,6 @@
 #![feature(duration_float)]
 #![feature(proc_macro_hygiene, decl_macro)]
+#![feature(seek_convenience)]
 
 extern crate clap;
 extern crate byte_unit;
@@ -20,6 +21,7 @@ extern crate base64;
 #[macro_use]
 extern crate serde_json;
 extern crate benchmarking;
+extern crate chrono;
 
 #[macro_use]
 extern crate rocket;
@@ -562,27 +564,38 @@ impl Config {
                 .arg(Arg::with_name("VERBOSE")
                     .display_order(2)
                     .long("verbose")
+                    .short("v")
                     .help("Shows more information in stderr")
                 )
                 .arg(Arg::with_name("DISABLE_CPU")
                     .display_order(10)
-                    .long("disable-cpu")
-                    .help("Not to bench CPUs")
+                    .long("disable-cpu").aliases(&["disabled-cpu", "disable-cpus", "disabled-cpus"])
+                    .help("Not to benchmark CPUs")
                 )
                 .arg(Arg::with_name("ENABLE_CPU")
                     .display_order(100)
-                    .long("enable-cpu")
-                    .help("Allows to bench CPUs (disables others by default)")
+                    .long("enable-cpu").aliases(&["enabled-cpu", "enable-cpus", "enabled-cpus"])
+                    .help("Allows to benchmark CPUs (disables others by default)")
                 )
                 .arg(Arg::with_name("DISABLE_MEMORY")
                     .display_order(11)
-                    .long("disable-memory")
-                    .help("Not to bench memory")
+                    .long("disable-memory").aliases(&["disabled-memory"])
+                    .help("Not to benchmark memory")
                 )
                 .arg(Arg::with_name("ENABLE_MEMORY")
                     .display_order(101)
-                    .long("enable-memory")
-                    .help("Allows to bench memory (disables others by default)")
+                    .long("enable-memory").aliases(&["enabled-memory"])
+                    .help("Allows to benchmark memory (disables others by default)")
+                )
+                .arg(Arg::with_name("DISABLE_VOLUME")
+                    .display_order(13)
+                    .long("disable-volume").aliases(&["disabled-volume", "disable-volumes", "disabled-volumes"])
+                    .help("Not to benchmark volumes")
+                )
+                .arg(Arg::with_name("ENABLE_VOLUME")
+                    .display_order(103)
+                    .long("enable-volume").aliases(&["enabled-volume", "enable-volumes", "enabled-volumes"])
+                    .help("Allows to benchmark volumes (disables others by default)")
                 )
                 .after_help("Enjoy it! https://magiclen.org")
             )
@@ -772,17 +785,24 @@ impl Config {
             let enable_cpu = sub_matches.is_present("ENABLE_CPU");
 
             if enable_cpu && disable_cpu {
-                return Err(String::from("Cannot determine whether to enable benching CPU or not."));
+                return Err(String::from("Cannot determine whether to enable benchmarking CPU or not."));
             }
 
             let disable_memory = sub_matches.is_present("DISABLE_MEMORY");
             let enable_memory = sub_matches.is_present("ENABLE_MEMORY");
 
             if disable_memory && enable_memory {
-                return Err(String::from("Cannot determine whether to enable benching memory or not."));
+                return Err(String::from("Cannot determine whether to enable benchmarking memory or not."));
             }
 
-            let default = !(enable_cpu || enable_memory);
+            let disable_volume = sub_matches.is_present("DISABLE_VOLUME");
+            let enable_volume = sub_matches.is_present("ENABLE_VOLUME");
+
+            if disable_volume && enable_volume {
+                return Err(String::from("Cannot determine whether to enable benchmarking volumes or not."));
+            }
+
+            let default = !(enable_cpu || enable_memory || enable_volume);
 
             let cpu = if disable_cpu {
                 false
@@ -796,12 +816,19 @@ impl Config {
                 default || enable_memory
             };
 
+            let volume = if disable_volume {
+                false
+            } else {
+                default || enable_volume
+            };
+
             let benchmark_config = BenchmarkConfig {
                 warming_up_duration,
                 benchmark_duration,
                 print_out,
                 cpu,
                 memory,
+                volume,
             };
 
             Mode::Benchmark {
