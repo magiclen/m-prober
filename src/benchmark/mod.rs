@@ -248,7 +248,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             }
 
             const BUFFER_SIZE: usize = 4096;
-            const MEM_SIZE: usize = 16 * 1024 * 1024; // N times of BUFFER_SIZE
+            const MEM_SIZE: usize = 4 * BUFFER_SIZE; // N times of BUFFER_SIZE
 
             let bench_result = benchmarking::bench_function_with_duration(config.benchmark_duration, |measurer| {
                 let mut random = [0u8; BUFFER_SIZE];
@@ -259,21 +259,17 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                     random[i] = rng.gen();
                 }
 
-                let mut buffer = Vec::with_capacity(MEM_SIZE);
-
-                unsafe {
-                    buffer.set_len(MEM_SIZE);
-                }
+                let mut mem = [0u8; MEM_SIZE];
 
                 for i in 0..(MEM_SIZE / BUFFER_SIZE) {
                     let i = i * BUFFER_SIZE;
 
                     measurer.measure(|| {
-                        buffer[i..(i + BUFFER_SIZE)].copy_from_slice(&random);
+                        mem[i..(i + BUFFER_SIZE)].copy_from_slice(&random);
                     });
                 }
 
-                buffer
+                mem
             })?;
 
             let speed = bench_result.speed() * BUFFER_SIZE as f64;
