@@ -40,7 +40,7 @@ rocket = "0.4"
 rocket-simple-authorization = "0.8"
 rocket-cache-response = "0.5"
 rocket-json-response = "0.5"
-rocket-include-static-resources = "0.8"
+rocket-include-static-resources = "0.9"
 rocket-include-handlebars = "0.11"
 
 [dependencies.validators]

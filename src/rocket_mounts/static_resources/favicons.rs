@@ -1,72 +1,72 @@
 const STATIC_RESOURCES_CACHE_MAX_AGE: u32 = 259200;
 
-use crate::rocket_include_static_resources::{EtagIfNoneMatch, StaticResponse};
+use crate::rocket_include_static_resources::StaticResponse;
 use crate::rocket_cache_response::CacheResponse;
 
-fn static_response(etag_if_none_match: EtagIfNoneMatch, id: &'static str) -> CacheResponse<StaticResponse> {
-    let responder = static_response!(etag_if_none_match, id);
+fn static_response(id: &'static str) -> CacheResponse<StaticResponse> {
+    let responder = static_response!(id);
 
     CacheResponse::public_only_release(responder, STATIC_RESOURCES_CACHE_MAX_AGE, false)
 }
 
 #[get("/web-app.manifest")]
-fn web_app_manifest(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "web-app.manifest")
+fn web_app_manifest() -> CacheResponse<StaticResponse> {
+    static_response("web-app.manifest")
 }
 
 #[get("/browser-config.xml")]
-fn browser_config(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "browser-config")
+fn browser_config() -> CacheResponse<StaticResponse> {
+    static_response("browser-config")
 }
 
 #[get("/favicon-monochrome.svg")]
-fn favicon_monochrome(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-monochrome")
+fn favicon_monochrome() -> CacheResponse<StaticResponse> {
+    static_response("favicon-monochrome")
 }
 
 #[get("/favicon.ico")]
-fn favicon(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon")
+fn favicon() -> CacheResponse<StaticResponse> {
+    static_response("favicon")
 }
 
 #[get("/favicon-512.png")]
-fn favicon_512(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-512")
+fn favicon_512() -> CacheResponse<StaticResponse> {
+    static_response("favicon-512")
 }
 
 #[get("/favicon-192.png")]
-fn favicon_192(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-192")
+fn favicon_192() -> CacheResponse<StaticResponse> {
+    static_response("favicon-192")
 }
 
 #[get("/favicon-32.png")]
-fn favicon_32(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-32")
+fn favicon_32() -> CacheResponse<StaticResponse> {
+    static_response("favicon-32")
 }
 
 #[get("/favicon-16.png")]
-fn favicon_16(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-16")
+fn favicon_16() -> CacheResponse<StaticResponse> {
+    static_response("favicon-16")
 }
 
 #[get("/favicon-180-i.png")]
-fn favicon_180_i(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "favicon-180-i")
+fn favicon_180_i() -> CacheResponse<StaticResponse> {
+    static_response("favicon-180-i")
 }
 
 #[get("/mstile-310.png")]
-fn mstile_310(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "mstile-310")
+fn mstile_310() -> CacheResponse<StaticResponse> {
+    static_response("mstile-310")
 }
 
 #[get("/mstile-150.png")]
-fn mstile_150(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "mstile-150")
+fn mstile_150() -> CacheResponse<StaticResponse> {
+    static_response("mstile-150")
 }
 
 #[get("/mstile-70.png")]
-fn mstile_70(etag_if_none_match: EtagIfNoneMatch) -> CacheResponse<StaticResponse> {
-    static_response(etag_if_none_match, "mstile-70")
+fn mstile_70() -> CacheResponse<StaticResponse> {
+    static_response("mstile-70")
 }
 
 pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
