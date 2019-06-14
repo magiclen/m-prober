@@ -56,28 +56,22 @@ lazy_static! {
 pub struct Auth;
 
 impl<'a, 'r> SimpleAuthorization<'a, 'r> for Auth {
-    #[inline]
-    fn has_authority(request: &'a Request<'r>, key: Option<&'a str>) -> Option<Option<&'a str>> {
+    fn authorizing(request: &'a Request<'r>, authorization: Option<&'a str>) -> Option<Self> {
         let auth_key = request.guard::<State<super::AuthKey>>().unwrap();
 
         match auth_key.get_value() {
             Some(auth_key) => {
-                match key {
-                    Some(key) => if key.eq(auth_key) {
-                        Some(None)
+                match authorization {
+                    Some(authorization) => if authorization.eq(auth_key) {
+                        Some(Auth)
                     } else {
                         None
                     },
                     None => None
                 }
             }
-            None => Some(None)
+            None => Some(Auth)
         }
-    }
-
-    #[inline]
-    fn create_auth(_key: Option<&'a str>) -> Auth {
-        Auth
     }
 }
 
