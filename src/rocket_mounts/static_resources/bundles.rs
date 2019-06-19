@@ -19,11 +19,6 @@ fn js_bundle() -> CacheResponse<StaticResponse> {
     static_response("js-bundle")
 }
 
-#[get("/css/font-roboto-mono.min.css")]
-fn font_roboto_mono() -> CacheResponse<StaticResponse> {
-    static_response("font-roboto-mono")
-}
-
 #[get("/fonts/RobotoMono-Bold.woff2")]
 fn roboto_mono_bold() -> CacheResponse<StaticResponse> {
     static_response("RobotoMono-Bold")
@@ -42,56 +37,6 @@ fn roboto_mono_medium() -> CacheResponse<StaticResponse> {
 #[get("/fonts/RobotoMono-Regular.woff2")]
 fn roboto_mono_regular() -> CacheResponse<StaticResponse> {
     static_response("RobotoMono-Regular")
-}
-
-#[get("/fonts/fa-brands-400.eot")]
-fn fa_brands_400_eot() -> CacheResponse<StaticResponse> {
-    static_response("fa-brands-400-eot")
-}
-
-#[get("/fonts/fa-brands-400.svg")]
-fn fa_brands_400_svg() -> CacheResponse<StaticResponse> {
-    static_response("fa-brands-400-svg")
-}
-
-#[get("/fonts/fa-brands-400.ttf")]
-fn fa_brands_400_ttf() -> CacheResponse<StaticResponse> {
-    static_response("fa-brands-400-ttf")
-}
-
-#[get("/fonts/fa-brands-400.woff")]
-fn fa_brands_400_woff() -> CacheResponse<StaticResponse> {
-    static_response("fa-brands-400-woff")
-}
-
-#[get("/fonts/fa-brands-400.woff2")]
-fn fa_brands_400_woff2() -> CacheResponse<StaticResponse> {
-    static_response("fa-brands-400-woff2")
-}
-
-#[get("/fonts/fa-regular-400.eot")]
-fn fa_regular_400_eot() -> CacheResponse<StaticResponse> {
-    static_response("fa-regular-400-eot")
-}
-
-#[get("/fonts/fa-regular-400.svg")]
-fn fa_regular_400_svg() -> CacheResponse<StaticResponse> {
-    static_response("fa-regular-400-svg")
-}
-
-#[get("/fonts/fa-regular-400.ttf")]
-fn fa_regular_400_ttf() -> CacheResponse<StaticResponse> {
-    static_response("fa-regular-400-ttf")
-}
-
-#[get("/fonts/fa-regular-400.woff")]
-fn fa_regular_400_woff() -> CacheResponse<StaticResponse> {
-    static_response("fa-regular-400-woff")
-}
-
-#[get("/fonts/fa-regular-400.woff2")]
-fn fa_regular_400_woff2() -> CacheResponse<StaticResponse> {
-    static_response("fa-regular-400-woff2")
 }
 
 #[get("/fonts/fa-solid-900.eot")]
@@ -127,10 +72,7 @@ fn preload() -> CacheResponse<StaticResponse> {
 pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
     rocket
         .mount("/", routes![css_bundle, js_bundle])
-        .mount("/", routes![font_roboto_mono])
         .mount("/", routes![roboto_mono_bold, roboto_mono_light, roboto_mono_medium, roboto_mono_regular])
-        .mount("/", routes![fa_brands_400_eot, fa_brands_400_svg, fa_brands_400_ttf, fa_brands_400_woff, fa_brands_400_woff2])
-        .mount("/", routes![fa_regular_400_eot, fa_regular_400_svg, fa_regular_400_ttf, fa_regular_400_woff, fa_regular_400_woff2])
         .mount("/", routes![fa_solid_900_eot, fa_solid_900_svg, fa_solid_900_ttf, fa_solid_900_woff, fa_solid_900_woff2])
         .mount("/", routes![preload])
 }
