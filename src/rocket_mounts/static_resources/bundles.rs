@@ -19,6 +19,11 @@ fn js_bundle() -> CacheResponse<StaticResponse> {
     static_response("js-bundle")
 }
 
+#[get("/css/font-roboto-mono.min.css")]
+fn font_roboto_mono() -> CacheResponse<StaticResponse> {
+    static_response("font-roboto-mono")
+}
+
 #[get("/fonts/RobotoMono-Bold.woff2")]
 fn roboto_mono_bold() -> CacheResponse<StaticResponse> {
     static_response("RobotoMono-Bold")
@@ -72,6 +77,7 @@ fn preload() -> CacheResponse<StaticResponse> {
 pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
     rocket
         .mount("/", routes![css_bundle, js_bundle])
+        .mount("/", routes![font_roboto_mono])
         .mount("/", routes![roboto_mono_bold, roboto_mono_light, roboto_mono_medium, roboto_mono_regular])
         .mount("/", routes![fa_solid_900_eot, fa_solid_900_svg, fa_solid_900_ttf, fa_solid_900_woff, fa_solid_900_woff2])
         .mount("/", routes![preload])

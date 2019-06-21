@@ -17,15 +17,18 @@ function collectWhitelist() {
 }
 
 module.exports = {
-    entry: './src/app.js',
+    entry: {
+        'bundle': './src/app.js',
+        'font-roboto-mono': './src/font-roboto-mono.js',
+    },
     output: {
-        filename: 'js/bundle.min.js',
+        filename: 'js/[name].min.js',
         libraryTarget: "umd",
     },
     plugins: [
         new CleanWebpackPlugin(),
         new MiniCssExtractPlugin({
-            filename: 'css/bundle.min.css',
+            filename: 'css/[name].min.css',
         }),
         new PurgecssPlugin({
             whitelist: collectWhitelist,

@@ -12,6 +12,8 @@ pub fn rocket_handler(rocket: Rocket) -> Rocket {
             "css-bundle", "front-end/css/bundle.min.css",
             "js-bundle", "front-end/js/bundle.min.js",
 
+            "font-roboto-mono", "front-end/css/font-roboto-mono.min.css",
+
             "RobotoMono-Bold", "front-end/fonts/RobotoMono-Bold.woff2",
             "RobotoMono-Light", "front-end/fonts/RobotoMono-Light.woff2",
             "RobotoMono-Medium", "front-end/fonts/RobotoMono-Medium.woff2",

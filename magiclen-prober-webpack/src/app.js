@@ -3,6 +3,8 @@ import 'bootstrap/js/dist/collapse';
 import 'bootstrap/js/dist/modal';
 import Vue from 'vue';
 
+import {applyRobotoMono} from 'web-fonts/src/js/roboto-mono';
+
 import './app.scss';
 
 $.fn.pressEnter = function (fnc) {
@@ -260,6 +262,8 @@ function callMonitorAPI(vueData, authKey = undefined, interval, retryCount = 0) 
 }
 
 export function monitor_init() {
+    applyRobotoMono('html body, code');
+
     $("#menu-github").click(function (e) {
         e.preventDefault();
         go('https://github.com/magiclen/m-prober');

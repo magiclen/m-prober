@@ -4,19 +4,16 @@ $fa-font-path: "~@fortawesome/fontawesome-free/webfonts/";
 @import '~@fortawesome/fontawesome-free/scss/fontawesome';
 @import '~@fortawesome/fontawesome-free/scss/solid';
 
-$font-path: "~web-fonts/src/fonts/";
-@import "~web-fonts/src/scss/roboto-mono";
-
 body {
   overflow-x: hidden;
-  font-family: 'ROBOTO MONO', monospace;
+  font-family: monospace, monospace;
 }
 
 code,
 kbd,
 pre,
 samp {
-  font-family: 'ROBOTO MONO', monospace;
+  font-family: monospace, monospace;
 }
 
 html {
