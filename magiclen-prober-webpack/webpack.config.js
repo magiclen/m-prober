@@ -13,7 +13,7 @@ const PATHS = {
 };
 
 function collectWhitelist() {
-    return ['toggled', 'collapsed', 'collapsing', 'show', 'modal-backdrop', 'modal-open'];
+    return ['toggled', 'collapsed', 'collapsing', 'show', 'modal-backdrop', 'modal-open', 'd-none', 'border-dark'];
 }
 
 module.exports = {
