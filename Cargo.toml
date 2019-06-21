@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.10.4"
+version = "0.10.5"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
