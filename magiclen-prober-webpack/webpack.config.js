@@ -1,7 +1,7 @@
 const {CleanWebpackPlugin} = require('clean-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 const OptimizeCSSAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 
 const path = require('path');
@@ -22,13 +22,13 @@ module.exports = {
         'font-roboto-mono': './src/font-roboto-mono.js',
     },
     output: {
-        filename: 'js/[name].min.js',
+        filename: './js/[name].min.js',
         libraryTarget: "umd",
     },
     plugins: [
         new CleanWebpackPlugin(),
         new MiniCssExtractPlugin({
-            filename: 'css/[name].min.css',
+            filename: './css/[name].min.css',
         }),
         new PurgecssPlugin({
             whitelist: collectWhitelist,
@@ -70,23 +70,23 @@ module.exports = {
                 ],
             },
             {
-                test: /\.(eot|woff|woff2|ttf)(\?\S*)?$/,
+                test: /\.(eot|woff|woff2|[ot]tf)$/,
                 use: [{
                     loader: 'file-loader',
                     options: {
                         name: '[name].[ext]',
-                        outputPath: 'fonts/',
+                        outputPath: './fonts/',
                         publicPath: '../fonts/'
                     }
                 }]
             },
             {
-                test: /.*font.*\.svg(\?\S*)?$/,
+                test: /.*font.*\.svg$/,
                 use: [{
                     loader: 'file-loader',
                     options: {
                         name: '[name].[ext]',
-                        outputPath: 'fonts/',
+                        outputPath: './fonts/',
                         publicPath: '../fonts/'
                     }
                 }]
@@ -95,12 +95,14 @@ module.exports = {
     },
     optimization: {
         minimizer: [
-            new UglifyJsPlugin({
-                uglifyOptions: {
+            new TerserPlugin({
+                cache: true,
+                parallel: true,
+                terserOptions: {
                     output: {
                         comments: false,
-                    },
-                },
+                    }
+                }
             }),
             new OptimizeCSSAssetsPlugin({
                 cssProcessorPluginOptions: {
