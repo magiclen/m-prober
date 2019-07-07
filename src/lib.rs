@@ -12,7 +12,6 @@ extern crate getch;
 extern crate scanner_rust;
 #[macro_use]
 extern crate lazy_static;
-extern crate crc_any;
 
 extern crate libc;
 
