@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.10.6"
+version = "0.10.7"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
@@ -21,7 +21,7 @@ panic = "abort"
 [dependencies]
 scanner-rust = "1.2"
 clap = "2"
-byte-unit = "2.1"
+byte-unit = "3"
 termcolor = "1"
 terminal_size = "0.1"
 getch = "0.2"
