@@ -1,6 +1,20 @@
 language: rust
 
 rust:
-- nightly
+  - nightly
+
 os:
-- linux
+  - linux
+
+matrix:
+  include:
+    - rust: nightly
+      os: linux
+      env: TARGET=x86_64-unknown-linux-musl
+      install: rustup target add $TARGET
+      script: cargo test --target $TARGET
+    - rust: nightly
+      os: linux
+      env: TARGET=i686-unknown-linux-gnu
+      services: docker
+      script: cargo install cross; cross test --target $TARGET --verbose;

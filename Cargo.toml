@@ -12,8 +12,9 @@ readme = "README.md"
 license = "MIT"
 exclude = ["doc-images", "magiclen-prober-webpack"]
 
-[badges]
-travis-ci = { repository = "magiclen/m-prober", branch = "master" }
+[badges.travis-ci]
+repository = "magiclen/m-prober"
+branch = "master"
 
 [profile.release]
 panic = "abort"
