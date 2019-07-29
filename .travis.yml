@@ -1,20 +1,26 @@
 language: rust
 
-rust:
-  - nightly
-
-os:
-  - linux
-
 matrix:
   include:
     - rust: nightly
       os: linux
+      env: TARGET=x86_64-unknown-linux-gnu
+      script: cargo test --verbose --target $TARGET
+    - rust: nightly
+      os: linux
       env: TARGET=x86_64-unknown-linux-musl
-      install: rustup target add $TARGET
-      script: cargo test --target $TARGET
+      install:
+        - sudo apt update
+        - sudo apt install musl-tools
+        - rustup target add $TARGET
+      script: cargo test --verbose --target $TARGET
     - rust: nightly
       os: linux
       env: TARGET=i686-unknown-linux-gnu
       services: docker
-      script: cargo install cross; cross test --target $TARGET --verbose;
+      script: cargo install cross && cross test --verbose --target $TARGET
+    - rust: nightly
+      os: linux
+      env: TARGET=i686-unknown-linux-musl
+      services: docker
+      script: cargo install cross && cross test --verbose --target $TARGET
