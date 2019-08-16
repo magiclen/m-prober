@@ -14,13 +14,13 @@ matrix:
         - sudo apt install musl-tools
         - rustup target add $TARGET
       script: cargo test --verbose --target $TARGET
-    - rust: nightly
-      os: linux
-      env: TARGET=i686-unknown-linux-gnu
-      services: docker
-      script: cargo install cross && cross test --verbose --target $TARGET
-    - rust: nightly
-      os: linux
-      env: TARGET=i686-unknown-linux-musl
-      services: docker
-      script: cargo install cross && cross test --verbose --target $TARGET
+#    - rust: nightly
+#      os: linux
+#      env: TARGET=i686-unknown-linux-gnu
+#      services: docker
+#      script: cargo install cross && cross test --verbose --target $TARGET
+#    - rust: nightly
+#      os: linux
+#      env: TARGET=i686-unknown-linux-musl
+#      services: docker
+#      script: cargo install cross && cross test --verbose --target $TARGET
