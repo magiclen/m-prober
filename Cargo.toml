@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.10.7"
+version = "0.10.8"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
@@ -36,7 +36,7 @@ serde_json = "1"
 benchmarking = "0.4"
 chrono = "0.4"
 
-rocket = "0.4"
+rocket = "0.4.2"
 rocket-simple-authorization = "0.9"
 rocket-cache-response = "0.5"
 rocket-json-response = "0.5"

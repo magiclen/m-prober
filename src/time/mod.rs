@@ -1,20 +1,25 @@
-use std::time::Duration;
-use std::io::{self, ErrorKind};
 use std::fmt::Write;
+use std::io::{self, ErrorKind};
+use std::time::Duration;
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
-const UPTIME_PATH: &'static str = "/proc/uptime";
+const UPTIME_PATH: &str = "/proc/uptime";
 
-const RTC_PATH: &'static str = "/proc/driver/rtc";
-const ITEMS: [&'static str; 2] = ["rtc_time", "rtc_date"];
+const RTC_PATH: &str = "/proc/driver/rtc";
+const ITEMS: [&str; 2] = ["rtc_time", "rtc_date"];
 
 pub fn get_uptime() -> Result<Duration, ScannerError> {
     let mut sc = Scanner::scan_path(UPTIME_PATH)?;
 
     let uptime = match sc.next_f64()? {
         Some(v) => v,
-        None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "Cannot find the uptime.")))
+        None => {
+            return Err(ScannerError::IOError(io::Error::new(
+                ErrorKind::UnexpectedEof,
+                "Cannot find the uptime.",
+            )))
+        }
     };
 
     Ok(Duration::from_secs_f64(uptime))
@@ -115,14 +120,18 @@ impl RTCDateTime {
                 match line {
                     Some(line) => {
                         if line.as_str().starts_with(item) {
-                            match line[item_len..].find(":") {
+                            match line[item_len..].find(':') {
                                 Some(colon_index) => {
-                                    let item = line[(item_len + colon_index + 1)..].trim().to_string();
+                                    let item =
+                                        line[(item_len + colon_index + 1)..].trim().to_string();
 
                                     item_values.push(item);
                                 }
                                 None => {
-                                    return Err(ScannerError::IOError(io::Error::new(ErrorKind::InvalidInput, format!("The item `{}` has no colon.", item))));
+                                    return Err(ScannerError::IOError(io::Error::new(
+                                        ErrorKind::InvalidInput,
+                                        format!("The item `{}` has no colon.", item),
+                                    )));
                                 }
                             }
 
@@ -130,7 +139,10 @@ impl RTCDateTime {
                         }
                     }
                     None => {
-                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The item `{}` is not found.", item))));
+                        return Err(ScannerError::IOError(io::Error::new(
+                            ErrorKind::UnexpectedEof,
+                            format!("The item `{}` is not found.", item),
+                        )));
                     }
                 }
             }

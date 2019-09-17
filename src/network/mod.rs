@@ -1,13 +1,13 @@
-use std::hash::{Hash, Hasher};
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::io::{self, ErrorKind};
-use std::time::Duration;
 use std::thread::sleep;
+use std::time::Duration;
 
 use crate::scanner_rust::{Scanner, ScannerError};
 use std::string::ToString;
 
-const NET_DEV_PATH: &'static str = "/proc/net/dev";
+const NET_DEV_PATH: &str = "/proc/net/dev";
 
 #[derive(Debug, Clone, Eq)]
 pub struct Network {
@@ -28,11 +28,6 @@ impl PartialEq for Network {
     fn eq(&self, other: &Network) -> bool {
         self.interface.eq(&other.interface)
     }
-
-    #[inline]
-    fn ne(&self, other: &Network) -> bool {
-        self.interface.ne(&other.interface)
-    }
 }
 
 impl Network {
@@ -41,7 +36,10 @@ impl Network {
 
         for _ in 0..2 {
             if sc.next_line()?.is_none() {
-                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "Cannot find any network interface.".to_string())));
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "Cannot find any network interface.".to_string(),
+                )));
             }
         }
 
@@ -56,18 +54,31 @@ impl Network {
 
                     let receive_bytes = match sc.next_u64()? {
                         Some(v) => v,
-                        None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of interface `{}` is not correct.", interface))))
+                        None => {
+                            return Err(ScannerError::IOError(io::Error::new(
+                                ErrorKind::UnexpectedEof,
+                                format!("The format of interface `{}` is not correct.", interface),
+                            )))
+                        }
                     };
 
                     for _ in 0..7 {
                         if sc.next_u64()?.is_none() {
-                            return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of interface `{}` is not correct.", interface))));
+                            return Err(ScannerError::IOError(io::Error::new(
+                                ErrorKind::UnexpectedEof,
+                                format!("The format of interface `{}` is not correct.", interface),
+                            )));
                         }
                     }
 
                     let transmit_bytes = match sc.next_u64()? {
                         Some(v) => v,
-                        None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of interface `{}` is not correct.", interface))))
+                        None => {
+                            return Err(ScannerError::IOError(io::Error::new(
+                                ErrorKind::UnexpectedEof,
+                                format!("The format of interface `{}` is not correct.", interface),
+                            )))
+                        }
                     };
 
                     let network = Network {
@@ -79,7 +90,10 @@ impl Network {
                     networks.push(network);
 
                     if sc.next_line()?.is_none() {
-                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of networks is not correct.".to_string())));
+                        return Err(ScannerError::IOError(io::Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "The format of networks is not correct.".to_string(),
+                        )));
                     }
                 }
                 None => {
@@ -105,20 +119,17 @@ pub struct NetworkWithSpeed {
 }
 
 impl NetworkWithSpeed {
-    pub fn get_networks_with_speed(interval: Duration) -> Result<Vec<NetworkWithSpeed>, ScannerError> {
+    pub fn get_networks_with_speed(
+        interval: Duration,
+    ) -> Result<Vec<NetworkWithSpeed>, ScannerError> {
         let mut pre_networks = Network::get_networks()?;
 
         let pre_networks_len = pre_networks.len();
 
         let mut pre_networks_hashset = HashSet::with_capacity(pre_networks_len);
 
-        loop {
-            match pre_networks.pop() {
-                Some(network) => {
-                    pre_networks_hashset.insert(network);
-                }
-                None => break
-            }
+        while let Some(network) = pre_networks.pop() {
+            pre_networks_hashset.insert(network);
         }
 
         let seconds = interval.as_secs_f64();

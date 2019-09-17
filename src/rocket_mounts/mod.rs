@@ -1,14 +1,14 @@
 mod api;
-mod static_resources;
 mod monitor;
+mod static_resources;
 
-use std::time::Duration;
 use std::ops::Deref;
+use std::time::Duration;
 
-use crate::rocket::{Config, config::Environment};
+use crate::rocket::{config::Environment, Config};
 
-use crate::rand::{self, RngCore};
 use crate::base64;
+use crate::rand::{self, RngCore};
 
 #[derive(Debug)]
 struct DetectInterval(Duration);
@@ -54,7 +54,8 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: 
 
     config.port = port;
 
-    let rocket = rocket::custom(config.unwrap()).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
+    let rocket =
+        rocket::custom(config.unwrap()).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
 
     let rocket = api::mounts(rocket);
 
@@ -63,9 +64,7 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: 
     } else {
         let rocket = static_resources::rocket_handler(rocket);
 
-        let rocket = monitor::rocket_handler(rocket);
-
-        rocket
+        monitor::rocket_handler(rocket)
     };
 
     rocket.launch();

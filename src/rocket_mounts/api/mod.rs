@@ -1,22 +1,25 @@
-use std::thread;
-use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
-use std::time::{Instant, Duration};
 use std::collections::linked_list::LinkedList;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
+use std::thread;
+use std::time::{Duration, Instant};
 
-use crate::rocket::{Rocket, State, http::Status, request::Request};
-use crate::rocket_simple_authorization::SimpleAuthorization;
+use crate::rocket::{http::Status, request::Request, Rocket, State};
 use crate::rocket_cache_response::CacheResponse;
-use crate::rocket_json_response::{JSONResponse, json_gettext::JSONGetTextValue};
+use crate::rocket_json_response::{json_gettext::JSONGetTextValue, JSONResponse};
+use crate::rocket_simple_authorization::SimpleAuthorization;
 
 use crate::byte_unit::{Byte, ByteUnit};
 
+use crate::cpu_info::{CPUStat, CPU};
+use crate::free::Free;
 use crate::hostname;
-use crate::time::{self, RTCDateTime};
 use crate::kernel;
 use crate::load_average::LoadAverage;
-use crate::cpu_info::{CPU, CPUStat};
-use crate::free::Free;
 use crate::network::NetworkWithSpeed;
+use crate::time::{self, RTCDateTime};
 use crate::volume::{Volume, VolumeWithSpeed};
 
 static mut CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
@@ -26,31 +29,18 @@ static mut VOLUMES_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static DELAY_DURATION: Duration = Duration::from_millis(33);
 
 lazy_static! {
-    static ref CPUS_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
-        Mutex::new(Some(Instant::now()))
-    };
-
-    static ref NETWORK_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
-        Mutex::new(Some(Instant::now()))
-    };
-
-    static ref VOLUMES_STAT_LATEST_DETECT: Mutex<Option<Instant>> = {
-        Mutex::new(Some(Instant::now()))
-    };
+    static ref CPUS_STAT_LATEST_DETECT: Mutex<Option<Instant>> =
+        { Mutex::new(Some(Instant::now())) };
+    static ref NETWORK_STAT_LATEST_DETECT: Mutex<Option<Instant>> =
+        { Mutex::new(Some(Instant::now())) };
+    static ref VOLUMES_STAT_LATEST_DETECT: Mutex<Option<Instant>> =
+        { Mutex::new(Some(Instant::now())) };
 }
 
 lazy_static! {
-    static ref CPUS_STAT: Mutex<Option<Vec<f64>>> = {
-        Mutex::new(None)
-    };
-
-    static ref NETWORK_STAT: Mutex<Option<Vec<NetworkWithSpeed>>> = {
-        Mutex::new(None)
-    };
-
-    static ref VOLUMES_STAT: Mutex<Option<Vec<VolumeWithSpeed>>> = {
-        Mutex::new(None)
-    };
+    static ref CPUS_STAT: Mutex<Option<Vec<f64>>> = { Mutex::new(None) };
+    static ref NETWORK_STAT: Mutex<Option<Vec<NetworkWithSpeed>>> = { Mutex::new(None) };
+    static ref VOLUMES_STAT: Mutex<Option<Vec<VolumeWithSpeed>>> = { Mutex::new(None) };
 }
 
 pub struct Auth;
@@ -62,15 +52,17 @@ impl<'a, 'r> SimpleAuthorization<'a, 'r> for Auth {
         match auth_key.get_value() {
             Some(auth_key) => {
                 match authorization {
-                    Some(authorization) => if authorization.eq(auth_key) {
-                        Some(Auth)
-                    } else {
-                        None
-                    },
-                    None => None
+                    Some(authorization) => {
+                        if authorization.eq(auth_key) {
+                            Some(Auth)
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
                 }
             }
-            None => Some(Auth)
+            None => Some(Auth),
         }
     }
 }
@@ -165,7 +157,12 @@ fn detect_volumes_stat_sleep(detect_interval: Duration, strict: bool) {
 fn detect_all_sleep(detect_interval: Duration, strict: bool) {
     let now = Instant::now();
 
-    let latest = CPUS_STAT_LATEST_DETECT.lock().unwrap().unwrap().max(NETWORK_STAT_LATEST_DETECT.lock().unwrap().unwrap()).max(VOLUMES_STAT_LATEST_DETECT.lock().unwrap().unwrap());
+    let latest = CPUS_STAT_LATEST_DETECT
+        .lock()
+        .unwrap()
+        .unwrap()
+        .max(NETWORK_STAT_LATEST_DETECT.lock().unwrap().unwrap())
+        .max(VOLUMES_STAT_LATEST_DETECT.lock().unwrap().unwrap());
 
     if now > latest {
         let d: Duration = now - latest;
@@ -178,7 +175,9 @@ fn detect_all_sleep(detect_interval: Duration, strict: bool) {
 
     if strict {
         loop {
-            let cont = CPUS_STAT.lock().unwrap().is_none() || NETWORK_STAT.lock().unwrap().is_none() || VOLUMES_STAT.lock().unwrap().is_none();
+            let cont = CPUS_STAT.lock().unwrap().is_none()
+                || NETWORK_STAT.lock().unwrap().is_none()
+                || VOLUMES_STAT.lock().unwrap().is_none();
 
             if cont {
                 thread::sleep(DELAY_DURATION);
@@ -197,7 +196,9 @@ fn fetch_cpus_stat(detect_interval: Duration) {
 
             CPUS_STAT.lock().unwrap().replace(cpus_stat);
 
-            unsafe { CPUS_STAT_DOING.swap(false, Ordering::Relaxed); }
+            unsafe {
+                CPUS_STAT_DOING.swap(false, Ordering::Relaxed);
+            }
         });
     }
 }
@@ -210,7 +211,9 @@ fn fetch_network_stat(detect_interval: Duration) {
 
             NETWORK_STAT.lock().unwrap().replace(network_stat);
 
-            unsafe { NETWORK_STAT_DOING.swap(false, Ordering::Relaxed); }
+            unsafe {
+                NETWORK_STAT_DOING.swap(false, Ordering::Relaxed);
+            }
         });
     }
 }
@@ -223,14 +226,18 @@ fn fetch_volumes_stat(detect_interval: Duration) {
 
             VOLUMES_STAT.lock().unwrap().replace(volume_stat);
 
-            unsafe { VOLUMES_STAT_DOING.swap(false, Ordering::Relaxed); }
+            unsafe {
+                VOLUMES_STAT_DOING.swap(false, Ordering::Relaxed);
+            }
         });
     }
 }
 
 #[get("/hostname")]
 fn hostname(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(hostname::get_hostname().unwrap())))
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(
+        hostname::get_hostname().unwrap(),
+    )))
 }
 
 #[get("/hostname", rank = 2)]
@@ -240,7 +247,9 @@ fn hostname_401() -> Status {
 
 #[get("/kernel")]
 fn kernel(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(kernel::get_kernel_version().unwrap())))
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(
+        kernel::get_kernel_version().unwrap(),
+    )))
 }
 
 #[get("/kernel", rank = 2)]
@@ -250,7 +259,9 @@ fn kernel_401() -> Status {
 
 #[get("/uptime")]
 fn uptime(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_u64(time::get_uptime().unwrap().as_secs())))
+    CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_u64(
+        time::get_uptime().unwrap().as_secs(),
+    )))
 }
 
 #[get("/uptime", rank = 2)]
@@ -314,7 +325,10 @@ fn cpu_401() -> Status {
 }
 
 #[get("/cpu-detect")]
-fn cpu_detect(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+fn cpu_detect(
+    _auth: Auth,
+    detect_interval: State<super::DetectInterval>,
+) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat(detect_interval.get_value());
 
     detect_cpus_stat_sleep(detect_interval.get_value(), true);
@@ -395,7 +409,10 @@ fn memory_401() -> Status {
 }
 
 #[get("/network-detect")]
-fn network_detect(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+fn network_detect(
+    _auth: Auth,
+    detect_interval: State<super::DetectInterval>,
+) -> CacheResponse<JSONResponse<'static>> {
     fetch_network_stat(detect_interval.get_value());
 
     detect_network_stat_sleep(detect_interval.get_value(), true);
@@ -458,7 +475,10 @@ fn volume_401() -> Status {
 }
 
 #[get("/volume-detect")]
-fn volume_detect(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+fn volume_detect(
+    _auth: Auth,
+    detect_interval: State<super::DetectInterval>,
+) -> CacheResponse<JSONResponse<'static>> {
     fetch_volumes_stat(detect_interval.get_value());
 
     detect_volumes_stat_sleep(detect_interval.get_value(), true);
@@ -495,7 +515,10 @@ fn volume_detect_401() -> Status {
 }
 
 #[get("/all")]
-fn all(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+fn all(
+    _auth: Auth,
+    detect_interval: State<super::DetectInterval>,
+) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat(detect_interval.get_value());
     fetch_network_stat(detect_interval.get_value());
     fetch_volumes_stat(detect_interval.get_value());
@@ -627,7 +650,10 @@ fn all_401() -> Status {
 }
 
 #[get("/monitor")]
-fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheResponse<JSONResponse<'static>> {
+fn monitor(
+    _auth: Auth,
+    detect_interval: State<super::DetectInterval>,
+) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat(detect_interval.get_value());
     fetch_network_stat(detect_interval.get_value());
     fetch_volumes_stat(detect_interval.get_value());
@@ -667,9 +693,14 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
             for mhz in cpu.cpus_mhz {
                 mhz_sum += mhz;
 
-                let adjusted_byte = Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+                let adjusted_byte =
+                    Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
-                let mhz_string = format!("{:.2} {}Hz", adjusted_byte.get_value(), &adjusted_byte.get_unit().as_str()[..1]);
+                let mhz_string = format!(
+                    "{:.2} {}Hz",
+                    adjusted_byte.get_value(),
+                    &adjusted_byte.get_unit().as_str()[..1]
+                );
 
                 mhz_list.push_back(json!({
                     "value": mhz,
@@ -679,9 +710,14 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
 
             let mhz = mhz_sum / cpus_mhz_len as f64;
             let mhz_string = {
-                let adjusted_byte = Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+                let adjusted_byte =
+                    Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
-                format!("{:.2} {}Hz", adjusted_byte.get_value(), &adjusted_byte.get_unit().as_str()[..1])
+                format!(
+                    "{:.2} {}Hz",
+                    adjusted_byte.get_value(),
+                    &adjusted_byte.get_unit().as_str()[..1]
+                )
             };
 
             mhz_list.push_front(json!({
@@ -702,13 +738,19 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
 
     let memory_buff_and_cache = memory.mem.buffers + memory.mem.cache;
 
-    let memory_total_string = Byte::from_bytes(memory.mem.total as u128).get_appropriate_unit(true).to_string();
-    let memory_used_string = Byte::from_bytes(memory.mem.used as u128).get_appropriate_unit(true).to_string();
-    let memory_buff_and_cache_string = Byte::from_bytes(memory_buff_and_cache as u128).get_appropriate_unit(true).to_string();
+    let memory_total_string =
+        Byte::from_bytes(memory.mem.total as u128).get_appropriate_unit(true).to_string();
+    let memory_used_string =
+        Byte::from_bytes(memory.mem.used as u128).get_appropriate_unit(true).to_string();
+    let memory_buff_and_cache_string =
+        Byte::from_bytes(memory_buff_and_cache as u128).get_appropriate_unit(true).to_string();
 
-    let swap_total_string = Byte::from_bytes(memory.swap.total as u128).get_appropriate_unit(true).to_string();
-    let swap_used_string = Byte::from_bytes(memory.swap.used as u128).get_appropriate_unit(true).to_string();
-    let swap_cache_string = Byte::from_bytes(memory.swap.cache as u128).get_appropriate_unit(true).to_string();
+    let swap_total_string =
+        Byte::from_bytes(memory.swap.total as u128).get_appropriate_unit(true).to_string();
+    let swap_used_string =
+        Byte::from_bytes(memory.swap.used as u128).get_appropriate_unit(true).to_string();
+    let swap_cache_string =
+        Byte::from_bytes(memory.swap.cache as u128).get_appropriate_unit(true).to_string();
 
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
@@ -718,11 +760,20 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
         let mut json_network = Vec::with_capacity(network_stat.len());
 
         for network_with_speed in network_stat {
-            let upload_total_string = Byte::from_bytes(network_with_speed.network.transmit_bytes as u128).get_appropriate_unit(false).to_string();
-            let download_total_string = Byte::from_bytes(network_with_speed.network.receive_bytes as u128).get_appropriate_unit(false).to_string();
+            let upload_total_string =
+                Byte::from_bytes(u128::from(network_with_speed.network.transmit_bytes))
+                    .get_appropriate_unit(false)
+                    .to_string();
+            let download_total_string =
+                Byte::from_bytes(u128::from(network_with_speed.network.receive_bytes))
+                    .get_appropriate_unit(false)
+                    .to_string();
 
             let upload_rate_string = {
-                let mut s = Byte::from_bytes(network_with_speed.speed.transmit as u128).get_appropriate_unit(false).to_string();
+                let mut s = Byte::from_unit(network_with_speed.speed.transmit, ByteUnit::B)
+                    .unwrap()
+                    .get_appropriate_unit(false)
+                    .to_string();
 
                 s.push_str("/s");
 
@@ -730,7 +781,10 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_bytes(network_with_speed.speed.receive as u128).get_appropriate_unit(false).to_string();
+                let mut s = Byte::from_unit(network_with_speed.speed.receive, ByteUnit::B)
+                    .unwrap()
+                    .get_appropriate_unit(false)
+                    .to_string();
 
                 s.push_str("/s");
 
@@ -769,14 +823,26 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
         for volume_with_speed in volumes_stat {
-            let size_string = Byte::from_bytes(volume_with_speed.volume.size as u128).get_appropriate_unit(false).to_string();
-            let used_string = Byte::from_bytes(volume_with_speed.volume.used as u128).get_appropriate_unit(false).to_string();
+            let size_string = Byte::from_bytes(u128::from(volume_with_speed.volume.size))
+                .get_appropriate_unit(false)
+                .to_string();
+            let used_string = Byte::from_bytes(u128::from(volume_with_speed.volume.used))
+                .get_appropriate_unit(false)
+                .to_string();
 
-            let read_total_string = Byte::from_bytes(volume_with_speed.volume.read_bytes as u128).get_appropriate_unit(false).to_string();
-            let write_total_string = Byte::from_bytes(volume_with_speed.volume.write_bytes as u128).get_appropriate_unit(false).to_string();
+            let read_total_string =
+                Byte::from_bytes(u128::from(volume_with_speed.volume.read_bytes))
+                    .get_appropriate_unit(false)
+                    .to_string();
+            let write_total_string =
+                Byte::from_bytes(u128::from(volume_with_speed.volume.write_bytes))
+                    .get_appropriate_unit(false)
+                    .to_string();
 
             let read_rate_string = {
-                let mut s = Byte::from_bytes(volume_with_speed.speed.read as u128).get_appropriate_unit(false).to_string();
+                let mut s = Byte::from_bytes(volume_with_speed.speed.read as u128)
+                    .get_appropriate_unit(false)
+                    .to_string();
 
                 s.push_str("/s");
 
@@ -784,7 +850,9 @@ fn monitor(_auth: Auth, detect_interval: State<super::DetectInterval>) -> CacheR
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_bytes(volume_with_speed.speed.write as u128).get_appropriate_unit(false).to_string();
+                let mut s = Byte::from_bytes(volume_with_speed.speed.write as u128)
+                    .get_appropriate_unit(false)
+                    .to_string();
 
                 s.push_str("/s");
 
@@ -899,14 +967,15 @@ mod test {
 
     use std::time::Duration;
 
-    use rocket::local::Client;
     use rocket::http::Header;
+    use rocket::local::Client;
 
     const TEST_DETECT_INTERVAL: u64 = 1000;
-    const TEST_AUTH_KEY: &'static str = "magic";
+    const TEST_AUTH_KEY: &str = "magic";
 
     fn create_basic_rocket(has_auth_key: bool) -> Rocket {
-        let rocket = rocket::ignite().manage(super::super::DetectInterval(Duration::from_millis(TEST_DETECT_INTERVAL)));
+        let rocket = rocket::ignite()
+            .manage(super::super::DetectInterval(Duration::from_millis(TEST_DETECT_INTERVAL)));
 
         if has_auth_key {
             rocket.manage(super::super::AuthKey(Some(TEST_AUTH_KEY.to_string())))

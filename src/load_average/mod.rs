@@ -2,7 +2,7 @@ use std::io::{self, ErrorKind};
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
-const LOADAVG_PATH: &'static str = "/proc/loadavg";
+const LOADAVG_PATH: &str = "/proc/loadavg";
 
 #[derive(Debug, Clone)]
 pub struct LoadAverage {
@@ -17,17 +17,32 @@ impl LoadAverage {
 
         let one = match sc.next_f64()? {
             Some(v) => v,
-            None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "Cannot find the load average within one minute.")))
+            None => {
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "Cannot find the load average within one minute.",
+                )))
+            }
         };
 
         let five = match sc.next_f64()? {
             Some(v) => v,
-            None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "Cannot find the load average within five minutes.")))
+            None => {
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "Cannot find the load average within five minutes.",
+                )))
+            }
         };
 
         let fifteen = match sc.next_f64()? {
             Some(v) => v,
-            None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "Cannot find the load average within fifteen minutes.")))
+            None => {
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "Cannot find the load average within fifteen minutes.",
+                )))
+            }
         };
 
         Ok(LoadAverage {

@@ -2,21 +2,21 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 #![feature(seek_convenience)]
 
-extern crate clap;
 extern crate byte_unit;
+extern crate clap;
 #[macro_use]
 extern crate validators;
-extern crate termcolor;
-extern crate terminal_size;
 extern crate getch;
 extern crate scanner_rust;
+extern crate termcolor;
+extern crate terminal_size;
 #[macro_use]
 extern crate lazy_static;
 
 extern crate libc;
 
-extern crate rand;
 extern crate base64;
+extern crate rand;
 #[macro_use]
 extern crate serde_json;
 extern crate benchmarking;
@@ -33,39 +33,39 @@ extern crate rocket_include_static_resources;
 #[macro_use]
 extern crate rocket_include_handlebars;
 
-mod free;
-mod cpu_info;
-mod load_average;
-mod hostname;
-mod time;
-mod kernel;
-mod network;
-mod volume;
-mod rocket_mounts;
 mod benchmark;
+mod cpu_info;
+mod free;
+mod hostname;
+mod kernel;
+mod load_average;
+mod network;
+mod rocket_mounts;
+mod time;
+mod volume;
 
-use std::time::Duration;
 use std::env;
-use std::path::Path;
 use std::io::Write;
-use std::thread;
+use std::path::Path;
 use std::process;
+use std::thread;
+use std::time::Duration;
 
-use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
-use terminal_size::{Width, terminal_size};
-use clap::{App, Arg, SubCommand};
-use validators::number::NumberGtZero;
 use byte_unit::{Byte, ByteUnit};
+use clap::{App, Arg, SubCommand};
 use getch::Getch;
 use scanner_rust::ScannerError;
+use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+use terminal_size::{terminal_size, Width};
+use validators::number::NumberGtZero;
 
-use free::Free;
-use cpu_info::{CPU, CPUStat};
-use load_average::LoadAverage;
-use time::RTCDateTime;
-use network::NetworkWithSpeed;
-use volume::{Volume, VolumeWithSpeed};
 use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
+use cpu_info::{CPUStat, CPU};
+use free::Free;
+use load_average::LoadAverage;
+use network::NetworkWithSpeed;
+use time::RTCDateTime;
+use volume::{Volume, VolumeWithSpeed};
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -83,7 +83,8 @@ const WINE_COLOR: Color = Color::Rgb(215, 0, 0);
 const ORANGE_COLOR: Color = Color::Rgb(215, 135, 0);
 const DARK_BLUE_COLOR: Color = Color::Rgb(0, 0, 95);
 
-const CLEAR_SCREEN_DATA: [u8; 11] = [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
+const CLEAR_SCREEN_DATA: [u8; 11] =
+    [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
 
 static mut LIGHT_MODE: bool = false;
 static mut FORCE_PLAIN_MODE: bool = false;
@@ -91,15 +92,12 @@ static mut FORCE_PLAIN_MODE: bool = false;
 validated_customized_ranged_number!(WebMonitorInterval, u64, 1, 15);
 
 lazy_static! {
-    static ref COLOR_DEFAULT: ColorSpec = {
-        ColorSpec::new()
-    };
-
+    static ref COLOR_DEFAULT: ColorSpec = { ColorSpec::new() };
     static ref COLOR_LABEL: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if !unsafe{ FORCE_PLAIN_MODE } {
-            if unsafe{ LIGHT_MODE } {
+        if !unsafe { FORCE_PLAIN_MODE } {
+            if unsafe { LIGHT_MODE } {
                 color_spec.set_fg(Some(DARK_CYAN_COLOR));
             } else {
                 color_spec.set_fg(Some(CYAN_COLOR));
@@ -108,12 +106,11 @@ lazy_static! {
 
         color_spec
     };
-
     static ref COLOR_NORMAL_TEXT: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if !unsafe{ FORCE_PLAIN_MODE } {
-            if unsafe{ LIGHT_MODE } {
+        if !unsafe { FORCE_PLAIN_MODE } {
+            if unsafe { LIGHT_MODE } {
                 color_spec.set_fg(Some(BLACK_COLOR));
             } else {
                 color_spec.set_fg(Some(WHITE_COLOR));
@@ -122,12 +119,11 @@ lazy_static! {
 
         color_spec
     };
-
     static ref COLOR_BOLD_TEXT: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if !unsafe{ FORCE_PLAIN_MODE } {
-            if unsafe{ LIGHT_MODE } {
+        if !unsafe { FORCE_PLAIN_MODE } {
+            if unsafe { LIGHT_MODE } {
                 color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
             } else {
                 color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
@@ -136,12 +132,11 @@ lazy_static! {
 
         color_spec
     };
-
     static ref COLOR_USED: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if !unsafe{ FORCE_PLAIN_MODE } {
-            if unsafe{ LIGHT_MODE } {
+        if !unsafe { FORCE_PLAIN_MODE } {
+            if unsafe { LIGHT_MODE } {
                 color_spec.set_fg(Some(WINE_COLOR));
             } else {
                 color_spec.set_fg(Some(RED_COLOR));
@@ -150,12 +145,11 @@ lazy_static! {
 
         color_spec
     };
-
     static ref COLOR_CACHE: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if !unsafe{ FORCE_PLAIN_MODE } {
-            if unsafe{ LIGHT_MODE } {
+        if !unsafe { FORCE_PLAIN_MODE } {
+            if unsafe { LIGHT_MODE } {
                 color_spec.set_fg(Some(ORANGE_COLOR));
             } else {
                 color_spec.set_fg(Some(YELLOW_COLOR));
@@ -164,12 +158,11 @@ lazy_static! {
 
         color_spec
     };
-
     static ref COLOR_BUFFERS: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
-        if !unsafe{ FORCE_PLAIN_MODE } {
-            if unsafe{ LIGHT_MODE } {
+        if !unsafe { FORCE_PLAIN_MODE } {
+            if unsafe { LIGHT_MODE } {
                 color_spec.set_fg(Some(DARK_BLUE_COLOR));
             } else {
                 color_spec.set_fg(Some(SKY_CYAN_COLOR));
@@ -219,13 +212,13 @@ pub enum Mode {
         only_api: bool,
     },
     Benchmark {
-        benchmark_config: BenchmarkConfig
+        benchmark_config: BenchmarkConfig,
     },
 }
 
 #[derive(Debug)]
 pub struct Config {
-    pub mode: Mode
+    pub mode: Mode,
 }
 
 const APP_NAME: &str = "M Prober (MagicLen Prober)";
@@ -237,7 +230,7 @@ const ENV_FORCE_PLAIN: &str = "MPROBER_FORCE_PLAIN";
 
 macro_rules! set_color_mode {
     ($sub_matches:ident) => {
-        unsafe{
+        unsafe {
             if $sub_matches.is_present("PLAIN") {
                 FORCE_PLAIN_MODE = true;
             } else {
@@ -249,7 +242,8 @@ macro_rules! set_color_mode {
                             if $sub_matches.is_present("LIGHT") {
                                 LIGHT_MODE = true;
                             } else {
-                                LIGHT_MODE = env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+                                LIGHT_MODE =
+                                    env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
                             }
                         }
                     }
@@ -257,7 +251,8 @@ macro_rules! set_color_mode {
                         if $sub_matches.is_present("LIGHT") {
                             LIGHT_MODE = true;
                         } else {
-                            LIGHT_MODE = env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+                            LIGHT_MODE =
+                                env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
                         }
                     }
                 }
@@ -267,9 +262,12 @@ macro_rules! set_color_mode {
 }
 
 impl Config {
+    #[allow(clippy::cognitive_complexity)]
     pub fn from_cli() -> Result<Config, String> {
         let arg0 = env::args().next().unwrap();
-        let arg0 = Path::new(&arg0).file_name().unwrap().to_str().ok_or("The file name of this program is not supported by UTF-8.".to_string())?;
+        let arg0 = Path::new(&arg0).file_name().unwrap().to_str().ok_or_else(|| {
+            "The file name of this program is not supported by UTF-8.".to_string()
+        })?;
 
         let examples = vec![
             "hostname                    # Show the hostname",
@@ -604,9 +602,9 @@ impl Config {
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
 
-        let mode = if let Some(_) = matches.subcommand_matches("hostname") {
+        let mode = if matches.subcommand_matches("hostname").is_some() {
             Mode::HostName
-        } else if let Some(_) = matches.subcommand_matches("kernel") {
+        } else if matches.subcommand_matches("kernel").is_some() {
             Mode::Kernel
         } else if let Some(sub_matches) = matches.subcommand_matches("uptime") {
             let monitor = sub_matches.is_present("MONITOR");
@@ -630,11 +628,15 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("cpu") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor)
+                        .map_err(|_| {
+                            format!("`{}` is not a correct value for MILLI_SECONDS", monitor)
+                        })?
+                        .get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
-                None => None
+                None => None,
             };
 
             let separate = sub_matches.is_present("SEPARATE");
@@ -651,20 +653,25 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("memory") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor)
+                        .map_err(|_| {
+                            format!("`{}` is not a correct value for MILLI_SECONDS", monitor)
+                        })?
+                        .get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
-                None => None
+                None => None,
             };
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
-                    let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
+                    let unit = ByteUnit::from_str(unit)
+                        .map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
 
                     Some(unit)
                 }
-                None => None
+                None => None,
             };
 
             set_color_mode!(sub_matches);
@@ -676,20 +683,25 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("network") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor)
+                        .map_err(|_| {
+                            format!("`{}` is not a correct value for MILLI_SECONDS", monitor)
+                        })?
+                        .get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
-                None => None
+                None => None,
             };
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
-                    let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
+                    let unit = ByteUnit::from_str(unit)
+                        .map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
 
                     Some(unit)
                 }
-                None => None
+                None => None,
             };
 
             set_color_mode!(sub_matches);
@@ -701,20 +713,25 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("volume") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = NumberGtZero::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?.get_number();
+                    let monitor = NumberGtZero::from_str(monitor)
+                        .map_err(|_| {
+                            format!("`{}` is not a correct value for MILLI_SECONDS", monitor)
+                        })?
+                        .get_number();
 
                     Some(Duration::from_secs_f64(monitor / 1000f64))
                 }
-                None => None
+                None => None,
             };
 
             let unit = match sub_matches.value_of("UNIT") {
                 Some(unit) => {
-                    let unit = ByteUnit::from_str(unit).map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
+                    let unit = ByteUnit::from_str(unit)
+                        .map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
 
                     Some(unit)
                 }
-                None => None
+                None => None,
             };
 
             let only_information = sub_matches.is_present("ONLY_INFORMATION");
@@ -732,20 +749,23 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("web") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
-                    let monitor = WebMonitorInterval::from_str(monitor).map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
+                    let monitor = WebMonitorInterval::from_str(monitor)
+                        .map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
 
                     Duration::from_secs(monitor.get_number())
                 }
-                None => unreachable!()
+                None => unreachable!(),
             };
 
             let port = match sub_matches.value_of("PORT") {
                 Some(port) => {
-                    let port: u16 = port.parse().map_err(|_| format!("`{}` is not a correct value for PORT", port))?;
+                    let port: u16 = port
+                        .parse()
+                        .map_err(|_| format!("`{}` is not a correct value for PORT", port))?;
 
                     port
                 }
-                None => unreachable!()
+                None => unreachable!(),
             };
 
             let auth_key = sub_matches.value_of("AUTH_KEY").map(|s| s.to_string());
@@ -761,20 +781,24 @@ impl Config {
         } else if let Some(sub_matches) = matches.subcommand_matches("benchmark") {
             let warming_up_duration = match sub_matches.value_of("WARMING_UP_DURATION") {
                 Some(millisecond) => {
-                    let millisecond: u64 = millisecond.parse().map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", millisecond))?;
+                    let millisecond: u64 = millisecond.parse().map_err(|_| {
+                        format!("`{}` is not a correct value for MILLI_SECONDS", millisecond)
+                    })?;
 
                     Duration::from_millis(millisecond)
                 }
-                None => unreachable!()
+                None => unreachable!(),
             };
 
             let benchmark_duration = match sub_matches.value_of("BENCHMARK_DURATION") {
                 Some(millisecond) => {
-                    let millisecond: u64 = millisecond.parse().map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", millisecond))?;
+                    let millisecond: u64 = millisecond.parse().map_err(|_| {
+                        format!("`{}` is not a correct value for MILLI_SECONDS", millisecond)
+                    })?;
 
                     Duration::from_millis(millisecond)
                 }
-                None => unreachable!()
+                None => unreachable!(),
             };
 
             let print_out = if sub_matches.is_present("VERBOSE") {
@@ -787,21 +811,27 @@ impl Config {
             let enable_cpu = sub_matches.is_present("ENABLE_CPU");
 
             if enable_cpu && disable_cpu {
-                return Err(String::from("Cannot determine whether to enable benchmarking CPU or not."));
+                return Err(String::from(
+                    "Cannot determine whether to enable benchmarking CPU or not.",
+                ));
             }
 
             let disable_memory = sub_matches.is_present("DISABLE_MEMORY");
             let enable_memory = sub_matches.is_present("ENABLE_MEMORY");
 
             if disable_memory && enable_memory {
-                return Err(String::from("Cannot determine whether to enable benchmarking memory or not."));
+                return Err(String::from(
+                    "Cannot determine whether to enable benchmarking memory or not.",
+                ));
             }
 
             let disable_volume = sub_matches.is_present("DISABLE_VOLUME");
             let enable_volume = sub_matches.is_present("ENABLE_VOLUME");
 
             if disable_volume && enable_volume {
-                return Err(String::from("Cannot determine whether to enable benchmarking volumes or not."));
+                return Err(String::from(
+                    "Cannot determine whether to enable benchmarking volumes or not.",
+                ));
             }
 
             let default = !(enable_cpu || enable_memory || enable_volume);
@@ -834,14 +864,16 @@ impl Config {
             };
 
             Mode::Benchmark {
-                benchmark_config
+                benchmark_config,
             }
         } else {
-            return Err(String::from("Please input a subcommand. Use `help` to see how to use this program."));
+            return Err(String::from(
+                "Please input a subcommand. Use `help` to see how to use this program.",
+            ));
         };
 
         let config = Config {
-            mode
+            mode,
         };
 
         Ok(config)
@@ -864,17 +896,17 @@ pub fn run(config: Config) -> Result<i32, String> {
 
             println!("{}", hostname);
         }
-        Mode::Uptime { monitor, second } => {
+        Mode::Uptime {
+            monitor,
+            second,
+        } => {
             if monitor {
                 thread::spawn(move || {
                     loop {
                         let key = Getch::new().getch().unwrap();
 
-                        match key {
-                            b'q' => {
-                                break;
-                            }
-                            _ => ()
+                        if let b'q' = key {
+                            break;
                         }
                     }
 
@@ -892,17 +924,16 @@ pub fn run(config: Config) -> Result<i32, String> {
                 draw_uptime(second, false).map_err(|err| err.to_string())?;
             }
         }
-        Mode::Time { monitor } => {
+        Mode::Time {
+            monitor,
+        } => {
             if monitor {
                 thread::spawn(move || {
                     loop {
                         let key = Getch::new().getch().unwrap();
 
-                        match key {
-                            b'q' => {
-                                break;
-                            }
-                            _ => ()
+                        if let b'q' = key {
+                            break;
                         }
                     }
 
@@ -920,25 +951,31 @@ pub fn run(config: Config) -> Result<i32, String> {
                 draw_time(false).map_err(|err| err.to_string())?;
             }
         }
-        Mode::CPU { monitor, separate, only_information } => {
+        Mode::CPU {
+            monitor,
+            separate,
+            only_information,
+        } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
 
-                            match key {
-                                b'q' => {
-                                    break;
-                                }
-                                _ => ()
+                            if let b'q' = key {
+                                break;
                             }
                         }
 
                         process::exit(0);
                     });
 
-                    draw_cpu_info(separate, only_information, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_cpu_info(
+                        separate,
+                        only_information,
+                        Some(Duration::from_millis(DEFAULT_INTERVAL)),
+                    )
+                    .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -947,26 +984,28 @@ pub fn run(config: Config) -> Result<i32, String> {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_cpu_info(separate, only_information, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_cpu_info(separate, only_information, Some(sleep_interval))
+                            .map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_cpu_info(separate, only_information, None).map_err(|err| err.to_string())?;
+                    draw_cpu_info(separate, only_information, None)
+                        .map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::Memory { monitor, unit } => {
+        Mode::Memory {
+            monitor,
+            unit,
+        } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
 
-                            match key {
-                                b'q' => {
-                                    break;
-                                }
-                                _ => ()
+                            if let b'q' = key {
+                                break;
                             }
                         }
 
@@ -986,25 +1025,26 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
-        Mode::Network { monitor, unit } => {
+        Mode::Network {
+            monitor,
+            unit,
+        } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
 
-                            match key {
-                                b'q' => {
-                                    break;
-                                }
-                                _ => ()
+                            if let b'q' = key {
+                                break;
                             }
                         }
 
                         process::exit(0);
                     });
 
-                    draw_network(unit, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_network(unit, Some(Duration::from_millis(DEFAULT_INTERVAL)))
+                        .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1017,25 +1057,33 @@ pub fn run(config: Config) -> Result<i32, String> {
                 }
             }
         }
-        Mode::Volume { monitor, unit, only_information, mounts } => {
+        Mode::Volume {
+            monitor,
+            unit,
+            only_information,
+            mounts,
+        } => {
             match monitor {
                 Some(monitor) => {
                     thread::spawn(move || {
                         loop {
                             let key = Getch::new().getch().unwrap();
 
-                            match key {
-                                b'q' => {
-                                    break;
-                                }
-                                _ => ()
+                            if let b'q' = key {
+                                break;
                             }
                         }
 
                         process::exit(0);
                     });
 
-                    draw_volume(unit, only_information, mounts, Some(Duration::from_millis(DEFAULT_INTERVAL))).map_err(|err| err.to_string())?;
+                    draw_volume(
+                        unit,
+                        only_information,
+                        mounts,
+                        Some(Duration::from_millis(DEFAULT_INTERVAL)),
+                    )
+                    .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1044,18 +1092,27 @@ pub fn run(config: Config) -> Result<i32, String> {
                             thread::sleep(sleep_interval);
                         }
 
-                        draw_volume(unit, only_information, mounts, Some(sleep_interval)).map_err(|err| err.to_string())?;
+                        draw_volume(unit, only_information, mounts, Some(sleep_interval))
+                            .map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
-                    draw_volume(unit, only_information, mounts, None).map_err(|err| err.to_string())?;
+                    draw_volume(unit, only_information, mounts, None)
+                        .map_err(|err| err.to_string())?;
                 }
             }
         }
-        Mode::Web { monitor, port, auth_key, only_api } => {
+        Mode::Web {
+            monitor,
+            port,
+            auth_key,
+            only_api,
+        } => {
             rocket_mounts::launch(monitor, port, auth_key, only_api);
         }
-        Mode::Benchmark { benchmark_config } => {
+        Mode::Benchmark {
+            benchmark_config,
+        } => {
             run_benchmark(&benchmark_config).map_err(|err| err.to_string())?;
         }
     }
@@ -1101,7 +1158,7 @@ fn draw_uptime(second: bool, monitor: bool) -> Result<(), ScannerError> {
     write!(&mut stdout, ".")?;
 
     stdout.set_color(&*COLOR_DEFAULT)?;
-    writeln!(&mut stdout, "")?;
+    writeln!(&mut stdout)?;
 
     output.print(&stdout)?;
 
@@ -1131,7 +1188,7 @@ fn draw_time(monitor: bool) -> Result<(), ScannerError> {
     stdout.set_color(&*COLOR_BOLD_TEXT)?;
     stdout.write_all(rtc_date_time.rtc_date.as_bytes())?;
 
-    writeln!(&mut stdout, "")?;
+    writeln!(&mut stdout)?;
 
     stdout.set_color(&*COLOR_LABEL)?;
     write!(&mut stdout, "RTC Time")?;
@@ -1142,7 +1199,7 @@ fn draw_time(monitor: bool) -> Result<(), ScannerError> {
     stdout.write_all(rtc_date_time.rtc_time.as_bytes())?;
 
     stdout.set_color(&*COLOR_DEFAULT)?;
-    writeln!(&mut stdout, "")?;
+    writeln!(&mut stdout)?;
 
     output.print(&stdout)?;
 
@@ -1151,7 +1208,11 @@ fn draw_time(monitor: bool) -> Result<(), ScannerError> {
 
 // TODO
 
-fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
+fn draw_cpu_info(
+    separate: bool,
+    only_information: bool,
+    monitor: Option<Duration>,
+) -> Result<(), ScannerError> {
     let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
     } else {
@@ -1182,11 +1243,15 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
 
         let load_average_len = one.len().max(five.len()).max(fifteen.len());
 
-        let one_percentage = format!("{:.2}%", load_average.one * 100f64 / logical_cores_number_f64);
-        let five_percentage = format!("{:.2}%", load_average.five * 100f64 / logical_cores_number_f64);
-        let fifteen_percentage = format!("{:.2}%", load_average.fifteen * 100f64 / logical_cores_number_f64);
+        let one_percentage =
+            format!("{:.2}%", load_average.one * 100f64 / logical_cores_number_f64);
+        let five_percentage =
+            format!("{:.2}%", load_average.five * 100f64 / logical_cores_number_f64);
+        let fifteen_percentage =
+            format!("{:.2}%", load_average.fifteen * 100f64 / logical_cores_number_f64);
 
-        let percentage_len = one_percentage.len().max(five_percentage.len()).max(fifteen_percentage.len());
+        let percentage_len =
+            one_percentage.len().max(five_percentage.len()).max(fifteen_percentage.len());
 
         let progress_max = terminal_width - 11 - load_average_len - 2 - percentage_len - 1;
 
@@ -1204,7 +1269,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
         } else {
             write!(&mut stdout, "There is only one logical CPU core.")?;
         }
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
 
         // one
 
@@ -1247,7 +1312,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
 
         write!(&mut stdout, ")")?; // 1
 
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
 
         // five
 
@@ -1290,7 +1355,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
 
         write!(&mut stdout, ")")?; // 1
 
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
 
         // fifteen
 
@@ -1333,8 +1398,8 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
 
         write!(&mut stdout, ")")?; // 1
 
-        writeln!(&mut stdout, "")?;
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
+        writeln!(&mut stdout)?;
 
         Ok(())
     };
@@ -1345,7 +1410,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
         } else {
             CPUStat::get_all_percentage(false, match monitor {
                 Some(monitor) => monitor,
-                None => Duration::from_millis(DEFAULT_INTERVAL)
+                None => Duration::from_millis(DEFAULT_INTERVAL),
             })?
         };
 
@@ -1367,14 +1432,19 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
 
             write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings)?;
 
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
 
             let mut hz_string: Vec<String> = Vec::with_capacity(cpu.siblings);
 
             for &cpu_mhz in cpu.cpus_mhz.iter() {
-                let cpu_hz = Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+                let cpu_hz =
+                    Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
-                hz_string.push(format!("{:.2} {}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1]));
+                hz_string.push(format!(
+                    "{:.2} {}Hz",
+                    cpu_hz.get_value(),
+                    &cpu_hz.get_unit().as_str()[..1]
+                ));
             }
 
             let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap();
@@ -1402,7 +1472,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
                     write!(&mut stdout, "{1:>0$}", hz_string_len, hz_string)?;
 
                     stdout.set_color(&*COLOR_DEFAULT)?;
-                    writeln!(&mut stdout, "")?;
+                    writeln!(&mut stdout)?;
                 }
             } else {
                 let mut percentage_string: Vec<String> = Vec::with_capacity(cpu.siblings);
@@ -1418,7 +1488,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
                 let mut percentage_string_iter = percentage_string.into_iter();
                 let mut hz_string_iter = hz_string.into_iter();
 
-                for (i, p) in all_percentage[i..].into_iter().take(cpu.siblings).enumerate() {
+                for (i, p) in all_percentage[i..].iter().take(cpu.siblings).enumerate() {
                     let percentage_string = percentage_string_iter.next().unwrap();
                     let hz_string = hz_string_iter.next().unwrap();
 
@@ -1464,14 +1534,14 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
                     write!(&mut stdout, ")")?; // 1
 
                     stdout.set_color(&*COLOR_DEFAULT)?;
-                    writeln!(&mut stdout, "")?;
+                    writeln!(&mut stdout)?;
                 }
 
                 i += cpu.siblings;
             }
 
             if cpu_index != cpus_len_dec {
-                writeln!(&mut stdout, "")?;
+                writeln!(&mut stdout)?;
             }
         }
     } else {
@@ -1480,7 +1550,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
         } else {
             let average_percentage = CPUStat::get_average_percentage(match monitor {
                 Some(monitor) => monitor,
-                None => Duration::from_millis(DEFAULT_INTERVAL)
+                None => Duration::from_millis(DEFAULT_INTERVAL),
             })?;
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
@@ -1506,12 +1576,13 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
 
             let cpu_mhz: f64 = cpu.cpus_mhz.iter().sum::<f64>() / cpu.cpus_mhz.len() as f64;
 
-            let cpu_hz = Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+            let cpu_hz =
+                Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
             write!(&mut stdout, "{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1])?;
 
             stdout.set_color(&*COLOR_DEFAULT)?;
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
         }
 
         if !only_information {
@@ -1543,7 +1614,7 @@ fn draw_cpu_info(separate: bool, only_information: bool, monitor: Option<Duratio
             stdout.write_all(average_percentage_string.as_bytes())?;
 
             stdout.set_color(&*COLOR_DEFAULT)?;
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
         }
     }
 
@@ -1599,7 +1670,8 @@ fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError
     let total_len = mem_total.len().max(swap_total.len());
 
     let mem_percentage = format!("{:.2}%", free.mem.used as f64 * 100f64 / free.mem.total as f64);
-    let swap_percentage = format!("{:.2}%", free.swap.used as f64 * 100f64 / free.swap.total as f64);
+    let swap_percentage =
+        format!("{:.2}%", free.swap.used as f64 * 100f64 / free.swap.total as f64);
 
     let percentage_len = mem_percentage.len().max(swap_percentage.len());
 
@@ -1684,7 +1756,7 @@ fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError
 
     write!(&mut stdout, ")")?; // 1
 
-    writeln!(&mut stdout, "")?;
+    writeln!(&mut stdout)?;
 
     // Swap
 
@@ -1749,7 +1821,7 @@ fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError
     write!(&mut stdout, ")")?; // 1
 
     stdout.set_color(&*COLOR_DEFAULT)?;
-    writeln!(&mut stdout, "")?;
+    writeln!(&mut stdout)?;
 
     output.print(&stdout)?;
 
@@ -1759,7 +1831,7 @@ fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError
 fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
     let networks_with_speed = NetworkWithSpeed::get_networks_with_speed(match monitor {
         Some(monitor) => monitor,
-        None => Duration::from_millis(DEFAULT_INTERVAL)
+        None => Duration::from_millis(DEFAULT_INTERVAL),
     })?;
 
     let networks_with_speed_len = networks_with_speed.len();
@@ -1786,10 +1858,10 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
 
     for network_with_speed in networks_with_speed.iter() {
         let upload = Byte::from_unit(network_with_speed.speed.transmit, ByteUnit::B).unwrap();
-        let upload_total = Byte::from_bytes(network_with_speed.network.transmit_bytes as u128);
+        let upload_total = Byte::from_bytes(u128::from(network_with_speed.network.transmit_bytes));
 
         let download = Byte::from_unit(network_with_speed.speed.receive, ByteUnit::B).unwrap();
-        let download_total = Byte::from_bytes(network_with_speed.network.receive_bytes as u128);
+        let download_total = Byte::from_bytes(u128::from(network_with_speed.network.receive_bytes));
 
         let (mut upload, upload_total, mut download, download_total) = match unit {
             Some(unit) => {
@@ -1819,13 +1891,19 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
         downloads_total.push(download_total);
     }
 
-    let interface_len = networks_with_speed.iter().map(|network_with_sppeed| network_with_sppeed.network.interface.len()).max().unwrap();
+    let interface_len = networks_with_speed
+        .iter()
+        .map(|network_with_sppeed| network_with_sppeed.network.interface.len())
+        .max()
+        .unwrap();
     let interface_len_inc = interface_len + 1;
 
     let upload_len = uploads.iter().map(|upload| upload.len()).max().unwrap().max(11);
-    let upload_total_len = uploads_total.iter().map(|upload_total| upload_total.len()).max().unwrap().max(13);
+    let upload_total_len =
+        uploads_total.iter().map(|upload_total| upload_total.len()).max().unwrap().max(13);
     let download_len = downloads.iter().map(|download| download.len()).max().unwrap().max(13);
-    let download_total_len = downloads_total.iter().map(|download_total| download_total.len()).max().unwrap().max(15);
+    let download_total_len =
+        downloads_total.iter().map(|download_total| download_total.len()).max().unwrap().max(15);
 
     stdout.set_color(&*COLOR_LABEL)?;
     write!(&mut stdout, "{1:>0$}", interface_len_inc + upload_len, "Upload Rate")?;
@@ -1848,7 +1926,7 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
     stdout.set_color(&*COLOR_LABEL)?;
     write!(&mut stdout, "{1:>0$}", download_total_len, "Downloaded Data")?;
 
-    writeln!(&mut stdout, "")?;
+    writeln!(&mut stdout)?;
 
     let mut uploads_iter = uploads.into_iter();
     let mut uploads_total_iter = uploads_total.into_iter();
@@ -1898,7 +1976,7 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
         stdout.write_all(download_total.as_bytes())?;
 
         stdout.set_color(&*COLOR_DEFAULT)?;
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
     }
 
     output.print(&stdout)?;
@@ -1906,7 +1984,13 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
     Ok(())
 }
 
-fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, monitor: Option<Duration>) -> Result<(), ScannerError> {
+#[allow(clippy::cognitive_complexity)]
+fn draw_volume(
+    unit: Option<ByteUnit>,
+    only_information: bool,
+    mounts: bool,
+    monitor: Option<Duration>,
+) -> Result<(), ScannerError> {
     let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
     } else {
@@ -1943,15 +2027,16 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
         let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_len);
 
         for volume in volumes.iter() {
-            let size = Byte::from_bytes(volume.size as u128);
+            let size = Byte::from_bytes(u128::from(volume.size));
 
-            let used = Byte::from_bytes(volume.used as u128);
+            let used = Byte::from_bytes(u128::from(volume.used));
 
-            let used_percentage = format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
+            let used_percentage =
+                format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
 
-            let read_total = Byte::from_bytes(volume.read_bytes as u128);
+            let read_total = Byte::from_bytes(u128::from(volume.read_bytes));
 
-            let write_total = Byte::from_bytes(volume.write_bytes as u128);
+            let write_total = Byte::from_bytes(u128::from(volume.write_bytes));
 
             let (size, used, read_total, write_total) = match unit {
                 Some(unit) => {
@@ -1984,11 +2069,25 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
 
         let volumes_size_len = volumes_size.iter().map(|size| size.len()).max().unwrap();
         let volumes_used_len = volumes_used.iter().map(|used| used.len()).max().unwrap();
-        let volumes_used_percentage_len = volumes_used_percentage.iter().map(|used_percentage| used_percentage.len()).max().unwrap();
-        let volumes_read_total_len = volumes_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
-        let volumes_write_total_len = volumes_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
+        let volumes_used_percentage_len = volumes_used_percentage
+            .iter()
+            .map(|used_percentage| used_percentage.len())
+            .max()
+            .unwrap();
+        let volumes_read_total_len =
+            volumes_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
+        let volumes_write_total_len =
+            volumes_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
 
-        let progress_max = terminal_width - devices_len - 4 - volumes_used_len - 3 - volumes_size_len - 2 - volumes_used_percentage_len - 1;
+        let progress_max = terminal_width
+            - devices_len
+            - 4
+            - volumes_used_len
+            - 3
+            - volumes_size_len
+            - 2
+            - volumes_used_percentage_len
+            - 1;
 
         stdout.set_color(&*COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", devices_len_inc + volumes_read_total_len, "Read Data")?;
@@ -1999,7 +2098,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
         stdout.set_color(&*COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", volumes_write_total_len, "Written Data")?;
 
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
 
         let mut volumes_size_iter = volumes_size.into_iter();
         let mut volumes_used_iter = volumes_used.into_iter();
@@ -2037,7 +2136,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
 
             stdout.write_all(write_total.as_bytes())?;
 
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
 
             stdout.set_color(&*COLOR_NORMAL_TEXT)?;
 
@@ -2091,7 +2190,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
             write!(&mut stdout, ")")?; // 1
 
             stdout.set_color(&*COLOR_DEFAULT)?;
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
 
             if mounts {
                 stdout.set_color(&*COLOR_NORMAL_TEXT)?;
@@ -2104,14 +2203,14 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
                     stdout.write_all(point.as_bytes())?;
 
                     stdout.set_color(&*COLOR_DEFAULT)?;
-                    writeln!(&mut stdout, "")?;
+                    writeln!(&mut stdout)?;
                 }
             }
         }
     } else {
         let volumes_with_speed = VolumeWithSpeed::get_volumes_with_speed(match monitor {
             Some(monitor) => monitor,
-            None => Duration::from_millis(DEFAULT_INTERVAL)
+            None => Duration::from_millis(DEFAULT_INTERVAL),
         })?;
 
         let volumes_with_speed_len = volumes_with_speed.len();
@@ -2133,17 +2232,20 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
         let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
         for volume_with_speed in volumes_with_speed.iter() {
-            let size = Byte::from_bytes(volume_with_speed.volume.size as u128);
+            let size = Byte::from_bytes(u128::from(volume_with_speed.volume.size));
 
-            let used = Byte::from_bytes(volume_with_speed.volume.used as u128);
+            let used = Byte::from_bytes(u128::from(volume_with_speed.volume.used));
 
-            let used_percentage = format!("{:.2}%", (volume_with_speed.volume.used * 100) as f64 / volume_with_speed.volume.size as f64);
+            let used_percentage = format!(
+                "{:.2}%",
+                (volume_with_speed.volume.used * 100) as f64 / volume_with_speed.volume.size as f64
+            );
 
             let read = Byte::from_unit(volume_with_speed.speed.read, ByteUnit::B).unwrap();
-            let read_total = Byte::from_bytes(volume_with_speed.volume.read_bytes as u128);
+            let read_total = Byte::from_bytes(u128::from(volume_with_speed.volume.read_bytes));
 
             let write = Byte::from_unit(volume_with_speed.speed.write, ByteUnit::B).unwrap();
-            let write_total = Byte::from_bytes(volume_with_speed.volume.write_bytes as u128);
+            let write_total = Byte::from_bytes(u128::from(volume_with_speed.volume.write_bytes));
 
             let (size, used, mut read, read_total, mut write, write_total) = match unit {
                 Some(unit) => {
@@ -2180,18 +2282,37 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
             volumes_write_total.push(write_total);
         }
 
-        let devices_len = volumes_with_speed.iter().map(|volume_with_speed| volume_with_speed.volume.device.len()).max().unwrap();
+        let devices_len = volumes_with_speed
+            .iter()
+            .map(|volume_with_speed| volume_with_speed.volume.device.len())
+            .max()
+            .unwrap();
         let devices_len_inc = devices_len + 1;
 
         let volumes_size_len = volumes_size.iter().map(|size| size.len()).max().unwrap();
         let volumes_used_len = volumes_used.iter().map(|used| used.len()).max().unwrap();
-        let volumes_used_percentage_len = volumes_used_percentage.iter().map(|used_percentage| used_percentage.len()).max().unwrap();
+        let volumes_used_percentage_len = volumes_used_percentage
+            .iter()
+            .map(|used_percentage| used_percentage.len())
+            .max()
+            .unwrap();
         let volumes_read_len = volumes_read.iter().map(|read| read.len()).max().unwrap().max(12);
-        let volumes_read_total_len = volumes_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
-        let volumes_write_len = volumes_write.iter().map(|write| write.len()).max().unwrap().max(12);
-        let volumes_write_total_len = volumes_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
+        let volumes_read_total_len =
+            volumes_read_total.iter().map(|read_total| read_total.len()).max().unwrap().max(9);
+        let volumes_write_len =
+            volumes_write.iter().map(|write| write.len()).max().unwrap().max(12);
+        let volumes_write_total_len =
+            volumes_write_total.iter().map(|write_total| write_total.len()).max().unwrap().max(12);
 
-        let progress_max = terminal_width - devices_len - 4 - volumes_used_len - 3 - volumes_size_len - 2 - volumes_used_percentage_len - 1;
+        let progress_max = terminal_width
+            - devices_len
+            - 4
+            - volumes_used_len
+            - 3
+            - volumes_size_len
+            - 2
+            - volumes_used_percentage_len
+            - 1;
 
         stdout.set_color(&*COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", devices_len_inc + volumes_read_len, "Reading Rate")?;
@@ -2214,7 +2335,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
         stdout.set_color(&*COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", volumes_write_total_len, "Written Data")?;
 
-        writeln!(&mut stdout, "")?;
+        writeln!(&mut stdout)?;
 
         let mut volumes_size_iter = volumes_size.into_iter();
         let mut volumes_used_iter = volumes_used.into_iter();
@@ -2272,7 +2393,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
 
             stdout.write_all(write_total.as_bytes())?;
 
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
 
             stdout.set_color(&*COLOR_NORMAL_TEXT)?;
 
@@ -2326,7 +2447,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
             write!(&mut stdout, ")")?; // 1
 
             stdout.set_color(&*COLOR_DEFAULT)?;
-            writeln!(&mut stdout, "")?;
+            writeln!(&mut stdout)?;
 
             if mounts {
                 stdout.set_color(&*COLOR_NORMAL_TEXT)?;
@@ -2339,7 +2460,7 @@ fn draw_volume(unit: Option<ByteUnit>, only_information: bool, mounts: bool, mon
                     stdout.write_all(point.as_bytes())?;
 
                     stdout.set_color(&*COLOR_DEFAULT)?;
-                    writeln!(&mut stdout, "")?;
+                    writeln!(&mut stdout)?;
                 }
             }
         }

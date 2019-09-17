@@ -1,16 +1,16 @@
 mod mounts;
 
-use std::hash::{Hash, Hasher};
 use std::collections::HashSet;
-use std::io::{self, ErrorKind};
-use std::time::Duration;
-use std::thread::sleep;
-use std::mem;
 use std::ffi::CString;
+use std::hash::{Hash, Hasher};
+use std::io::{self, ErrorKind};
+use std::mem;
+use std::thread::sleep;
+use std::time::Duration;
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
-const DISKSTATS_PATH: &'static str = "/proc/diskstats";
+const DISKSTATS_PATH: &str = "/proc/diskstats";
 
 const SECTOR_SIZE: u64 = 512;
 
@@ -36,11 +36,6 @@ impl PartialEq for Volume {
     fn eq(&self, other: &Volume) -> bool {
         self.device.eq(&other.device)
     }
-
-    #[inline]
-    fn ne(&self, other: &Volume) -> bool {
-        self.device.ne(&other.device)
-    }
 }
 
 impl Volume {
@@ -57,7 +52,10 @@ impl Volume {
             }
 
             if sc.next()?.is_none() {
-                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of volume stats is not correct.".to_string())));
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "The format of volume stats is not correct.".to_string(),
+                )));
             }
 
             match sc.next()? {
@@ -65,39 +63,59 @@ impl Volume {
                     if let Some(points) = mounts.remove(&device) {
                         for _ in 0..2 {
                             if sc.next_u64()?.is_none() {
-                                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of device `{}` is not correct.", device))));
+                                return Err(ScannerError::IOError(io::Error::new(
+                                    ErrorKind::UnexpectedEof,
+                                    format!("The format of device `{}` is not correct.", device),
+                                )));
                             }
                         }
 
                         let read_bytes = match sc.next_u64()? {
-                            Some(sectors) => {
-                                sectors * SECTOR_SIZE
+                            Some(sectors) => sectors * SECTOR_SIZE,
+                            None => {
+                                return Err(ScannerError::IOError(io::Error::new(
+                                    ErrorKind::UnexpectedEof,
+                                    format!("The format of device `{}` is not correct.", device),
+                                )))
                             }
-                            None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of device `{}` is not correct.", device))))
                         };
 
                         for _ in 0..3 {
                             if sc.next_u64()?.is_none() {
-                                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of device `{}` is not correct.", device))));
+                                return Err(ScannerError::IOError(io::Error::new(
+                                    ErrorKind::UnexpectedEof,
+                                    format!("The format of device `{}` is not correct.", device),
+                                )));
                             }
                         }
 
                         let write_bytes = match sc.next_u64()? {
-                            Some(sectors) => {
-                                sectors * SECTOR_SIZE
+                            Some(sectors) => sectors * SECTOR_SIZE,
+                            None => {
+                                return Err(ScannerError::IOError(io::Error::new(
+                                    ErrorKind::UnexpectedEof,
+                                    format!("The format of device `{}` is not correct.", device),
+                                )))
                             }
-                            None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of device `{}` is not correct.", device))))
                         };
 
                         for _ in 0..2 {
                             if sc.next_u64()?.is_none() {
-                                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of device `{}` is not correct.", device))));
+                                return Err(ScannerError::IOError(io::Error::new(
+                                    ErrorKind::UnexpectedEof,
+                                    format!("The format of device `{}` is not correct.", device),
+                                )));
                             }
                         }
 
                         let time_spent = match sc.next_u64()? {
                             Some(milliseconds) => milliseconds,
-                            None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of device `{}` is not correct.", device))))
+                            None => {
+                                return Err(ScannerError::IOError(io::Error::new(
+                                    ErrorKind::UnexpectedEof,
+                                    format!("The format of device `{}` is not correct.", device),
+                                )))
+                            }
                         };
 
                         if time_spent > 0 {
@@ -106,13 +124,23 @@ impl Volume {
 
                                 let mut stats: libc::statvfs = unsafe { mem::zeroed() };
 
-                                let rtn = unsafe { libc::statvfs(path.as_ptr(), &mut stats as *mut _) };
+                                let rtn =
+                                    unsafe { libc::statvfs(path.as_ptr(), &mut stats as *mut _) };
 
                                 if rtn != 0 {
-                                    return Err(ScannerError::IOError(io::Error::new(ErrorKind::Other, format!("Cannot get the stats of the path `{}`.", points[0]))));
+                                    return Err(ScannerError::IOError(io::Error::new(
+                                        ErrorKind::Other,
+                                        format!(
+                                            "Cannot get the stats of the path `{}`.",
+                                            points[0]
+                                        ),
+                                    )));
                                 }
 
-                                (stats.f_bsize as u64 * stats.f_blocks as u64, stats.f_bsize as u64 * (stats.f_blocks - stats.f_bavail) as u64)
+                                (
+                                    stats.f_bsize as u64 * stats.f_blocks as u64,
+                                    stats.f_bsize as u64 * (stats.f_blocks - stats.f_bavail) as u64,
+                                )
                             };
 
                             let volume = Volume {
@@ -129,10 +157,18 @@ impl Volume {
                     }
 
                     if sc.next_line()?.is_none() {
-                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of volume stats is not correct.".to_string())));
+                        return Err(ScannerError::IOError(io::Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "The format of volume stats is not correct.".to_string(),
+                        )));
                     }
                 }
-                None => return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, "The format of volume stats is not correct.".to_string())))
+                None => {
+                    return Err(ScannerError::IOError(io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "The format of volume stats is not correct.".to_string(),
+                    )))
+                }
             }
         }
 
@@ -153,20 +189,17 @@ pub struct VolumeWithSpeed {
 }
 
 impl VolumeWithSpeed {
-    pub fn get_volumes_with_speed(interval: Duration) -> Result<Vec<VolumeWithSpeed>, ScannerError> {
+    pub fn get_volumes_with_speed(
+        interval: Duration,
+    ) -> Result<Vec<VolumeWithSpeed>, ScannerError> {
         let mut pre_volumes = Volume::get_volumes()?;
 
         let pre_volume_len = pre_volumes.len();
 
         let mut pre_volumes_hashset = HashSet::with_capacity(pre_volume_len);
 
-        loop {
-            match pre_volumes.pop() {
-                Some(network) => {
-                    pre_volumes_hashset.insert(network);
-                }
-                None => break
-            }
+        while let Some(network) = pre_volumes.pop() {
+            pre_volumes_hashset.insert(network);
         }
 
         let seconds = interval.as_secs_f64();

@@ -2,8 +2,20 @@ use std::io::{self, ErrorKind};
 
 use crate::scanner_rust::{Scanner, ScannerError};
 
-const MEMINFO_PATH: &'static str = "/proc/meminfo";
-const ITEMS: [&'static str; 11] = ["MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached", "SwapCached", "SwapTotal", "SwapFree", "Shmem", "Slab", "SUnreclaim"];
+const MEMINFO_PATH: &str = "/proc/meminfo";
+const ITEMS: [&str; 11] = [
+    "MemTotal",
+    "MemFree",
+    "MemAvailable",
+    "Buffers",
+    "Cached",
+    "SwapCached",
+    "SwapTotal",
+    "SwapFree",
+    "Shmem",
+    "Slab",
+    "SUnreclaim",
+];
 
 #[derive(Debug, Clone)]
 pub struct Mem {
@@ -50,19 +62,26 @@ impl Free {
                                     item_values[i] = value * 1024;
                                 }
                                 None => {
-                                    return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of item `{}` is not correct.", item))));
+                                    return Err(ScannerError::IOError(io::Error::new(
+                                        ErrorKind::UnexpectedEof,
+                                        format!("The format of item `{}` is not correct.", item),
+                                    )));
                                 }
                             }
 
                             break;
-                        } else {
-                            if sc.next_line()?.is_none() {
-                                return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The format of label `{}` is not correct.", label))));
-                            }
+                        } else if sc.next_line()?.is_none() {
+                            return Err(ScannerError::IOError(io::Error::new(
+                                ErrorKind::UnexpectedEof,
+                                format!("The format of label `{}` is not correct.", label),
+                            )));
                         }
                     }
                     None => {
-                        return Err(ScannerError::IOError(io::Error::new(ErrorKind::UnexpectedEof, format!("The item `{}` is not found.", item))));
+                        return Err(ScannerError::IOError(io::Error::new(
+                            ErrorKind::UnexpectedEof,
+                            format!("The item `{}` is not found.", item),
+                        )));
                     }
                 }
             }

@@ -1,7 +1,7 @@
-const STATIC_RESOURCES_CACHE_MAX_AGE: u32 = 259200;
+const STATIC_RESOURCES_CACHE_MAX_AGE: u32 = 259_200;
 
-use crate::rocket_include_static_resources::StaticResponse;
 use crate::rocket_cache_response::CacheResponse;
+use crate::rocket_include_static_resources::StaticResponse;
 
 fn static_response(id: &'static str) -> CacheResponse<StaticResponse> {
     let responder = static_response!(id);

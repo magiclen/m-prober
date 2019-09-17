@@ -1,7 +1,7 @@
-const STATIC_RESOURCES_CACHE_MAX_AGE: u32 = 259200;
+const STATIC_RESOURCES_CACHE_MAX_AGE: u32 = 259_200;
 
-use crate::rocket_include_static_resources::StaticResponse;
 use crate::rocket_cache_response::CacheResponse;
+use crate::rocket_include_static_resources::StaticResponse;
 
 fn static_response(id: &'static str) -> CacheResponse<StaticResponse> {
     let responder = static_response!(id);
@@ -78,7 +78,18 @@ pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
     rocket
         .mount("/", routes![css_bundle, js_bundle])
         .mount("/", routes![font_roboto_mono])
-        .mount("/", routes![roboto_mono_bold, roboto_mono_light, roboto_mono_medium, roboto_mono_regular])
-        .mount("/", routes![fa_solid_900_eot, fa_solid_900_svg, fa_solid_900_ttf, fa_solid_900_woff, fa_solid_900_woff2])
+        .mount("/", routes![
+            roboto_mono_bold,
+            roboto_mono_light,
+            roboto_mono_medium,
+            roboto_mono_regular
+        ])
+        .mount("/", routes![
+            fa_solid_900_eot,
+            fa_solid_900_svg,
+            fa_solid_900_ttf,
+            fa_solid_900_woff,
+            fa_solid_900_woff2
+        ])
         .mount("/", routes![preload])
 }
