@@ -84,9 +84,9 @@ SUBCOMMANDS:
 From [crates.io](https://crates.io/crates/mprober),
 
 ```bash
-cargo install mprober
+cargo +nightly install mprober
 
-# cargo uninstall mprober
+# cargo +nightly install mprober
 ```
 
 From [GitHub](https://github.com/magiclen/m-prober) (x86 and x86_64),
