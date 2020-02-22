@@ -1,4 +1,3 @@
-#![feature(duration_float)]
 #![feature(proc_macro_hygiene, decl_macro)]
 #![feature(seek_convenience)]
 
