@@ -35,7 +35,7 @@ struct AuthKey(Option<String>);
 impl AuthKey {
     #[inline]
     fn get_value(&self) -> Option<&str> {
-        self.0.as_ref().map(|v| v.as_str())
+        self.0.as_deref()
     }
 }
 
