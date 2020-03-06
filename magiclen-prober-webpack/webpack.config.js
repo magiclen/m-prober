@@ -2,7 +2,6 @@ const {CleanWebpackPlugin} = require('clean-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 const TerserPlugin = require('terser-webpack-plugin');
-const OptimizeCSSAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 
 const path = require('path');
 const glob = require('glob');
@@ -61,7 +60,8 @@ module.exports = {
                         options: {
                             plugins: function () {
                                 return [
-                                    require('autoprefixer')
+                                    require('autoprefixer'),
+                                    require('cssnano')({preset: ['default', {discardComments: {removeAll: true}}]})
                                 ];
                             }
                         }
@@ -102,11 +102,6 @@ module.exports = {
                     output: {
                         comments: false,
                     }
-                }
-            }),
-            new OptimizeCSSAssetsPlugin({
-                cssProcessorPluginOptions: {
-                    preset: ['default', {discardComments: {removeAll: true}}],
                 }
             })
         ],
