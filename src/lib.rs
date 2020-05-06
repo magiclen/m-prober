@@ -206,7 +206,8 @@ pub enum Mode {
     },
     Web {
         monitor: Duration,
-        port: u16,
+        address: String,
+        listen_port: u16,
         auth_key: Option<String>,
         only_api: bool,
     },
@@ -220,7 +221,7 @@ pub struct Config {
     pub mode: Mode,
 }
 
-const APP_NAME: &str = "M Prober (MagicLen Prober)";
+const APP_NAME: &str = "M Prober";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
@@ -306,6 +307,7 @@ impl Config {
             "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 3 seconds",
             "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds",
             "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer",
+            "web --addr 127.0.0.1        # Start a HTTP service on 127.0.0.1:8000 to monitor this computer",
             "web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key",
             "web --only-api              # Start a HTTP service on port 8000 to serve only HTTP APIs",
             "benchmark                   # Run benchmarks",
@@ -323,280 +325,311 @@ impl Config {
             .set_term_width(terminal_width)
             .version(CARGO_PKG_VERSION)
             .author(CARGO_PKG_AUTHORS)
-            .about(format!("MagicLen Prober is a free and simple probe utility for Linux.\n\nEXAMPLES:\n{}", examples.iter()
-                .map(|e| format!("  {} {}\n", arg0, e))
-                .collect::<Vec<String>>()
-                .concat()
-            ).as_str()
+            .about(
+                format!(
+                    "M Prober is a free and simple probe utility for Linux.\n\nEXAMPLES:\n{}",
+                    examples
+                        .iter()
+                        .map(|e| format!("  {} {}\n", arg0, e))
+                        .collect::<Vec<String>>()
+                        .concat()
+                )
+                .as_str(),
             )
-            .subcommand(SubCommand::with_name("hostname").aliases(&["h", "host", "name", "servername"])
-                .about("Shows the hostname")
-                .display_order(0)
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("kernel").aliases(&["k", "l", "linux"])
-                .about("Shows the kernel version")
-                .display_order(1)
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("uptime").aliases(&["u", "up", "utime", "ut"])
-                .about("Shows the uptime")
-                .display_order(2)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows the uptime and refreshes every second")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
-                )
-                .arg(Arg::with_name("LIGHT")
-                    .long("light")
-                    .short("l")
-                    .help("Darker colors")
-                )
-                .arg(Arg::with_name("SECOND")
-                    .long("second")
-                    .short("s")
-                    .help("Shows the uptime in seconds")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("time").aliases(&["t", "systime", "stime", "st", "utc", "utctime", "rtc", "rtctime", "date"])
-                .about("Shows the RTC (UTC) date and time")
-                .display_order(3)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows the RTC (UTC) date and time, and refreshes every second")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
-                )
-                .arg(Arg::with_name("LIGHT")
-                    .long("light")
-                    .short("l")
-                    .help("Darker colors")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("cpu").aliases(&["c", "cpus", "core", "cores", "load", "processor", "processors"])
-                .about("Shows CPU stats")
-                .display_order(4)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows CPU stats and refreshes every N milliseconds")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
-                )
-                .arg(Arg::with_name("LIGHT")
-                    .long("light")
-                    .short("l")
-                    .help("Darker colors")
-                )
-                .arg(Arg::with_name("SEPARATE")
-                    .long("separate")
-                    .short("s")
-                    .help("Separates each CPU")
-                )
-                .arg(Arg::with_name("ONLY_INFORMATION")
-                    .long("only-information")
-                    .short("i")
-                    .help("Shows only information about CPUs")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("memory").aliases(&["m", "mem", "f", "free", "memories", "swap", "ram", "dram", "ddr", "cache", "buffer", "buffers", "buf", "buff"])
-                .about("Shows memory stats")
-                .display_order(5)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows memory stats and refreshes every N milliseconds")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
-                )
-                .arg(Arg::with_name("LIGHT")
-                    .long("light")
-                    .short("l")
-                    .help("Darker colors")
-                )
-                .arg(Arg::with_name("UNIT")
-                    .long("unit")
-                    .short("u")
-                    .help("Forces to use a fixed unit")
-                    .takes_value(true)
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("network").aliases(&["n", "net", "networks", "bandwidth", "traffic"])
-                .about("Shows network stats")
-                .display_order(6)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows network stats and refreshes every N milliseconds")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
-                )
-                .arg(Arg::with_name("LIGHT")
-                    .long("light")
-                    .short("l")
-                    .help("Darker colors")
-                )
-                .arg(Arg::with_name("UNIT")
-                    .long("unit")
-                    .short("u")
-                    .help("Forces to use a fixed unit")
-                    .takes_value(true)
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("volume").aliases(&["v", "storage", "volumes", "d", "disk", "disks", "blk", "block", "blocks", "mount", "mounts", "ssd", "hdd"])
-                .about("Shows volume stats")
-                .display_order(7)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Shows volume stats and refreshes every N milliseconds")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
-                )
-                .arg(Arg::with_name("PLAIN")
-                    .long("plain")
-                    .short("p")
-                    .help("No colors")
-                )
-                .arg(Arg::with_name("LIGHT")
-                    .long("light")
-                    .short("l")
-                    .help("Darker colors")
-                )
-                .arg(Arg::with_name("UNIT")
-                    .long("unit")
-                    .short("u")
-                    .help("Forces to use a fixed unit")
-                    .takes_value(true)
-                )
-                .arg(Arg::with_name("ONLY_INFORMATION")
-                    .long("only-information")
-                    .short("i")
-                    .help("Shows only information about volumes without I/O rates")
-                )
-                .arg(Arg::with_name("MOUNTS")
-                    .long("mounts")
-                    .aliases(&["mount", "point", "points"])
-                    .help("Also shows mount points")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("web").aliases(&["w", "server", "http"])
-                .about("Starts a HTTP service to monitor this computer")
-                .display_order(8)
-                .arg(Arg::with_name("MONITOR")
-                    .long("monitor")
-                    .short("m")
-                    .help("Automatically refreshes every N seconds")
-                    .takes_value(true)
-                    .value_name("SECONDS")
-                    .default_value("3")
-                )
-                .arg(Arg::with_name("PORT")
-                    .long("port")
-                    .short("p")
-                    .help("Assigns a TCP port for the HTTP service")
-                    .takes_value(true)
-                    .default_value("8000")
-                )
-                .arg(Arg::with_name("AUTH_KEY")
-                    .long("auth-key")
-                    .short("a")
-                    .help("Assigns an auth key")
-                    .takes_value(true)
-                )
-                .arg(Arg::with_name("ONLY_API")
-                    .long("only-api")
-                    .aliases(&["only-apis"])
-                    .help("Disables the web page")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
-            )
-            .subcommand(SubCommand::with_name("benchmark").aliases(&["b", "bench", "performance"])
-                .about("Runs benchmarks to measure the performance of this environment")
-                .display_order(9)
-                .arg(Arg::with_name("WARMING_UP_DURATION")
+            .subcommand(
+                SubCommand::with_name("hostname")
+                    .aliases(&["h", "host", "name", "servername"])
+                    .about("Shows the hostname")
                     .display_order(0)
-                    .long("warming-up-duration")
-                    .help("Assigns a duration for warming up")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
-                    .default_value("3000")
-                )
-                .arg(Arg::with_name("BENCHMARK_DURATION")
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("kernel")
+                    .aliases(&["k", "l", "linux"])
+                    .about("Shows the kernel version")
                     .display_order(1)
-                    .long("benchmark-duration")
-                    .help("Assigns a duration for each benchmarking")
-                    .takes_value(true)
-                    .value_name("MILLI_SECONDS")
-                    .default_value("5000")
-                )
-                .arg(Arg::with_name("VERBOSE")
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("uptime")
+                    .aliases(&["u", "up", "utime", "ut"])
+                    .about("Shows the uptime")
                     .display_order(2)
-                    .long("verbose")
-                    .short("v")
-                    .help("Shows more information in stderr")
-                )
-                .arg(Arg::with_name("DISABLE_CPU")
-                    .display_order(10)
-                    .long("disable-cpu").aliases(&["disabled-cpu", "disable-cpus", "disabled-cpus"])
-                    .help("Not to benchmark CPUs")
-                )
-                .arg(Arg::with_name("ENABLE_CPU")
-                    .display_order(100)
-                    .long("enable-cpu").aliases(&["enabled-cpu", "enable-cpus", "enabled-cpus"])
-                    .help("Allows to benchmark CPUs (disables others by default)")
-                )
-                .arg(Arg::with_name("DISABLE_MEMORY")
-                    .display_order(11)
-                    .long("disable-memory").aliases(&["disabled-memory"])
-                    .help("Not to benchmark memory")
-                )
-                .arg(Arg::with_name("ENABLE_MEMORY")
-                    .display_order(101)
-                    .long("enable-memory").aliases(&["enabled-memory"])
-                    .help("Allows to benchmark memory (disables others by default)")
-                )
-                .arg(Arg::with_name("DISABLE_VOLUME")
-                    .display_order(13)
-                    .long("disable-volume").aliases(&["disabled-volume", "disable-volumes", "disabled-volumes"])
-                    .help("Not to benchmark volumes")
-                )
-                .arg(Arg::with_name("ENABLE_VOLUME")
-                    .display_order(103)
-                    .long("enable-volume").aliases(&["enabled-volume", "enable-volumes", "enabled-volumes"])
-                    .help("Allows to benchmark volumes (disables others by default)")
-                )
-                .after_help("Enjoy it! https://magiclen.org")
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows the uptime and refreshes every second"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .arg(
+                        Arg::with_name("SECOND")
+                            .long("second")
+                            .short("s")
+                            .help("Shows the uptime in seconds"),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("time")
+                    .aliases(&[
+                        "t", "systime", "stime", "st", "utc", "utctime", "rtc", "rtctime", "date",
+                    ])
+                    .about("Shows the RTC (UTC) date and time")
+                    .display_order(3)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows the RTC (UTC) date and time, and refreshes every second"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("cpu")
+                    .aliases(&["c", "cpus", "core", "cores", "load", "processor", "processors"])
+                    .about("Shows CPU stats")
+                    .display_order(4)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows CPU stats and refreshes every N milliseconds")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .arg(
+                        Arg::with_name("SEPARATE")
+                            .long("separate")
+                            .short("s")
+                            .help("Separates each CPU"),
+                    )
+                    .arg(
+                        Arg::with_name("ONLY_INFORMATION")
+                            .long("only-information")
+                            .short("i")
+                            .help("Shows only information about CPUs"),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("memory")
+                    .aliases(&[
+                        "m", "mem", "f", "free", "memories", "swap", "ram", "dram", "ddr", "cache",
+                        "buffer", "buffers", "buf", "buff",
+                    ])
+                    .about("Shows memory stats")
+                    .display_order(5)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows memory stats and refreshes every N milliseconds")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .arg(
+                        Arg::with_name("UNIT")
+                            .long("unit")
+                            .short("u")
+                            .help("Forces to use a fixed unit")
+                            .takes_value(true),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("network")
+                    .aliases(&["n", "net", "networks", "bandwidth", "traffic"])
+                    .about("Shows network stats")
+                    .display_order(6)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows network stats and refreshes every N milliseconds")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .arg(
+                        Arg::with_name("UNIT")
+                            .long("unit")
+                            .short("u")
+                            .help("Forces to use a fixed unit")
+                            .takes_value(true),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("volume")
+                    .aliases(&[
+                        "v", "storage", "volumes", "d", "disk", "disks", "blk", "block", "blocks",
+                        "mount", "mounts", "ssd", "hdd",
+                    ])
+                    .about("Shows volume stats")
+                    .display_order(7)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows volume stats and refreshes every N milliseconds")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .arg(
+                        Arg::with_name("UNIT")
+                            .long("unit")
+                            .short("u")
+                            .help("Forces to use a fixed unit")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("ONLY_INFORMATION")
+                            .long("only-information")
+                            .short("i")
+                            .help("Shows only information about volumes without I/O rates"),
+                    )
+                    .arg(
+                        Arg::with_name("MOUNTS")
+                            .long("mounts")
+                            .aliases(&["mount", "point", "points"])
+                            .help("Also shows mount points"),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("web")
+                    .aliases(&["w", "server", "http"])
+                    .about("Starts a HTTP service to monitor this computer")
+                    .display_order(8)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Automatically refreshes every N seconds")
+                            .takes_value(true)
+                            .value_name("SECONDS")
+                            .default_value("3"),
+                    )
+                    .arg(
+                        Arg::with_name("ADDRESS")
+                            .long("address")
+                            .visible_alias("addr")
+                            .help("Assigns the address that M Prober binds.")
+                            .takes_value(true)
+                            .default_value(if cfg!(debug_assertions) {
+                                "127.0.0.1"
+                            } else {
+                                "0.0.0.0"
+                            }),
+                    )
+                    .arg(
+                        Arg::with_name("LISTEN_PORT")
+                            .long("listen-port")
+                            .visible_alias("port")
+                            .short("p")
+                            .help("Assigns a TCP port for the HTTP service")
+                            .takes_value(true)
+                            .default_value("8000"),
+                    )
+                    .arg(
+                        Arg::with_name("AUTH_KEY")
+                            .long("auth-key")
+                            .short("a")
+                            .help("Assigns an auth key")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("ONLY_API")
+                            .long("only-api")
+                            .aliases(&["only-apis"])
+                            .help("Disables the web page"),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
+                SubCommand::with_name("benchmark")
+                    .aliases(&["b", "bench", "performance"])
+                    .about("Runs benchmarks to measure the performance of this environment")
+                    .display_order(9)
+                    .arg(
+                        Arg::with_name("WARMING_UP_DURATION")
+                            .display_order(0)
+                            .long("warming-up-duration")
+                            .help("Assigns a duration for warming up")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS")
+                            .default_value("3000"),
+                    )
+                    .arg(
+                        Arg::with_name("BENCHMARK_DURATION")
+                            .display_order(1)
+                            .long("benchmark-duration")
+                            .help("Assigns a duration for each benchmarking")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS")
+                            .default_value("5000"),
+                    )
+                    .arg(
+                        Arg::with_name("VERBOSE")
+                            .display_order(2)
+                            .long("verbose")
+                            .short("v")
+                            .help("Shows more information in stderr"),
+                    )
+                    .arg(
+                        Arg::with_name("DISABLE_CPU")
+                            .display_order(10)
+                            .long("disable-cpu")
+                            .aliases(&["disabled-cpu", "disable-cpus", "disabled-cpus"])
+                            .help("Not to benchmark CPUs"),
+                    )
+                    .arg(
+                        Arg::with_name("ENABLE_CPU")
+                            .display_order(100)
+                            .long("enable-cpu")
+                            .aliases(&["enabled-cpu", "enable-cpus", "enabled-cpus"])
+                            .help("Allows to benchmark CPUs (disables others by default)"),
+                    )
+                    .arg(
+                        Arg::with_name("DISABLE_MEMORY")
+                            .display_order(11)
+                            .long("disable-memory")
+                            .aliases(&["disabled-memory"])
+                            .help("Not to benchmark memory"),
+                    )
+                    .arg(
+                        Arg::with_name("ENABLE_MEMORY")
+                            .display_order(101)
+                            .long("enable-memory")
+                            .aliases(&["enabled-memory"])
+                            .help("Allows to benchmark memory (disables others by default)"),
+                    )
+                    .arg(
+                        Arg::with_name("DISABLE_VOLUME")
+                            .display_order(13)
+                            .long("disable-volume")
+                            .aliases(&["disabled-volume", "disable-volumes", "disabled-volumes"])
+                            .help("Not to benchmark volumes"),
+                    )
+                    .arg(
+                        Arg::with_name("ENABLE_VOLUME")
+                            .display_order(103)
+                            .long("enable-volume")
+                            .aliases(&["enabled-volume", "enable-volumes", "enabled-volumes"])
+                            .help("Allows to benchmark volumes (disables others by default)"),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
             )
             .after_help("Enjoy it! https://magiclen.org")
             .get_matches();
@@ -756,11 +789,13 @@ impl Config {
                 None => unreachable!(),
             };
 
-            let port = match sub_matches.value_of("PORT") {
+            let address = sub_matches.value_of("ADDRESS").unwrap().to_string();
+
+            let listen_port = match sub_matches.value_of("LISTEN_PORT") {
                 Some(port) => {
-                    let port: u16 = port
-                        .parse()
-                        .map_err(|_| format!("`{}` is not a correct value for PORT", port))?;
+                    let port: u16 = port.parse().map_err(|_| {
+                        format!("`{}` is not a correct value for LISTEN_PORT", port)
+                    })?;
 
                     port
                 }
@@ -773,7 +808,8 @@ impl Config {
 
             Mode::Web {
                 monitor,
-                port,
+                address,
+                listen_port,
                 auth_key,
                 only_api,
             }
@@ -1103,11 +1139,12 @@ pub fn run(config: Config) -> Result<i32, String> {
         }
         Mode::Web {
             monitor,
-            port,
+            address,
+            listen_port,
             auth_key,
             only_api,
         } => {
-            rocket_mounts::launch(monitor, port, auth_key, only_api);
+            rocket_mounts::launch(monitor, address, listen_port, auth_key, only_api);
         }
         Mode::Benchmark {
             benchmark_config,

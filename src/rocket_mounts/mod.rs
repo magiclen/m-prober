@@ -39,7 +39,13 @@ impl AuthKey {
     }
 }
 
-pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: bool) {
+pub fn launch(
+    monitor: Duration,
+    address: String,
+    listen_port: u16,
+    auth_key: Option<String>,
+    only_api: bool,
+) {
     let mut config = Config::build(if cfg!(debug_assertions) {
         Environment::Development
     } else {
@@ -52,7 +58,9 @@ pub fn launch(monitor: Duration, port: u16, auth_key: Option<String>, only_api: 
 
     config.secret_key = Some(base64::encode(&secret_key));
 
-    config.port = port;
+    config.address = address;
+
+    config.port = listen_port;
 
     let rocket =
         rocket::custom(config.unwrap()).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
