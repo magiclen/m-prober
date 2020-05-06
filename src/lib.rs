@@ -91,7 +91,7 @@ static mut FORCE_PLAIN_MODE: bool = false;
 validated_customized_ranged_number!(WebMonitorInterval, u64, 1, 15);
 
 lazy_static! {
-    static ref COLOR_DEFAULT: ColorSpec = { ColorSpec::new() };
+    static ref COLOR_DEFAULT: ColorSpec = ColorSpec::new();
     static ref COLOR_LABEL: ColorSpec = {
         let mut color_spec = ColorSpec::new();
 
