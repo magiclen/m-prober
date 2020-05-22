@@ -4,10 +4,9 @@ use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::byte_unit::{Byte, ByteUnit};
-use crate::chrono::prelude::*;
 use crate::rand::{self, Rng};
 use crate::scanner_rust::ScannerError;
 
@@ -333,8 +332,13 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                             let mut can_write = false;
 
                             for point in volume.points {
-                                let path = Path::new(&point)
-                                    .join(format!("mprober-{}.tmp", Utc::now().timestamp_millis()));
+                                let path = Path::new(&point).join(format!(
+                                    "mprober-{}.tmp",
+                                    SystemTime::now()
+                                        .duration_since(SystemTime::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_millis()
+                                ));
 
                                 match File::create(&path) {
                                     Ok(file) => {

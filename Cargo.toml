@@ -34,7 +34,6 @@ rand = "0.7"
 base64 = "0.12"
 serde_json = "1"
 benchmarking = "0.4"
-chrono = "0.4"
 
 rocket = "0.4.2"
 rocket-simple-authorization = "0.9"

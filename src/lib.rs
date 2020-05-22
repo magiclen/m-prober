@@ -19,7 +19,6 @@ extern crate rand;
 #[macro_use]
 extern crate serde_json;
 extern crate benchmarking;
-extern crate chrono;
 
 #[macro_use]
 extern crate rocket;
