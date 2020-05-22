@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -13,7 +14,6 @@ use crate::scanner_rust::ScannerError;
 use crate::benchmarking;
 use crate::cpu_info::CPU;
 use crate::volume::Volume;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BenchmarkLog {

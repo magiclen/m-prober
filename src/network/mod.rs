@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::io::{self, ErrorKind};
+use std::string::ToString;
 use std::thread::sleep;
 use std::time::Duration;
 
 use crate::scanner_rust::{Scanner, ScannerError};
-use std::string::ToString;
 
 const NET_DEV_PATH: &str = "/proc/net/dev";
 
