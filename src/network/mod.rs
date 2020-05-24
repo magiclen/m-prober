@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::io::{self, ErrorKind};
-use std::string::ToString;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -35,10 +34,10 @@ impl Network {
         let mut sc = Scanner::scan_path(NET_DEV_PATH)?;
 
         for _ in 0..2 {
-            if sc.next_line()?.is_none() {
+            if sc.drop_next_line()?.is_none() {
                 return Err(ScannerError::IOError(io::Error::new(
                     ErrorKind::UnexpectedEof,
-                    "Cannot find any network interface.".to_string(),
+                    "Cannot find any network interface.",
                 )));
             }
         }
@@ -63,7 +62,7 @@ impl Network {
                     };
 
                     for _ in 0..7 {
-                        if sc.next_u64()?.is_none() {
+                        if sc.drop_next()?.is_none() {
                             return Err(ScannerError::IOError(io::Error::new(
                                 ErrorKind::UnexpectedEof,
                                 format!("The format of interface `{}` is not correct.", interface),
@@ -89,10 +88,10 @@ impl Network {
 
                     networks.push(network);
 
-                    if sc.next_line()?.is_none() {
+                    if sc.drop_next_line()?.is_none() {
                         return Err(ScannerError::IOError(io::Error::new(
                             ErrorKind::UnexpectedEof,
-                            "The format of networks is not correct.".to_string(),
+                            "The format of networks is not correct.",
                         )));
                     }
                 }

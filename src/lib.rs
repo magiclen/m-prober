@@ -19,6 +19,9 @@ extern crate rand;
 #[macro_use]
 extern crate serde_json;
 extern crate benchmarking;
+extern crate chrono;
+extern crate regex;
+extern crate users;
 
 #[macro_use]
 extern crate rocket;
@@ -38,23 +41,26 @@ mod hostname;
 mod kernel;
 mod load_average;
 mod network;
+mod process;
 mod rocket_mounts;
 mod time;
 mod volume;
 
 use std::env;
-use std::io::Write;
+use std::io::{self, ErrorKind, Write};
 use std::path::Path;
-use std::process;
+use std::process as std_process;
 use std::thread;
 use std::time::Duration;
 
 use byte_unit::{Byte, ByteUnit};
 use clap::{App, Arg, SubCommand};
 use getch::Getch;
+use regex::Regex;
 use scanner_rust::ScannerError;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{terminal_size, Width};
+use users::{Users, UsersCache};
 use validators::number::NumberGtZero;
 
 use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
@@ -62,6 +68,7 @@ use cpu_info::{CPUStat, CPU};
 use free::Free;
 use load_average::LoadAverage;
 use network::NetworkWithSpeed;
+use process::Process;
 use time::RTCDateTime;
 use volume::{Volume, VolumeWithSpeed};
 
@@ -203,6 +210,14 @@ pub enum Mode {
         only_information: bool,
         mounts: bool,
     },
+    Process {
+        monitor: Option<Duration>,
+        unit: Option<ByteUnit>,
+        only_information: bool,
+        user_filter: Option<String>,
+        program_filter: Option<Regex>,
+        tty_filter: Option<Regex>,
+    },
     Web {
         monitor: Duration,
         address: String,
@@ -333,7 +348,7 @@ impl Config {
                         .collect::<Vec<String>>()
                         .concat()
                 )
-                .as_str(),
+                    .as_str(),
             )
             .subcommand(
                 SubCommand::with_name("hostname")
@@ -507,10 +522,58 @@ impl Config {
                     .after_help("Enjoy it! https://magiclen.org"),
             )
             .subcommand(
+                SubCommand::with_name("process")
+                    .aliases(&["p", "ps"])
+                    .about("Shows process stats")
+                    .display_order(8)
+                    .arg(
+                        Arg::with_name("MONITOR")
+                            .long("monitor")
+                            .short("m")
+                            .help("Shows volume stats and refreshes every N milliseconds")
+                            .takes_value(true)
+                            .value_name("MILLI_SECONDS"),
+                    )
+                    .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
+                    .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                    .arg(
+                        Arg::with_name("UNIT")
+                            .long("unit")
+                            .short("u")
+                            .help("Forces to use a fixed unit")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("ONLY_INFORMATION")
+                            .long("only-information")
+                            .short("i")
+                            .help("Shows only information about processes without CPU usage"),
+                    )
+                    .arg(
+                        Arg::with_name("USER_FILTER")
+                            .long("user-filter")
+                            .help("Shows only processes which are related to a specific user")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("PROGRAM_FILTER")
+                            .long("program-filter")
+                            .help("Shows only processes which are related to specific programs or commands matched by a regex")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("TTY_FILTER")
+                            .long("tty-filter")
+                            .help("Shows only processes which are run on specific TTY/PTS matched by a regex")
+                            .takes_value(true),
+                    )
+                    .after_help("Enjoy it! https://magiclen.org"),
+            )
+            .subcommand(
                 SubCommand::with_name("web")
                     .aliases(&["w", "server", "http"])
                     .about("Starts a HTTP service to monitor this computer")
-                    .display_order(8)
+                    .display_order(9)
                     .arg(
                         Arg::with_name("MONITOR")
                             .long("monitor")
@@ -560,7 +623,7 @@ impl Config {
                 SubCommand::with_name("benchmark")
                     .aliases(&["b", "bench", "performance"])
                     .about("Runs benchmarks to measure the performance of this environment")
-                    .display_order(9)
+                    .display_order(10)
                     .arg(
                         Arg::with_name("WARMING_UP_DURATION")
                             .display_order(0)
@@ -777,6 +840,56 @@ impl Config {
                 only_information,
                 mounts,
             }
+        } else if let Some(sub_matches) = matches.subcommand_matches("process") {
+            let monitor = match sub_matches.value_of("MONITOR") {
+                Some(monitor) => {
+                    let monitor = NumberGtZero::from_str(monitor)
+                        .map_err(|_| {
+                            format!("`{}` is not a correct value for MILLI_SECONDS", monitor)
+                        })?
+                        .get_number();
+
+                    Some(Duration::from_secs_f64(monitor / 1000f64))
+                }
+                None => None,
+            };
+
+            let unit = match sub_matches.value_of("UNIT") {
+                Some(unit) => {
+                    let unit = ByteUnit::from_str(unit)
+                        .map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
+
+                    Some(unit)
+                }
+                None => None,
+            };
+
+            let only_information = sub_matches.is_present("ONLY_INFORMATION");
+
+            let user_filter = sub_matches.value_of("USER_FILTER").map(|s| s.to_string());
+
+            let program_filter = match sub_matches.value_of("PROGRAM_FILTER") {
+                Some(program_filter) => {
+                    Some(Regex::new(program_filter).map_err(|err| err.to_string())?)
+                }
+                None => None,
+            };
+
+            let tty_filter = match sub_matches.value_of("TTY_FILTER") {
+                Some(program_filter) => {
+                    Some(Regex::new(program_filter).map_err(|err| err.to_string())?)
+                }
+                None => None,
+            };
+
+            Mode::Process {
+                monitor,
+                unit,
+                only_information,
+                user_filter,
+                program_filter,
+                tty_filter,
+            }
         } else if let Some(sub_matches) = matches.subcommand_matches("web") {
             let monitor = match sub_matches.value_of("MONITOR") {
                 Some(monitor) => {
@@ -944,7 +1057,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         }
                     }
 
-                    process::exit(0);
+                    std_process::exit(0);
                 });
 
                 let sleep_interval = Duration::from_secs(1);
@@ -971,7 +1084,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         }
                     }
 
-                    process::exit(0);
+                    std_process::exit(0);
                 });
 
                 let sleep_interval = Duration::from_secs(1);
@@ -1001,7 +1114,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        process::exit(0);
+                        std_process::exit(0);
                     });
 
                     draw_cpu_info(
@@ -1043,7 +1156,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        process::exit(0);
+                        std_process::exit(0);
                     });
 
                     let sleep_interval = monitor;
@@ -1074,7 +1187,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        process::exit(0);
+                        std_process::exit(0);
                     });
 
                     draw_network(unit, Some(Duration::from_millis(DEFAULT_INTERVAL)))
@@ -1108,7 +1221,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                             }
                         }
 
-                        process::exit(0);
+                        std_process::exit(0);
                     });
 
                     draw_volume(
@@ -1133,6 +1246,73 @@ pub fn run(config: Config) -> Result<i32, String> {
                 None => {
                     draw_volume(unit, only_information, mounts, None)
                         .map_err(|err| err.to_string())?;
+                }
+            }
+        }
+        Mode::Process {
+            monitor,
+            unit,
+            only_information,
+            user_filter,
+            program_filter,
+            tty_filter,
+        } => {
+            let user_filter = user_filter.as_deref();
+            let program_filter = program_filter.as_ref();
+            let tty_filter = tty_filter.as_ref();
+
+            match monitor {
+                Some(monitor) => {
+                    thread::spawn(move || {
+                        loop {
+                            let key = Getch::new().getch().unwrap();
+
+                            if let b'q' = key {
+                                break;
+                            }
+                        }
+
+                        std_process::exit(0);
+                    });
+
+                    draw_process(
+                        unit,
+                        only_information,
+                        Some(Duration::from_millis(DEFAULT_INTERVAL)),
+                        user_filter,
+                        program_filter,
+                        tty_filter,
+                    )
+                    .map_err(|err| err.to_string())?;
+
+                    let sleep_interval = monitor;
+
+                    loop {
+                        if only_information {
+                            thread::sleep(sleep_interval);
+                        }
+
+                        draw_process(
+                            unit,
+                            only_information,
+                            Some(sleep_interval),
+                            user_filter,
+                            program_filter,
+                            tty_filter,
+                        )
+                        .map_err(|err| err.to_string())?;
+                    }
+                }
+                None => {
+                    draw_process(
+                        unit,
+                        only_information,
+                        None,
+                        user_filter,
+                        program_filter,
+                        tty_filter,
+                    )
+                    .map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -1240,8 +1420,6 @@ fn draw_time(monitor: bool) -> Result<(), ScannerError> {
 
     Ok(())
 }
-
-// TODO
 
 fn draw_cpu_info(
     separate: bool,
@@ -1484,6 +1662,7 @@ fn draw_cpu_info(
 
             let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap();
 
+            // The max length of `CPU<number> `.
             let d = {
                 let mut n = cpu.siblings;
 
@@ -1495,13 +1674,13 @@ fn draw_cpu_info(
                     d += 1;
                 }
 
-                d
+                d + 4
             };
 
             if only_information {
                 for (i, hz_string) in hz_string.into_iter().enumerate() {
                     stdout.set_color(&*COLOR_LABEL)?;
-                    write!(&mut stdout, "{1:<0$}", d + 4, format!("CPU{}", i))?;
+                    write!(&mut stdout, "{1:<0$}", d, format!("CPU{}", i))?;
 
                     stdout.set_color(&*COLOR_BOLD_TEXT)?;
                     write!(&mut stdout, "{1:>0$}", hz_string_len, hz_string)?;
@@ -1518,7 +1697,7 @@ fn draw_cpu_info(
 
                 let percentage_len = percentage_string.iter().map(|s| s.len()).max().unwrap();
 
-                let progress_max = terminal_width - d - 7 - percentage_len - 2 - hz_string_len - 1;
+                let progress_max = terminal_width - d - 3 - percentage_len - 2 - hz_string_len - 1;
 
                 let mut percentage_string_iter = percentage_string.into_iter();
                 let mut hz_string_iter = hz_string.into_iter();
@@ -1528,12 +1707,10 @@ fn draw_cpu_info(
                     let hz_string = hz_string_iter.next().unwrap();
 
                     stdout.set_color(&*COLOR_LABEL)?;
-                    write!(&mut stdout, "CPU")?; // 3
-
-                    write!(&mut stdout, "{}", i)?;
+                    write!(&mut stdout, "{1:<0$}", d, format!("CPU{}", i))?;
 
                     stdout.set_color(&*COLOR_NORMAL_TEXT)?;
-                    write!(&mut stdout, " [")?; // 2
+                    write!(&mut stdout, "[")?; // 1
 
                     let f = progress_max as f64;
 
@@ -2502,6 +2679,67 @@ fn draw_volume(
     }
 
     output.print(&stdout)?;
+
+    Ok(())
+}
+
+fn draw_process(
+    unit: Option<ByteUnit>,
+    only_information: bool,
+    monitor: Option<Duration>,
+    user_filter: Option<&str>,
+    program_filter: Option<&Regex>,
+    tty_filter: Option<&Regex>,
+) -> Result<(), ScannerError> {
+    let output = if unsafe { FORCE_PLAIN_MODE } {
+        BufferWriter::stdout(ColorChoice::Never)
+    } else {
+        BufferWriter::stdout(ColorChoice::Always)
+    };
+
+    let mut stdout = output.buffer();
+
+    if monitor.is_some() {
+        stdout.write_all(&CLEAR_SCREEN_DATA)?;
+    }
+
+    let terminal_width = if let Some((Width(width), _)) = terminal_size() {
+        (width as usize).max(MIN_TERMINAL_WIDTH)
+    } else {
+        DEFAULT_TERMINAL_WIDTH
+    };
+
+    let mut user_cache = UsersCache::new();
+
+    let uid_filter = match user_filter {
+        Some(user_filter) => {
+            match user_cache.get_user_by_name(user_filter) {
+                Some(user) => Some(user.uid()),
+                None => {
+                    return Err(ScannerError::IOError(io::Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("Cannot find the user `{}`.", user_filter),
+                    )));
+                }
+            }
+        }
+        None => None,
+    };
+
+    let processes_with_stats =
+        Process::get_processes_with_stats(uid_filter, program_filter, tty_filter)?;
+
+    if only_information {
+        println!("{:#?}", processes_with_stats);
+    } else {
+        let volumes_with_speed =
+            Process::get_processes_with_percentage(processes_with_stats, match monitor {
+                Some(monitor) => monitor,
+                None => Duration::from_millis(DEFAULT_INTERVAL),
+            })?;
+    }
+
+    unimplemented!();
 
     Ok(())
 }

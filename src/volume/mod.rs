@@ -47,14 +47,14 @@ impl Volume {
         let mut volumes = Vec::with_capacity(1);
 
         loop {
-            if sc.next()?.is_none() {
+            if sc.drop_next()?.is_none() {
                 break;
             }
 
-            if sc.next()?.is_none() {
+            if sc.drop_next()?.is_none() {
                 return Err(ScannerError::IOError(io::Error::new(
                     ErrorKind::UnexpectedEof,
-                    "The format of volume stats is not correct.".to_string(),
+                    "The format of volume stats is not correct.",
                 )));
             }
 
@@ -62,7 +62,7 @@ impl Volume {
                 Some(device) => {
                     if let Some(points) = mounts.remove(&device) {
                         for _ in 0..2 {
-                            if sc.next_u64()?.is_none() {
+                            if sc.drop_next()?.is_none() {
                                 return Err(ScannerError::IOError(io::Error::new(
                                     ErrorKind::UnexpectedEof,
                                     format!("The format of device `{}` is not correct.", device),
@@ -81,7 +81,7 @@ impl Volume {
                         };
 
                         for _ in 0..3 {
-                            if sc.next_u64()?.is_none() {
+                            if sc.drop_next()?.is_none() {
                                 return Err(ScannerError::IOError(io::Error::new(
                                     ErrorKind::UnexpectedEof,
                                     format!("The format of device `{}` is not correct.", device),
@@ -100,7 +100,7 @@ impl Volume {
                         };
 
                         for _ in 0..2 {
-                            if sc.next_u64()?.is_none() {
+                            if sc.drop_next()?.is_none() {
                                 return Err(ScannerError::IOError(io::Error::new(
                                     ErrorKind::UnexpectedEof,
                                     format!("The format of device `{}` is not correct.", device),
@@ -156,17 +156,17 @@ impl Volume {
                         }
                     }
 
-                    if sc.next_line()?.is_none() {
+                    if sc.drop_next_line()?.is_none() {
                         return Err(ScannerError::IOError(io::Error::new(
                             ErrorKind::UnexpectedEof,
-                            "The format of volume stats is not correct.".to_string(),
+                            "The format of volume stats is not correct.",
                         )));
                     }
                 }
                 None => {
                     return Err(ScannerError::IOError(io::Error::new(
                         ErrorKind::UnexpectedEof,
-                        "The format of volume stats is not correct.".to_string(),
+                        "The format of volume stats is not correct.",
                     )))
                 }
             }

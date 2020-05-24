@@ -45,10 +45,10 @@ pub fn get_mounts() -> Result<HashMap<String, Vec<String>>, ScannerError> {
             }
         }
 
-        if sc.next_line()?.is_none() {
+        if sc.drop_next_line()?.is_none() {
             return Err(ScannerError::IOError(io::Error::new(
                 ErrorKind::UnexpectedEof,
-                "The format of disk.mounts is not correct.".to_string(),
+                "The format of disk.mounts is not correct.",
             )));
         }
     }

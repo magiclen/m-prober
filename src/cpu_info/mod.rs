@@ -6,9 +6,13 @@ use std::time::Duration;
 use crate::scanner_rust::{Scanner, ScannerError};
 
 const CPUINFO_PATH: &str = "/proc/cpuinfo";
+
 const ITEMS: [&str; 5] = ["model name", "cpu MHz", "physical id", "siblings", "cpu cores"];
-const PHYSICAL_ID_INDEX: usize = 2;
+const MODEL_NAME_INDEX: usize = 0;
 const CPU_MHZ_INDEX: usize = 1;
+const PHYSICAL_ID_INDEX: usize = 2;
+const SIBLINGS_INDEX: usize = 3;
+const CPU_CORES: usize = 4;
 
 const STAT_PATH: &str = "/proc/stat";
 
@@ -28,36 +32,36 @@ impl CPU {
         let mut cpus = Vec::with_capacity(1);
         let mut physical_ids: BTreeSet<usize> = BTreeSet::new();
 
-        let items_len_dec_dec = ITEMS.len() - 2;
-
+        let mut physical_id = 0;
+        let mut model_name = String::new();
         let mut cpus_mhz = Vec::with_capacity(1);
+        let mut siblings = 0;
+        let mut cpu_cores = 0;
 
         'outer: loop {
-            let mut item_values: Vec<String> = Vec::with_capacity(items_len_dec_dec);
-
-            let mut physical_id = 0;
-
-            'cpu: for (i, &item) in ITEMS.iter().enumerate() {
+            'item: for (i, &item) in ITEMS.iter().enumerate() {
                 let item_len = item.len();
 
                 loop {
-                    let line = sc.next_line()?;
-
-                    match line {
+                    match sc.next_line()? {
                         Some(line) => {
-                            if line.as_str().starts_with(item) {
+                            if line.starts_with(item) {
                                 match line[item_len..].find(':') {
                                     Some(colon_index) => {
-                                        let value =
-                                            line[(item_len + colon_index + 1)..].trim().to_string();
+                                        let value = line[(item_len + colon_index + 1)..].trim();
 
                                         match i {
+                                            MODEL_NAME_INDEX => {
+                                                if model_name.is_empty() {
+                                                    model_name.push_str(value);
+                                                }
+                                            }
                                             CPU_MHZ_INDEX => {
                                                 let cpu_mhz: f64 = value.parse().map_err(|_| {
                                                     ScannerError::IOError(io::Error::new(
                                                         ErrorKind::InvalidInput,
                                                         format!(
-                                                            "The item `{}` has incorrect value.",
+                                                            "The item `{}` has an incorrect value.",
                                                             item
                                                         ),
                                                     ))
@@ -70,19 +74,41 @@ impl CPU {
                                                     ScannerError::IOError(io::Error::new(
                                                         ErrorKind::InvalidInput,
                                                         format!(
-                                                            "The item `{}` has incorrect value.",
+                                                            "The item `{}` has an incorrect value.",
                                                             item
                                                         ),
                                                     ))
                                                 })?;
 
                                                 if physical_ids.contains(&physical_id) {
-                                                    break 'cpu;
+                                                    break 'item;
                                                 }
                                             }
-                                            _ => {
-                                                item_values.push(value);
+                                            SIBLINGS_INDEX => {
+                                                siblings = value.parse().map_err(|_| {
+                                                    ScannerError::IOError(io::Error::new(
+                                                        ErrorKind::InvalidInput,
+                                                        format!(
+                                                            "The item `{}` has an incorrect value.",
+                                                            item
+                                                        ),
+                                                    ))
+                                                })?;
                                             }
+                                            CPU_CORES => {
+                                                cpu_cores = value.parse().map_err(|_| {
+                                                    ScannerError::IOError(io::Error::new(
+                                                        ErrorKind::InvalidInput,
+                                                        format!(
+                                                            "The item `{}` has an incorrect value.",
+                                                            item
+                                                        ),
+                                                    ))
+                                                })?;
+
+                                                break 'item;
+                                            }
+                                            _ => unreachable!(),
                                         }
                                     }
                                     None => {
@@ -97,57 +123,44 @@ impl CPU {
                             }
                         }
                         None => {
-                            if !item_values.is_empty() {
+                            if i == MODEL_NAME_INDEX {
+                                break 'outer;
+                            } else {
                                 return Err(ScannerError::IOError(io::Error::new(
                                     ErrorKind::UnexpectedEof,
                                     format!("The item `{}` is not found.", item),
                                 )));
-                            } else {
-                                break 'outer;
                             }
                         }
                     }
                 }
             }
 
-            if item_values.len() == items_len_dec_dec {
-                let cpu_cores: usize = item_values.pop().unwrap().parse().map_err(|_| {
-                    ScannerError::IOError(io::Error::new(
-                        ErrorKind::InvalidInput,
-                        "The item `cpu cores` has incorrect value.".to_string(),
-                    ))
-                })?;
-                let siblings: usize = item_values.pop().unwrap().parse().map_err(|_| {
-                    ScannerError::IOError(io::Error::new(
-                        ErrorKind::InvalidInput,
-                        "The item `siblings` has incorrect value.".to_string(),
-                    ))
-                })?;
+            if siblings == cpus_mhz.len() {
+                let cpu = CPU {
+                    physical_id,
+                    model_name,
+                    cpus_mhz,
+                    siblings,
+                    cpu_cores,
+                };
 
-                if siblings == cpus_mhz.len() {
-                    let model_name = item_values.pop().unwrap();
+                cpus.push(cpu);
+                physical_ids.insert(physical_id);
 
-                    let cpu = CPU {
-                        physical_id,
-                        model_name,
-                        cpus_mhz,
-                        siblings,
-                        cpu_cores,
-                    };
-
-                    cpus.push(cpu);
-                    physical_ids.insert(physical_id);
-
-                    cpus_mhz = Vec::with_capacity(1);
-                }
+                physical_id = 0;
+                model_name = String::new();
+                cpus_mhz = Vec::with_capacity(1);
+                siblings = 0;
+                cpu_cores = 0;
             }
 
             loop {
-                let line = sc.next_line()?;
+                let line_length = sc.drop_next_line()?;
 
-                match line {
-                    Some(line) => {
-                        if line.is_empty() {
+                match line_length {
+                    Some(line_length) => {
+                        if line_length == 0 {
                             break;
                         }
                     }
@@ -188,61 +201,61 @@ impl CPUStat {
                     let user = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let nice = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let system = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let idle = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let iowait = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let irq = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let softirq = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let steal = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let guest = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
                     let guest_nice = sc.next_u64()?.ok_or_else(|| {
                         ScannerError::IOError(io::Error::new(
                             ErrorKind::InvalidInput,
-                            "The item `cpu` has incorrect value.".to_string(),
+                            "The item `cpu` has an incorrect value.",
                         ))
                     })?;
 
@@ -261,14 +274,14 @@ impl CPUStat {
                 } else {
                     Err(ScannerError::IOError(io::Error::new(
                         ErrorKind::UnexpectedEof,
-                        "The item `cpu` is not found.".to_string(),
+                        "The item `cpu` is not found.",
                     )))
                 }
             }
             None => {
                 Err(ScannerError::IOError(io::Error::new(
                     ErrorKind::UnexpectedEof,
-                    "The item `cpu` is not found.".to_string(),
+                    "The item `cpu` is not found.",
                 )))
             }
         }
@@ -285,92 +298,85 @@ impl CPUStat {
             Some(label) => {
                 if label.as_str().eq("cpu") {
                     if with_average {
-                        if label.as_str().eq("cpu") {
-                            let user = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let nice = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let system = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let idle = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let iowait = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let irq = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let softirq = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let steal = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let guest = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
-                            let guest_nice = sc.next_u64()?.ok_or_else(|| {
-                                ScannerError::IOError(io::Error::new(
-                                    ErrorKind::InvalidInput,
-                                    "The item `cpu` has incorrect value.".to_string(),
-                                ))
-                            })?;
+                        let user = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let nice = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let system = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let idle = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let iowait = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let irq = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let softirq = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let steal = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let guest = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
+                        let guest_nice = sc.next_u64()?.ok_or_else(|| {
+                            ScannerError::IOError(io::Error::new(
+                                ErrorKind::InvalidInput,
+                                "The item `cpu` has an incorrect value.",
+                            ))
+                        })?;
 
-                            let cpu_stat = CPUStat {
-                                user,
-                                nice,
-                                system,
-                                idle,
-                                iowait,
-                                irq,
-                                softirq,
-                                steal,
-                                guest,
-                                guest_nice,
-                            };
+                        let cpu_stat = CPUStat {
+                            user,
+                            nice,
+                            system,
+                            idle,
+                            iowait,
+                            irq,
+                            softirq,
+                            steal,
+                            guest,
+                            guest_nice,
+                        };
 
-                            cpus_stat.push(cpu_stat);
-                        } else {
-                            return Err(ScannerError::IOError(io::Error::new(
-                                ErrorKind::UnexpectedEof,
-                                "The item `cpu` is not found.".to_string(),
-                            )));
-                        }
-                    } else if sc.next_line()?.is_none() {
+                        cpus_stat.push(cpu_stat);
+                    } else if sc.drop_next_line()?.is_none() {
                         return Err(ScannerError::IOError(io::Error::new(
                             ErrorKind::UnexpectedEof,
-                            "The format of item `cpu` is correct.".to_string(),
+                            "The format of item `cpu` is correct.",
                         )));
                     }
 
@@ -385,61 +391,61 @@ impl CPUStat {
                                     let user = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let nice = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let system = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let idle = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let iowait = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let irq = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let softirq = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let steal = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let guest = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
                                     let guest_nice = sc.next_u64()?.ok_or_else(|| {
                                         ScannerError::IOError(io::Error::new(
                                             ErrorKind::InvalidInput,
-                                            format!("The item `cpu{}` has incorrect value.", i),
+                                            format!("The item `cpu{}` has an incorrect value.", i),
                                         ))
                                     })?;
 
@@ -471,14 +477,14 @@ impl CPUStat {
                 } else {
                     return Err(ScannerError::IOError(io::Error::new(
                         ErrorKind::UnexpectedEof,
-                        "The item `cpu` is not found.".to_string(),
+                        "The item `cpu` is not found.",
                     )));
                 }
             }
             None => {
                 return Err(ScannerError::IOError(io::Error::new(
                     ErrorKind::UnexpectedEof,
-                    "The item `cpu` is not found.".to_string(),
+                    "The item `cpu` is not found.",
                 )));
             }
         }
@@ -486,7 +492,7 @@ impl CPUStat {
         if cpus_stat.is_empty() {
             return Err(ScannerError::IOError(io::Error::new(
                 ErrorKind::InvalidInput,
-                "Cannot get information of all CPUs.".to_string(),
+                "Cannot get information of all CPUs.",
             )));
         }
 
@@ -495,32 +501,29 @@ impl CPUStat {
 }
 
 impl CPUStat {
-    fn compute_percentage(pre_cpu_stat: CPUStat, cpu_stat: CPUStat) -> f64 {
-        let pre_idle = pre_cpu_stat.idle + pre_cpu_stat.iowait;
-        let idle = cpu_stat.idle + cpu_stat.iowait;
+    #[inline]
+    pub fn compute_time(&self) -> (u64, u64, u64) {
+        let idle = self.idle + self.iowait;
 
-        let pre_non_idle = pre_cpu_stat.user
-            + pre_cpu_stat.nice
-            + pre_cpu_stat.system
-            + pre_cpu_stat.irq
-            + pre_cpu_stat.softirq
-            + pre_cpu_stat.steal;
-        let non_idle = cpu_stat.user
-            + cpu_stat.nice
-            + cpu_stat.system
-            + cpu_stat.irq
-            + cpu_stat.softirq
-            + cpu_stat.steal;
+        let non_idle = self.user + self.nice + self.system + self.irq + self.softirq + self.steal;
 
-        let pre_total = pre_idle + pre_non_idle;
         let total = idle + non_idle;
 
-        let d_total = total - pre_total;
-        let d_idle = idle - pre_idle;
-
-        (d_total - d_idle) as f64 / d_total as f64
+        (non_idle, idle, total)
     }
 
+    #[inline]
+    pub fn compute_percentage(pre_cpu_stat: CPUStat, cpu_stat: CPUStat) -> f64 {
+        let (non_idle, _, total) = cpu_stat.compute_time();
+        let (pre_non_idle, _, pre_total) = pre_cpu_stat.compute_time();
+
+        let d_total = total - pre_total;
+        let d_non_idle = non_idle - pre_non_idle;
+
+        d_non_idle as f64 / d_total as f64
+    }
+
+    #[inline]
     pub fn get_average_percentage(interval: Duration) -> Result<f64, ScannerError> {
         let pre_cpu_stat = CPUStat::get_average_cpu_stat()?;
 

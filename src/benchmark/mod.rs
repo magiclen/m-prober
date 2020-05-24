@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -70,22 +72,24 @@ impl From<io::Error> for BenchmarkError {
     }
 }
 
-impl ToString for BenchmarkError {
-    fn to_string(&self) -> String {
+impl Display for BenchmarkError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            BenchmarkError::ScannerError(error) => error.to_string(),
+            BenchmarkError::ScannerError(error) => Display::fmt(error, f),
             BenchmarkError::BenchmarkError(error) => {
                 match error {
                     benchmarking::BenchmarkError::MeasurerNotMeasured => {
-                        "The measurer is not measured.".to_string()
+                        f.write_str("The measurer is not measured.")
                     }
                 }
             }
-            BenchmarkError::IOError(error) => error.to_string(),
-            BenchmarkError::NoNeedBenchmark => "There is nothing to benchmark".to_string(),
+            BenchmarkError::IOError(error) => Display::fmt(error, f),
+            BenchmarkError::NoNeedBenchmark => f.write_str("There is nothing to benchmark."),
         }
     }
 }
+
+impl Error for BenchmarkError {}
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkResult {

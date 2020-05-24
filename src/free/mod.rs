@@ -20,6 +20,7 @@ const ITEMS: [&str; 11] = [
 #[derive(Debug, Clone)]
 pub struct Mem {
     pub total: usize,
+    /// total - free - buffers - cached - total_cached; total_cached = cached + slab - s_unreclaim
     pub used: usize,
     pub free: usize,
     pub shared: usize,
@@ -31,6 +32,7 @@ pub struct Mem {
 #[derive(Debug, Clone)]
 pub struct Swap {
     pub total: usize,
+    /// swap_total - swap_free - swap_cached
     pub used: usize,
     pub free: usize,
     pub cache: usize,
@@ -46,18 +48,14 @@ impl Free {
     pub fn get_free() -> Result<Free, ScannerError> {
         let mut sc = Scanner::scan_path(MEMINFO_PATH)?;
 
-        let mut item_values = [0usize; 11];
+        let mut item_values = [0usize; ITEMS.len()];
 
         for (i, &item) in ITEMS.iter().enumerate() {
             loop {
-                let label = sc.next()?;
-
-                match label {
+                match sc.next()? {
                     Some(label) => {
-                        if label.as_str().starts_with(item) {
-                            let value = sc.next_usize()?;
-
-                            match value {
+                        if label.starts_with(item) {
+                            match sc.next_usize()? {
                                 Some(value) => {
                                     item_values[i] = value * 1024;
                                 }
@@ -70,7 +68,7 @@ impl Free {
                             }
 
                             break;
-                        } else if sc.next_line()?.is_none() {
+                        } else if sc.drop_next_line()?.is_none() {
                             return Err(ScannerError::IOError(io::Error::new(
                                 ErrorKind::UnexpectedEof,
                                 format!("The format of label `{}` is not correct.", label),

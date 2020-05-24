@@ -19,35 +19,35 @@ pub fn get_kernel_version() -> Result<String, ScannerError> {
                                 None => {
                                     Err(ScannerError::IOError(io::Error::new(
                                         ErrorKind::UnexpectedEof,
-                                        "Cannot find the kernel version.".to_string(),
+                                        "Cannot find the kernel version.",
                                     )))
                                 }
                             }
                         } else {
                             Err(ScannerError::IOError(io::Error::new(
                                 ErrorKind::InvalidInput,
-                                "The first token is not `version`.".to_string(),
+                                "The first token is not `version`.",
                             )))
                         }
                     }
                     None => {
                         Err(ScannerError::IOError(io::Error::new(
                             ErrorKind::UnexpectedEof,
-                            "Cannot find the token `version`.".to_string(),
+                            "Cannot find the token `version`.",
                         )))
                     }
                 }
             } else {
                 Err(ScannerError::IOError(io::Error::new(
                     ErrorKind::InvalidInput,
-                    "The first token is not `Linux`.".to_string(),
+                    "The first token is not `Linux`.",
                 )))
             }
         }
         None => {
             Err(ScannerError::IOError(io::Error::new(
                 ErrorKind::UnexpectedEof,
-                "Cannot find the token `Linux`.".to_string(),
+                "Cannot find the token `Linux`.",
             )))
         }
     }

@@ -2,9 +2,11 @@ use std::fmt::Write;
 use std::io::{self, ErrorKind};
 use std::time::Duration;
 
+use crate::chrono::prelude::*;
 use crate::scanner_rust::{Scanner, ScannerError};
 
 const UPTIME_PATH: &str = "/proc/uptime";
+const STAT_PATH: &str = "/proc/stat";
 
 const RTC_PATH: &str = "/proc/driver/rtc";
 const ITEMS: [&str; 2] = ["rtc_time", "rtc_date"];
@@ -99,6 +101,46 @@ pub fn format_duration(duration: Duration) -> String {
     }
 }
 
+pub fn get_btime() -> Result<DateTime<Utc>, ScannerError> {
+    let mut sc = Scanner::scan_path(STAT_PATH)?;
+
+    loop {
+        let label = sc.next()?;
+
+        match label {
+            Some(label) => {
+                if label.as_str().eq("btime") {
+                    match sc.next_u64()? {
+                        Some(btime) => {
+                            return Ok(DateTime::from_utc(
+                                NaiveDateTime::from_timestamp(btime as i64, 0),
+                                Utc,
+                            ))
+                        }
+                        None => {
+                            return Err(ScannerError::IOError(io::Error::new(
+                                ErrorKind::UnexpectedEof,
+                                "The format of item `btime` is correct.",
+                            )));
+                        }
+                    }
+                } else if sc.drop_next_line()?.is_none() {
+                    return Err(ScannerError::IOError(io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "The format of item `btime` is correct.",
+                    )));
+                }
+            }
+            None => {
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "The item `btime` is not found.",
+                )));
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RTCDateTime {
     pub rtc_time: String,
@@ -115,11 +157,9 @@ impl RTCDateTime {
             let item_len = item.len();
 
             loop {
-                let line = sc.next_line()?;
-
-                match line {
+                match sc.next_line()? {
                     Some(line) => {
-                        if line.as_str().starts_with(item) {
+                        if line.starts_with(item) {
                             match line[item_len..].find(':') {
                                 Some(colon_index) => {
                                     let item =
