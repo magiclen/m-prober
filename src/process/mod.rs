@@ -94,9 +94,9 @@ impl Process {
         let cmdline = {
             let mut data = fs::read(process_path.join("cmdline"))?;
 
-            for i in (0..data.len()).rev() {
-                if data[i] == 0 {
-                    data.remove(i);
+            for e in data.iter_mut() {
+                if *e == 0 {
+                    *e = b' ';
                 }
             }
 

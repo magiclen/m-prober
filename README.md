@@ -51,6 +51,7 @@ EXAMPLES:
   mprober process -u kb               # Show a snapshot of the current processes. Information about memory size is in KB
   mprober process --truncate 10       # Show a snapshot of the current processes with a specific truncation length to truncate user, group, program's names
   mprober process --top 10            # Show a snapshot of current top-10 (ordered by CPU and memory usage) processes
+  mprober process -t                  # Show a snapshot of the current processes with the start time of each process
   mprober process --pid-filter 3456   # Show a snapshot of the current processes which are related to a specific PID
   mprober process --user-filter user1 # Show a snapshot of the current processes which are related to a specific user
   mprober process --group-filter gp1  # Show a snapshot of the current processes which are related to a specific group

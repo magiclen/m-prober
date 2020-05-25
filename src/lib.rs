@@ -66,6 +66,7 @@ use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{terminal_size, Width};
 use users::{Group, Groups, User, Users, UsersCache};
 use validators::number::NumberGtZero;
+use chrono::SecondsFormat;
 
 use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
 use cpu_info::{CPUStat, CPU};
@@ -220,6 +221,7 @@ pub enum Mode {
         only_information: bool,
         top: Option<usize>,
         truncate: Option<usize>,
+        start_time: bool,
         user_filter: Option<String>,
         group_filter: Option<String>,
         program_filter: Option<Regex>,
@@ -334,6 +336,7 @@ impl Config {
             "process -u kb               # Show a snapshot of the current processes. Information about memory size is in KB",
             "process --truncate 10       # Show a snapshot of the current processes with a specific truncation length to truncate user, group, program's names",
             "process --top 10            # Show a snapshot of current top-10 (ordered by CPU and memory usage) processes",
+            "process -t                  # Show a snapshot of the current processes with the start time of each process",
             "process --pid-filter 3456   # Show a snapshot of the current processes which are related to a specific PID",
             "process --user-filter user1 # Show a snapshot of the current processes which are related to a specific user",
             "process --group-filter gp1  # Show a snapshot of the current processes which are related to a specific group",
@@ -573,17 +576,25 @@ impl Config {
                     .arg(
                         Arg::with_name("TOP")
                             .long("top")
-                            .help("Sets the max number of processes shown on the screen.")
+                            .help("Sets the max number of processes shown on the screen")
                             .takes_value(true)
                             .value_name("MAX_NUMBER_OF_PROCESSES"),
                     )
                     .arg(
                         Arg::with_name("TRUNCATE")
                             .long("truncate")
-                            .help("Truncates the user name, the group name and the program name of processes.")
+                            .help("Truncates the user name, the group name and the program name of processes")
                             .takes_value(true)
                             .value_name("LENGTH")
                             .default_value("7"),
+                    )
+                    .arg(
+                        Arg::with_name("START_TIME")
+                            .long("start-time")
+                            .short("t")
+                            .alias("time")
+                            .help("Shows when the progresses start")
+                            .takes_value(false),
                     )
                     .arg(
                         Arg::with_name("USER_FILTER")
@@ -942,6 +953,8 @@ impl Config {
                 None => None,
             };
 
+            let start_time = sub_matches.is_present("START_TIME");
+
             let user_filter = sub_matches.value_of("USER_FILTER").map(|s| s.to_string());
             let group_filter = sub_matches.value_of("GROUP_FILTER").map(|s| s.to_string());
 
@@ -970,6 +983,7 @@ impl Config {
                 only_information,
                 top,
                 truncate,
+                start_time,
                 user_filter,
                 group_filter,
                 program_filter,
@@ -1208,7 +1222,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         only_information,
                         Some(Duration::from_millis(DEFAULT_INTERVAL)),
                     )
-                    .map_err(|err| err.to_string())?;
+                        .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1316,7 +1330,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         mounts,
                         Some(Duration::from_millis(DEFAULT_INTERVAL)),
                     )
-                    .map_err(|err| err.to_string())?;
+                        .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1341,6 +1355,7 @@ pub fn run(config: Config) -> Result<i32, String> {
             only_information,
             top,
             truncate,
+            start_time,
             user_filter,
             group_filter,
             program_filter,
@@ -1372,13 +1387,14 @@ pub fn run(config: Config) -> Result<i32, String> {
                         unit,
                         only_information,
                         Some(Duration::from_millis(DEFAULT_INTERVAL)),
+                        start_time,
                         user_filter,
                         group_filter,
                         program_filter,
                         tty_filter,
                         pid_filter,
                     )
-                    .map_err(|err| err.to_string())?;
+                        .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1393,13 +1409,14 @@ pub fn run(config: Config) -> Result<i32, String> {
                             unit,
                             only_information,
                             Some(sleep_interval),
+                            start_time,
                             user_filter,
                             group_filter,
                             program_filter,
                             tty_filter,
                             pid_filter,
                         )
-                        .map_err(|err| err.to_string())?;
+                            .map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
@@ -1409,13 +1426,14 @@ pub fn run(config: Config) -> Result<i32, String> {
                         unit,
                         only_information,
                         None,
+                        start_time,
                         user_filter,
                         group_filter,
                         program_filter,
                         tty_filter,
                         pid_filter,
                     )
-                    .map_err(|err| err.to_string())?;
+                        .map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -2793,6 +2811,7 @@ fn draw_process(
     unit: Option<ByteUnit>,
     only_information: bool,
     monitor: Option<Duration>,
+    start_time: bool,
     user_filter: Option<&str>,
     group_filter: Option<&str>,
     program_filter: Option<&Regex>,
@@ -2930,6 +2949,7 @@ fn draw_process(
     let mut vsz: Vec<String> = Vec::with_capacity(processes_len);
     let mut rss: Vec<String> = Vec::with_capacity(processes_len);
     let mut anon: Vec<String> = Vec::with_capacity(processes_len);
+    let mut thd: Vec<String> = Vec::with_capacity(processes_len);
     let mut tty: Vec<&str> = Vec::with_capacity(processes_len);
     let mut user: Vec<Arc<User>> = Vec::with_capacity(processes_len);
     let mut group: Vec<Arc<Group>> = Vec::with_capacity(processes_len);
@@ -2961,6 +2981,8 @@ fn draw_process(
 
         tty.push(process.tty.as_deref().unwrap_or(""));
 
+        thd.push(process.threads.to_string());
+
         // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
         user.push(
             user_cache
@@ -2984,6 +3006,7 @@ fn draw_process(
     let vsz_len = vsz.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
     let rss_len = rss.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
     let anon_len = anon.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let thd_len = thd.iter().map(|s| s.len()).max().map(|s| s.max(3)).unwrap_or(0);
     let tty_len = tty.iter().map(|s| s.len()).max().map(|s| s.max(4)).unwrap_or(0);
     let user_len = user
         .iter()
@@ -3094,6 +3117,18 @@ fn draw_process(
         write!(&mut stdout, "ANON")?; // 4
         width += 4;
 
+        if width + 1 + thd_len > terminal_width {
+            break;
+        }
+
+        for _ in 2..thd_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        write!(&mut stdout, "THD")?; // 3
+        width += 3;
+
         if width + 1 + tty_len > terminal_width {
             break;
         }
@@ -3154,6 +3189,20 @@ fn draw_process(
             width += 1;
         }
 
+        if start_time {
+            if width + 21 > terminal_width {
+                break;
+            }
+
+            write!(&mut stdout, " START")?; // 6
+            width += 6;
+
+            for _ in 5..20 {
+                write!(&mut stdout, " ")?; // 1
+                width += 1;
+            }
+        }
+
         if width + 8 > terminal_width {
             break;
         }
@@ -3172,6 +3221,7 @@ fn draw_process(
     let mut rss_iter = rss.into_iter();
     let mut tty_iter = tty.into_iter();
     let mut anon_iter = anon.into_iter();
+    let mut thd_iter = thd.into_iter();
     let mut user_iter = user.into_iter();
     let mut group_iter = group.into_iter();
     let mut program_iter = program.into_iter();
@@ -3295,6 +3345,23 @@ fn draw_process(
 
         stdout.write_all(anon.as_bytes())?;
         width += anon.len();
+
+        if width + 1 + thd_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let thd = thd_iter.next().unwrap();
+
+        for _ in 0..=(thd_len - thd.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        stdout.write_all(thd.as_bytes())?;
+        width += thd.len();
 
         if width + 1 + tty_len > terminal_width {
             stdout.set_color(&*COLOR_DEFAULT)?;
@@ -3435,6 +3502,21 @@ fn draw_process(
         for _ in 0..(state_len - state.len()) {
             write!(&mut stdout, " ")?; // 1
             width += 1;
+        }
+
+        if start_time {
+            if width + 21 > terminal_width {
+                stdout.set_color(&*COLOR_DEFAULT)?;
+                writeln!(&mut stdout)?;
+
+                continue;
+            }
+
+            write!(&mut stdout, " ")?; // 1
+
+            stdout.write_all(process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true).as_bytes())?;
+
+            width += 21;
         }
 
         if width + 8 > terminal_width {
