@@ -58,6 +58,7 @@ use std::thread;
 use std::time::Duration;
 
 use byte_unit::{Byte, ByteUnit};
+use chrono::SecondsFormat;
 use clap::{App, Arg, SubCommand};
 use getch::Getch;
 use regex::Regex;
@@ -66,7 +67,6 @@ use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{terminal_size, Width};
 use users::{Group, Groups, User, Users, UsersCache};
 use validators::number::NumberGtZero;
-use chrono::SecondsFormat;
 
 use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
 use cpu_info::{CPUStat, CPU};
@@ -1222,7 +1222,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         only_information,
                         Some(Duration::from_millis(DEFAULT_INTERVAL)),
                     )
-                        .map_err(|err| err.to_string())?;
+                    .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1330,7 +1330,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         mounts,
                         Some(Duration::from_millis(DEFAULT_INTERVAL)),
                     )
-                        .map_err(|err| err.to_string())?;
+                    .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1394,7 +1394,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         tty_filter,
                         pid_filter,
                     )
-                        .map_err(|err| err.to_string())?;
+                    .map_err(|err| err.to_string())?;
 
                     let sleep_interval = monitor;
 
@@ -1416,7 +1416,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                             tty_filter,
                             pid_filter,
                         )
-                            .map_err(|err| err.to_string())?;
+                        .map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
@@ -1433,7 +1433,7 @@ pub fn run(config: Config) -> Result<i32, String> {
                         tty_filter,
                         pid_filter,
                     )
-                        .map_err(|err| err.to_string())?;
+                    .map_err(|err| err.to_string())?;
                 }
             }
         }
@@ -3514,7 +3514,9 @@ fn draw_process(
 
             write!(&mut stdout, " ")?; // 1
 
-            stdout.write_all(process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true).as_bytes())?;
+            stdout.write_all(
+                process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true).as_bytes(),
+            )?;
 
             width += 21;
         }
