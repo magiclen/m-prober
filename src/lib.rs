@@ -20,6 +20,7 @@ extern crate rand;
 extern crate serde_json;
 extern crate benchmarking;
 extern crate chrono;
+extern crate page_size;
 extern crate regex;
 extern crate users;
 
@@ -46,10 +47,13 @@ mod rocket_mounts;
 mod time;
 mod volume;
 
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::env;
 use std::io::{self, ErrorKind, Write};
 use std::path::Path;
 use std::process as std_process;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -60,7 +64,7 @@ use regex::Regex;
 use scanner_rust::ScannerError;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{terminal_size, Width};
-use users::{Users, UsersCache};
+use users::{Group, Groups, User, Users, UsersCache};
 use validators::number::NumberGtZero;
 
 use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
@@ -214,9 +218,13 @@ pub enum Mode {
         monitor: Option<Duration>,
         unit: Option<ByteUnit>,
         only_information: bool,
+        top: Option<usize>,
+        truncate: Option<usize>,
         user_filter: Option<String>,
+        group_filter: Option<String>,
         program_filter: Option<Regex>,
         tty_filter: Option<Regex>,
+        pid_filter: Option<u32>,
     },
     Web {
         monitor: Duration,
@@ -318,6 +326,19 @@ impl Config {
             "volume -u kb                # Show current volume stats in KB",
             "volume -i                   # Only show volume information without I/O rates",
             "volume --mounts             # Show current volume stats including mount points",
+            "process                     # Show a snapshot of the current processes",
+            "process -m 1000             # Show a snapshot of the current processes and refresh every 1000 milliseconds",
+            "process -p                  # Show a snapshot of the current processes without colors",
+            "process -l                  # Show a snapshot of the current processes with darker colors (fitting in with light themes)",
+            "process -i                  # Show a snapshot of the current processes but not including CPU usage",
+            "process -u kb               # Show a snapshot of the current processes. Information about memory size is in KB",
+            "process --truncate 10       # Show a snapshot of the current processes with a specific truncation length to truncate user, group, program's names",
+            "process --top 10            # Show a snapshot of current top-10 (ordered by CPU and memory usage) processes",
+            "process --pid-filter 3456   # Show a snapshot of the current processes which are related to a specific PID",
+            "process --user-filter user1 # Show a snapshot of the current processes which are related to a specific user",
+            "process --group-filter gp1  # Show a snapshot of the current processes which are related to a specific group",
+            "process --tty-filter tty    # Show a snapshot of the current processes which are related to specific tty names matched by a regex",
+            "process --program-filter ab # Show a snapshot of the current processes which are related to specific program names or commands matched by a regex",
             "web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 3 seconds",
             "web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds",
             "web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer",
@@ -550,22 +571,59 @@ impl Config {
                             .help("Shows only information about processes without CPU usage"),
                     )
                     .arg(
+                        Arg::with_name("TOP")
+                            .long("top")
+                            .help("Sets the max number of processes shown on the screen.")
+                            .takes_value(true)
+                            .value_name("MAX_NUMBER_OF_PROCESSES"),
+                    )
+                    .arg(
+                        Arg::with_name("TRUNCATE")
+                            .long("truncate")
+                            .help("Truncates the user name, the group name and the program name of processes.")
+                            .takes_value(true)
+                            .value_name("LENGTH")
+                            .default_value("7"),
+                    )
+                    .arg(
                         Arg::with_name("USER_FILTER")
                             .long("user-filter")
+                            .alias("filter-user")
                             .help("Shows only processes which are related to a specific user")
-                            .takes_value(true),
+                            .takes_value(true)
+                            .value_name("USER_NAME"),
+                    )
+                    .arg(
+                        Arg::with_name("GROUP_FILTER")
+                            .long("group-filter")
+                            .alias("filter-group")
+                            .help("Shows only processes which are related to a specific group")
+                            .takes_value(true)
+                            .value_name("GROUP_NAME"),
                     )
                     .arg(
                         Arg::with_name("PROGRAM_FILTER")
                             .long("program-filter")
+                            .alias("filter-program")
                             .help("Shows only processes which are related to specific programs or commands matched by a regex")
-                            .takes_value(true),
+                            .takes_value(true)
+                            .value_name("REGEX"),
                     )
                     .arg(
                         Arg::with_name("TTY_FILTER")
                             .long("tty-filter")
+                            .alias("filter-tty")
                             .help("Shows only processes which are run on specific TTY/PTS matched by a regex")
-                            .takes_value(true),
+                            .takes_value(true)
+                            .value_name("REGEX"),
+                    )
+                    .arg(
+                        Arg::with_name("PID_FILTER")
+                            .long("pid-filter")
+                            .alias("filter-pid")
+                            .help("Shows only processes which are related to a specific PID")
+                            .takes_value(true)
+                            .value_name("PID"),
                     )
                     .after_help("Enjoy it! https://magiclen.org"),
             )
@@ -866,7 +924,26 @@ impl Config {
 
             let only_information = sub_matches.is_present("ONLY_INFORMATION");
 
+            let top = match sub_matches.value_of("TOP") {
+                Some(top) => Some(top.parse::<usize>().map_err(|err| err.to_string())?),
+                None => None,
+            };
+
+            let truncate = match sub_matches.value_of("TRUNCATE") {
+                Some(truncate) => {
+                    let truncate = truncate.parse::<usize>().map_err(|err| err.to_string())?;
+
+                    if truncate > 0 {
+                        Some(truncate)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
             let user_filter = sub_matches.value_of("USER_FILTER").map(|s| s.to_string());
+            let group_filter = sub_matches.value_of("GROUP_FILTER").map(|s| s.to_string());
 
             let program_filter = match sub_matches.value_of("PROGRAM_FILTER") {
                 Some(program_filter) => {
@@ -876,19 +953,28 @@ impl Config {
             };
 
             let tty_filter = match sub_matches.value_of("TTY_FILTER") {
-                Some(program_filter) => {
-                    Some(Regex::new(program_filter).map_err(|err| err.to_string())?)
-                }
+                Some(tty_filter) => Some(Regex::new(tty_filter).map_err(|err| err.to_string())?),
                 None => None,
             };
+
+            let pid_filter = match sub_matches.value_of("PID_FILTER") {
+                Some(pid_filter) => Some(pid_filter.parse::<u32>().map_err(|err| err.to_string())?),
+                None => None,
+            };
+
+            set_color_mode!(sub_matches);
 
             Mode::Process {
                 monitor,
                 unit,
                 only_information,
+                top,
+                truncate,
                 user_filter,
+                group_filter,
                 program_filter,
                 tty_filter,
+                pid_filter,
             }
         } else if let Some(sub_matches) = matches.subcommand_matches("web") {
             let monitor = match sub_matches.value_of("MONITOR") {
@@ -1253,11 +1339,16 @@ pub fn run(config: Config) -> Result<i32, String> {
             monitor,
             unit,
             only_information,
+            top,
+            truncate,
             user_filter,
+            group_filter,
             program_filter,
             tty_filter,
+            pid_filter,
         } => {
             let user_filter = user_filter.as_deref();
+            let group_filter = group_filter.as_deref();
             let program_filter = program_filter.as_ref();
             let tty_filter = tty_filter.as_ref();
 
@@ -1276,12 +1367,16 @@ pub fn run(config: Config) -> Result<i32, String> {
                     });
 
                     draw_process(
+                        top,
+                        truncate,
                         unit,
                         only_information,
                         Some(Duration::from_millis(DEFAULT_INTERVAL)),
                         user_filter,
+                        group_filter,
                         program_filter,
                         tty_filter,
+                        pid_filter,
                     )
                     .map_err(|err| err.to_string())?;
 
@@ -1293,24 +1388,32 @@ pub fn run(config: Config) -> Result<i32, String> {
                         }
 
                         draw_process(
+                            top,
+                            truncate,
                             unit,
                             only_information,
                             Some(sleep_interval),
                             user_filter,
+                            group_filter,
                             program_filter,
                             tty_filter,
+                            pid_filter,
                         )
                         .map_err(|err| err.to_string())?;
                     }
                 }
                 None => {
                     draw_process(
+                        top,
+                        truncate,
                         unit,
                         only_information,
                         None,
                         user_filter,
+                        group_filter,
                         program_filter,
                         tty_filter,
+                        pid_filter,
                     )
                     .map_err(|err| err.to_string())?;
                 }
@@ -2683,13 +2786,18 @@ fn draw_volume(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_process(
+    top: Option<usize>,
+    truncate: Option<usize>,
     unit: Option<ByteUnit>,
     only_information: bool,
     monitor: Option<Duration>,
     user_filter: Option<&str>,
+    group_filter: Option<&str>,
     program_filter: Option<&Regex>,
     tty_filter: Option<&Regex>,
+    pid_filter: Option<u32>,
 ) -> Result<(), ScannerError> {
     let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
@@ -2704,12 +2812,12 @@ fn draw_process(
     }
 
     let terminal_width = if let Some((Width(width), _)) = terminal_size() {
-        (width as usize).max(MIN_TERMINAL_WIDTH)
+        width as usize
     } else {
         DEFAULT_TERMINAL_WIDTH
     };
 
-    let mut user_cache = UsersCache::new();
+    let user_cache = UsersCache::new();
 
     let uid_filter = match user_filter {
         Some(user_filter) => {
@@ -2726,20 +2834,636 @@ fn draw_process(
         None => None,
     };
 
-    let processes_with_stats =
-        Process::get_processes_with_stats(uid_filter, program_filter, tty_filter)?;
+    let gid_filter = match group_filter {
+        Some(group_filter) => {
+            match user_cache.get_group_by_name(group_filter) {
+                Some(group) => Some(group.gid()),
+                None => {
+                    return Err(ScannerError::IOError(io::Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("Cannot find the group `{}`.", group_filter),
+                    )));
+                }
+            }
+        }
+        None => None,
+    };
 
-    if only_information {
-        println!("{:#?}", processes_with_stats);
+    let mut processes_with_stats = Process::get_processes_with_stats(
+        uid_filter,
+        gid_filter,
+        program_filter,
+        tty_filter,
+        pid_filter,
+    )?;
+
+    let (processes, percentage): (Vec<Process>, BTreeMap<u32, f64>) = if only_information {
+        processes_with_stats.sort_by(|(a, _), (b, _)| b.vsz.cmp(&a.vsz));
+
+        if let Some(top) = top {
+            if top < processes_with_stats.len() {
+                unsafe {
+                    processes_with_stats.set_len(top);
+                }
+            }
+        }
+
+        (processes_with_stats.into_iter().map(|(process, _)| process).collect(), BTreeMap::new())
     } else {
-        let volumes_with_speed =
+        let mut processes_with_percentage =
             Process::get_processes_with_percentage(processes_with_stats, match monitor {
                 Some(monitor) => monitor,
                 None => Duration::from_millis(DEFAULT_INTERVAL),
             })?;
+
+        processes_with_percentage.sort_by(
+            |(process_a, percentage_a), (process_b, percentage_b)| {
+                let percentage_a = *percentage_a;
+                let percentage_b = *percentage_b;
+
+                if percentage_a > 0.01 {
+                    if percentage_a > percentage_b {
+                        Ordering::Less
+                    } else if percentage_b > 0.01
+                    // percentage_a == percentage_b hardly happens
+                    {
+                        Ordering::Greater
+                    } else {
+                        process_b.vsz.cmp(&process_a.vsz)
+                    }
+                } else if percentage_b > 0.01 {
+                    if percentage_b > percentage_a {
+                        Ordering::Greater
+                    } else {
+                        process_b.vsz.cmp(&process_a.vsz)
+                    }
+                } else {
+                    process_b.vsz.cmp(&process_a.vsz)
+                }
+            },
+        );
+
+        if let Some(top) = top {
+            if top < processes_with_percentage.len() {
+                unsafe {
+                    processes_with_percentage.set_len(top);
+                }
+            }
+        }
+
+        let mut processes = Vec::with_capacity(processes_with_percentage.len());
+        let mut processes_percentage = BTreeMap::new();
+
+        for (process, percentage) in processes_with_percentage {
+            processes_percentage.insert(process.pid, percentage);
+
+            processes.push(process);
+        }
+
+        (processes, processes_percentage)
+    };
+
+    let processes_len = processes.len();
+
+    let mut pid: Vec<String> = Vec::with_capacity(processes_len);
+    let mut ppid: Vec<String> = Vec::with_capacity(processes_len);
+    let mut vsz: Vec<String> = Vec::with_capacity(processes_len);
+    let mut rss: Vec<String> = Vec::with_capacity(processes_len);
+    let mut anon: Vec<String> = Vec::with_capacity(processes_len);
+    let mut tty: Vec<&str> = Vec::with_capacity(processes_len);
+    let mut user: Vec<Arc<User>> = Vec::with_capacity(processes_len);
+    let mut group: Vec<Arc<Group>> = Vec::with_capacity(processes_len);
+    let mut program: Vec<&str> = Vec::with_capacity(processes_len);
+    let mut state: Vec<&'static str> = Vec::with_capacity(processes_len);
+
+    for process in processes.iter() {
+        pid.push(process.pid.to_string());
+        ppid.push(process.ppid.to_string());
+
+        let (p_vsz, p_rss, p_anon) = (
+            Byte::from_bytes(process.vsz as u128),
+            Byte::from_bytes(process.rss as u128),
+            Byte::from_bytes(process.rss_anon as u128),
+        );
+
+        match unit {
+            Some(byte_unit) => {
+                vsz.push(p_vsz.get_adjusted_unit(byte_unit).format(1));
+                rss.push(p_rss.get_adjusted_unit(byte_unit).format(1));
+                anon.push(p_anon.get_adjusted_unit(byte_unit).format(1));
+            }
+            None => {
+                vsz.push(p_vsz.get_appropriate_unit(true).format(1));
+                rss.push(p_rss.get_appropriate_unit(true).format(1));
+                anon.push(p_anon.get_appropriate_unit(true).format(1));
+            }
+        }
+
+        tty.push(process.tty.as_deref().unwrap_or(""));
+
+        // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
+        user.push(
+            user_cache
+                .get_user_by_uid(process.effective_uid)
+                .unwrap_or_else(|| Arc::new(User::new(0, "systemd?", 0))),
+        );
+        group.push(
+            user_cache
+                .get_group_by_gid(process.effective_gid)
+                .unwrap_or_else(|| Arc::new(Group::new(0, "systemd?"))),
+        );
+
+        program.push(process.program.as_str());
+        state.push(process.state.as_str());
     }
 
-    unimplemented!();
+    let truncate_inc = truncate.map(|t| t + 1).unwrap_or(usize::max_value());
+
+    let pid_len = pid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let ppid_len = ppid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let vsz_len = vsz.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let rss_len = rss.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let anon_len = anon.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let tty_len = tty.iter().map(|s| s.len()).max().map(|s| s.max(4)).unwrap_or(0);
+    let user_len = user
+        .iter()
+        .map(|user| user.name().len())
+        .max()
+        .map(|s| s.min(truncate_inc).max(4))
+        .unwrap_or(truncate_inc);
+    let group_len = group
+        .iter()
+        .map(|group| group.name().len())
+        .max()
+        .map(|s| s.min(truncate_inc).max(5))
+        .unwrap_or(truncate_inc);
+    let program_len = program
+        .iter()
+        .map(|s| s.len())
+        .max()
+        .map(|s| s.min(truncate_inc).max(7))
+        .unwrap_or(truncate_inc);
+    let state_len = state.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
+
+    #[allow(clippy::never_loop)]
+    loop {
+        let mut width = 0;
+
+        stdout.set_color(&*COLOR_LABEL)?;
+
+        if width + pid_len > terminal_width {
+            break;
+        }
+
+        for _ in 3..pid_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        write!(&mut stdout, "PID")?; // 3
+        width += 3;
+
+        if width + 1 + ppid_len > terminal_width {
+            break;
+        }
+
+        for _ in 3..ppid_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        write!(&mut stdout, "PPID")?; // 4
+        width += 4;
+
+        if width + 5 > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, "   PR")?; // 5
+        width += 5;
+
+        if width + 4 > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, "  NI")?; // 4
+        width += 4;
+
+        if !only_information {
+            if width + 5 > terminal_width {
+                break;
+            }
+
+            write!(&mut stdout, " %CPU")?; // 5
+            width += 5;
+        }
+
+        if width + 1 + vsz_len > terminal_width {
+            break;
+        }
+
+        for _ in 2..vsz_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        write!(&mut stdout, "VSZ")?; // 3
+        width += 3;
+
+        if width + 1 + rss_len > terminal_width {
+            break;
+        }
+
+        for _ in 2..rss_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        write!(&mut stdout, "RSS")?; // 3
+        width += 3;
+
+        if width + 1 + anon_len > terminal_width {
+            break;
+        }
+
+        for _ in 3..anon_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        write!(&mut stdout, "ANON")?; // 4
+        width += 4;
+
+        if width + 1 + tty_len > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, " TTY")?; // 4
+        width += 4;
+
+        for _ in 3..tty_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 1 + user_len > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, " USER")?; // 5
+        width += 5;
+
+        for _ in 4..user_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 1 + group_len > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, " GROUP")?; // 6
+        width += 6;
+
+        for _ in 5..group_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 1 + program_len > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, " PROGRAM")?; // 8
+        width += 8;
+
+        for _ in 7..program_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 1 + state_len > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, " STATE")?; // 6
+        width += 6;
+
+        for _ in 5..state_len {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 8 > terminal_width {
+            break;
+        }
+
+        write!(&mut stdout, " COMMAND")?; // 8
+
+        break;
+    }
+
+    stdout.set_color(&*COLOR_DEFAULT)?;
+    writeln!(&mut stdout)?;
+
+    let mut pid_iter = pid.into_iter();
+    let mut ppid_iter = ppid.into_iter();
+    let mut vsz_iter = vsz.into_iter();
+    let mut rss_iter = rss.into_iter();
+    let mut tty_iter = tty.into_iter();
+    let mut anon_iter = anon.into_iter();
+    let mut user_iter = user.into_iter();
+    let mut group_iter = group.into_iter();
+    let mut program_iter = program.into_iter();
+    let mut state_iter = state.into_iter();
+
+    for process in processes.iter() {
+        let mut width = 0;
+
+        if width + pid_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let pid = pid_iter.next().unwrap();
+
+        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        write!(&mut stdout, "{1:>0$}", pid_len, pid)?;
+        width += pid_len;
+
+        if width + 1 + ppid_len > terminal_width {
+            continue;
+        }
+
+        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+
+        let ppid = ppid_iter.next().unwrap();
+
+        for _ in 0..=(ppid_len - ppid.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        stdout.write_all(ppid.as_bytes())?;
+        width += ppid.len();
+
+        if width + 5 > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        if let Some(real_time_priority) = process.real_time_priority {
+            write!(&mut stdout, "{:>5}", format!("*{}", real_time_priority))?;
+        } else {
+            write!(&mut stdout, "{:>5}", process.priority)?;
+        }
+        width += 5;
+
+        if width + 4 > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        write!(&mut stdout, "{:>4}", process.nice)?;
+        width += 4;
+
+        if !only_information {
+            if width + 5 > terminal_width {
+                stdout.set_color(&*COLOR_DEFAULT)?;
+                writeln!(&mut stdout)?;
+
+                continue;
+            }
+
+            write!(&mut stdout, " {:>4.1}", percentage.get(&process.pid).unwrap() * 100.0)?;
+            width += 5;
+        }
+
+        if width + 1 + vsz_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let vsz = vsz_iter.next().unwrap();
+
+        for _ in 0..=(vsz_len - vsz.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        stdout.write_all(vsz.as_bytes())?;
+        width += vsz.len();
+
+        if width + 1 + rss_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let rss = rss_iter.next().unwrap();
+
+        for _ in 0..=(rss_len - rss.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        stdout.write_all(rss.as_bytes())?;
+        width += rss.len();
+
+        if width + 1 + anon_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let anon = anon_iter.next().unwrap();
+
+        for _ in 0..=(anon_len - anon.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        stdout.write_all(anon.as_bytes())?;
+        width += anon.len();
+
+        if width + 1 + tty_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let tty = tty_iter.next().unwrap();
+
+        write!(&mut stdout, " ")?; // 1
+        width += 1;
+
+        stdout.write_all(tty.as_bytes())?;
+        width += tty.len();
+
+        for _ in 0..(tty_len - tty.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 1 + user_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let user = user_iter.next().unwrap();
+
+        write!(&mut stdout, " ")?; // 1
+        width += 1;
+
+        {
+            let s = user.name().to_str().unwrap();
+
+            if s.len() > truncate_inc {
+                stdout.write_all(s[..(truncate_inc - 1)].as_bytes())?;
+                write!(&mut stdout, "+")?; // 1
+                width += truncate_inc;
+
+                for _ in truncate_inc..4 {
+                    write!(&mut stdout, " ")?; // 1
+                    width += 1;
+                }
+            } else {
+                stdout.write_all(s.as_bytes())?;
+                width += s.len();
+
+                for _ in 0..(user_len - s.len()) {
+                    write!(&mut stdout, " ")?; // 1
+                    width += 1;
+                }
+            }
+        }
+
+        if width + 1 + group_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let group = group_iter.next().unwrap();
+
+        write!(&mut stdout, " ")?; // 1
+        width += 1;
+
+        {
+            let s = group.name().to_str().unwrap();
+
+            if s.len() > truncate_inc {
+                stdout.write_all(s[..(truncate_inc - 1)].as_bytes())?;
+                write!(&mut stdout, "+")?; // 1
+                width += truncate_inc;
+
+                for _ in truncate_inc..5 {
+                    write!(&mut stdout, " ")?; // 1
+                    width += 1;
+                }
+            } else {
+                stdout.write_all(s.as_bytes())?;
+                width += s.len();
+
+                for _ in 0..(group_len - s.len()) {
+                    write!(&mut stdout, " ")?; // 1
+                    width += 1;
+                }
+            }
+        }
+
+        if width + 1 + program_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let program = program_iter.next().unwrap();
+
+        write!(&mut stdout, " ")?; // 1
+        width += 1;
+
+        if program.len() > truncate_inc {
+            stdout.write_all(program[..(truncate_inc - 1)].as_bytes())?;
+            write!(&mut stdout, "+")?; // 1
+            width += truncate_inc;
+
+            for _ in truncate_inc..7 {
+                write!(&mut stdout, " ")?; // 1
+                width += 1;
+            }
+        } else {
+            stdout.write_all(program.as_bytes())?;
+            width += program.len();
+
+            for _ in 0..(program_len - program.len()) {
+                write!(&mut stdout, " ")?; // 1
+                width += 1;
+            }
+        }
+
+        if width + 1 + state_len > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        let state = state_iter.next().unwrap();
+
+        write!(&mut stdout, " ")?; // 1
+        width += 1;
+
+        stdout.write_all(state.as_bytes())?;
+        width += state.len();
+
+        for _ in 0..(state_len - state.len()) {
+            write!(&mut stdout, " ")?; // 1
+            width += 1;
+        }
+
+        if width + 8 > terminal_width {
+            stdout.set_color(&*COLOR_DEFAULT)?;
+            writeln!(&mut stdout)?;
+
+            continue;
+        }
+
+        write!(&mut stdout, " ")?; // 1
+        width += 1;
+
+        let remain_width = terminal_width - width;
+
+        if process.cmdline.len() > remain_width {
+            let cmdline =
+                String::from_utf8_lossy(&process.cmdline.as_bytes()[..(remain_width - 1)]);
+
+            stdout.write_all(cmdline.as_bytes())?;
+            write!(&mut stdout, "+")?; // 1
+        } else {
+            stdout.write_all(process.cmdline.as_bytes())?;
+        }
+
+        stdout.set_color(&*COLOR_DEFAULT)?;
+        writeln!(&mut stdout)?;
+    }
+
+    output.print(&stdout)?;
 
     Ok(())
 }

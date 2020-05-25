@@ -3,7 +3,7 @@ M Prober
 
 [![Build Status](https://travis-ci.org/magiclen/m-prober.svg?branch=master)](https://travis-ci.org/magiclen/m-prober)
 
-This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces and block devices. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs.
+This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs.
 
 ## Help
 
@@ -43,10 +43,23 @@ EXAMPLES:
   mprober volume -u kb                # Show current volume stats in KB
   mprober volume -i                   # Only show volume information without I/O rates
   mprober volume --mounts             # Show current volume stats including mount points
+  mprober process                     # Show a snapshot of the current processes
+  mprober process -m 1000             # Show a snapshot of the current processes and refresh every 1000 milliseconds
+  mprober process -p                  # Show a snapshot of the current processes without colors
+  mprober process -l                  # Show a snapshot of the current processes with darker colors (fitting in with light themes)
+  mprober process -i                  # Show a snapshot of the current processes but not including CPU usage
+  mprober process -u kb               # Show a snapshot of the current processes. Information about memory size is in KB
+  mprober process --truncate 10       # Show a snapshot of the current processes with a specific truncation length to truncate user, group, program's names
+  mprober process --top 10            # Show a snapshot of current top-10 (ordered by CPU and memory usage) processes
+  mprober process --pid-filter 3456   # Show a snapshot of the current processes which are related to a specific PID
+  mprober process --user-filter user1 # Show a snapshot of the current processes which are related to a specific user
+  mprober process --group-filter gp1  # Show a snapshot of the current processes which are related to a specific group
+  mprober process --tty-filter tty    # Show a snapshot of the current processes which are related to specific tty names matched by a regex
+  mprober process --program-filter ab # Show a snapshot of the current processes which are related to specific program names or commands matched by a regex
   mprober web                         # Start a HTTP service on port 8000 to monitor this computer. The default time interval is 3 seconds
   mprober web -m 2                    # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds
   mprober web -p 7777                 # Start a HTTP service on port 7777 to monitor this computer
-  mprober --addr 127.0.0.1            # Start a HTTP service on 127.0.0.1:8000 to monitor this computer
+  mprober web --addr 127.0.0.1        # Start a HTTP service on 127.0.0.1:8000 to monitor this computer
   mprober web -a auth_key             # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key
   mprober web --only-api              # Start a HTTP service on port 8000 to serve only HTTP APIs
   mprober benchmark                   # Run benchmarks
@@ -69,6 +82,7 @@ SUBCOMMANDS:
     memory       Shows memory stats
     network      Shows network stats
     volume       Shows volume stats
+    process      Shows process stats
     web          Starts a HTTP service to monitor this computer
     benchmark    Runs benchmarks to measure the performance of this environment
     help         Prints this message or the help of the given subcommand(s)
@@ -613,8 +627,7 @@ Also, you may want to disable the web page. Just add a `--only-api` flag.
 
 ## TODO
 
-1. Process snapshot (like the `ps` command)
-1. Terminal monitor (like the `top` command)
+1. Process snapshot (HTTP, documentation)
 1. Database Detection
 1. Benchmark (networks)
 

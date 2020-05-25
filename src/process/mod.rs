@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::{self, ErrorKind};
+use std::mem::replace;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
@@ -22,15 +24,21 @@ pub struct Process {
     pub effective_gid: u32,
     pub state: ProcessState,
     pub ppid: u32,
+    pub program: String,
     pub cmdline: String,
     pub tty: Option<String>,
     pub priority: i8,
+    pub real_time_priority: Option<u8>,
     pub nice: i8,
     pub threads: usize,
     /// Virtual Set Size (VIRT)
     pub vsz: usize,
     /// Resident Set Size (RES)
     pub rss: usize,
+    /// Resident Shared Size (SHR)
+    pub rss_shared: usize,
+    /// Resident Anonymous Memory
+    pub rss_anon: usize,
     pub start_time: DateTime<Utc>,
 }
 
@@ -53,6 +61,7 @@ impl Process {
         pid: u32,
         process_path: P,
         uid_filter: Option<u32>,
+        gid_filter: Option<u32>,
         program_filter: Option<&Regex>,
         tty_filter: Option<&Regex>,
     ) -> Result<Option<(Process, ProcessStat)>, ScannerError> {
@@ -72,7 +81,27 @@ impl Process {
             }
         }
 
-        let cmdline = fs::read_to_string(process_path.join("cmdline"))?;
+        if let Some(gid_filter) = gid_filter {
+            if status.real_gid != gid_filter
+                && status.effective_gid != gid_filter
+                && status.saved_set_gid != gid_filter
+                && status.fs_gid != gid_filter
+            {
+                return Ok(None);
+            }
+        }
+
+        let cmdline = {
+            let mut data = fs::read(process_path.join("cmdline"))?;
+
+            for i in (0..data.len()).rev() {
+                if data[i] == 0 {
+                    data.remove(i);
+                }
+            }
+
+            unsafe { String::from_utf8_unchecked(data) }
+        };
 
         if let Some(program_filter) = program_filter {
             if !program_filter.is_match(&cmdline) {
@@ -80,7 +109,7 @@ impl Process {
             }
         }
 
-        let stat = ProcessStat::get_process_stat(pid)?;
+        let mut stat = ProcessStat::get_process_stat(pid)?;
 
         if !program_filter_match {
             if let Some(program_filter) = program_filter {
@@ -94,6 +123,7 @@ impl Process {
         let effective_gid = status.effective_gid;
         let state = stat.state;
         let ppid = stat.ppid;
+        let program = replace(&mut stat.comm, String::new());
 
         let tty = {
             match stat.tty_nr_major {
@@ -121,10 +151,17 @@ impl Process {
         }
 
         let priority = stat.priority;
+        let real_time_priority = if stat.rt_priority > 0 {
+            Some(stat.rt_priority)
+        } else {
+            None
+        };
         let nice = stat.nice;
         let threads = stat.num_threads;
         let vsz = stat.vsize;
         let rss = stat.rss;
+        let rss_shared = stat.shared;
+        let rss_anon = stat.rss_anon;
 
         let start_time = time::get_btime()?
             + chrono::Duration::from_std(Duration::from_millis(stat.starttime)).unwrap();
@@ -135,51 +172,131 @@ impl Process {
             effective_gid,
             state,
             ppid,
+            program,
             cmdline,
             tty,
             priority,
+            real_time_priority,
             nice,
             threads,
             start_time,
             vsz,
             rss,
+            rss_shared,
+            rss_anon,
         };
 
         Ok(Some((process, stat)))
     }
 
-    #[inline]
-    pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), ScannerError> {
-        let process_path = Path::new("/proc").join(pid.to_string());
-
-        Process::get_process_with_stat_inner(pid, process_path, None, None, None)
-            .map(|o| o.unwrap())
-    }
+    // #[inline]
+    // pub fn get_process_with_stat(pid: u32) -> Result<(Process, ProcessStat), ScannerError> {
+    //     let process_path = Path::new("/proc").join(pid.to_string());
+    //
+    //     Process::get_process_with_stat_inner(pid, process_path, None, None, None, None)
+    //         .map(|o| o.unwrap())
+    // }
 
     pub fn get_processes_with_stats(
         uid_filter: Option<u32>,
+        gid_filter: Option<u32>,
         program_filter: Option<&Regex>,
         tty_filter: Option<&Regex>,
+        pid_filter: Option<u32>,
     ) -> Result<Vec<(Process, ProcessStat)>, ScannerError> {
         let mut processes_with_stats = Vec::new();
 
         let proc = Path::new("/proc");
 
-        for dir_entry in proc.read_dir()? {
-            let dir_entry = dir_entry?;
+        if let Some(pid_filter) = pid_filter {
+            let mut pid_ppid_map: BTreeMap<u32, u32> = BTreeMap::new();
 
-            if let Some(file_name) = dir_entry.file_name().to_str() {
-                if let Ok(pid) = file_name.parse::<u32>() {
-                    let process_path = dir_entry.path();
+            for dir_entry in proc.read_dir()? {
+                let dir_entry = dir_entry?;
 
-                    if let Some((process, stat)) = Process::get_process_with_stat_inner(
-                        pid,
-                        process_path,
-                        uid_filter,
-                        program_filter,
-                        tty_filter,
-                    )? {
-                        processes_with_stats.push((process, stat));
+                if let Some(file_name) = dir_entry.file_name().to_str() {
+                    if let Ok(pid) = file_name.parse::<u32>() {
+                        let process_path = dir_entry.path();
+
+                        match Process::get_process_with_stat_inner(
+                            pid,
+                            process_path,
+                            uid_filter,
+                            gid_filter,
+                            program_filter,
+                            tty_filter,
+                        ) {
+                            Ok(r) => {
+                                if let Some((process, stat)) = r {
+                                    if pid != pid_filter && process.ppid != pid_filter {
+                                        let mut not_related = true;
+
+                                        let mut p_ppid = pid_ppid_map.get(&process.ppid);
+
+                                        while let Some(ppid) = p_ppid.copied() {
+                                            if ppid == pid_filter {
+                                                not_related = false;
+
+                                                break;
+                                            }
+
+                                            p_ppid = pid_ppid_map.get(&ppid);
+                                        }
+
+                                        if not_related {
+                                            continue;
+                                        }
+                                    }
+
+                                    pid_ppid_map.insert(pid, process.ppid);
+
+                                    processes_with_stats.push((process, stat));
+                                }
+                            }
+                            Err(err) => {
+                                if let ScannerError::IOError(err) = &err {
+                                    if err.kind() == ErrorKind::NotFound {
+                                        continue;
+                                    }
+                                }
+
+                                return Err(err);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            for dir_entry in proc.read_dir()? {
+                let dir_entry = dir_entry?;
+
+                if let Some(file_name) = dir_entry.file_name().to_str() {
+                    if let Ok(pid) = file_name.parse::<u32>() {
+                        let process_path = dir_entry.path();
+
+                        match Process::get_process_with_stat_inner(
+                            pid,
+                            process_path,
+                            uid_filter,
+                            gid_filter,
+                            program_filter,
+                            tty_filter,
+                        ) {
+                            Ok(r) => {
+                                if let Some((process, stat)) = r {
+                                    processes_with_stats.push((process, stat));
+                                }
+                            }
+                            Err(err) => {
+                                if let ScannerError::IOError(err) = &err {
+                                    if err.kind() == ErrorKind::NotFound {
+                                        continue;
+                                    }
+                                }
+
+                                return Err(err);
+                            }
+                        }
                     }
                 }
             }
@@ -214,7 +331,7 @@ pub struct ProcessStat {
     pub rsslim: usize,
     pub processor: usize,
     pub rt_priority: u8,
-    /// RssFile + RssShmem (number of resident shared pages)
+    /// RssFile + RssShmem (resident shared size)
     pub shared: usize,
     /// VmRSS - RssFile - RssShmem = RssAnon (resident anonymous memory, process occupied memory)
     pub rss_anon: usize,
@@ -491,7 +608,7 @@ impl ProcessStat {
 
         match sc.next_usize()? {
             Some(rss) => {
-                stat.rss = rss;
+                stat.rss = rss * page_size::get();
             }
             None => {
                 return Err(ScannerError::IOError(io::Error::new(
@@ -577,7 +694,7 @@ impl ProcessStat {
 
         match sc.next_usize()? {
             Some(shared) => {
-                stat.shared = shared;
+                stat.shared = shared * page_size::get();
             }
             None => {
                 return Err(ScannerError::IOError(io::Error::new(
