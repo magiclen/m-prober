@@ -1,51 +1,46 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 #![feature(seek_convenience)]
 
+extern crate mprober_lib;
+
 extern crate byte_unit;
 extern crate clap;
+
 #[macro_use]
 extern crate validators;
+
 extern crate getch;
-extern crate scanner_rust;
 extern crate termcolor;
 extern crate terminal_size;
+
 #[macro_use]
 extern crate lazy_static;
 
-extern crate libc;
-
-extern crate base64;
-extern crate rand;
 #[macro_use]
 extern crate serde_json;
-extern crate benchmarking;
+
 extern crate chrono;
-extern crate page_size;
+extern crate rand;
 extern crate regex;
 extern crate users;
 
 #[macro_use]
 extern crate rocket;
+
 #[macro_use]
 extern crate rocket_simple_authorization;
+
 extern crate rocket_cache_response;
 extern crate rocket_json_response;
+
 #[macro_use]
 extern crate rocket_include_static_resources;
+
 #[macro_use]
 extern crate rocket_include_handlebars;
 
 mod benchmark;
-mod cpu_info;
-mod free;
-mod hostname;
-mod kernel;
-mod load_average;
-mod network;
-mod process;
 mod rocket_mounts;
-mod time;
-mod volume;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -57,25 +52,19 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use mprober_lib::*;
+
 use byte_unit::{Byte, ByteUnit};
 use chrono::SecondsFormat;
 use clap::{App, Arg, SubCommand};
 use getch::Getch;
 use regex::Regex;
-use scanner_rust::ScannerError;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use terminal_size::{terminal_size, Width};
 use users::{Group, Groups, User, Users, UsersCache};
 use validators::number::NumberGtZero;
 
 use benchmark::{run_benchmark, BenchmarkConfig, BenchmarkLog};
-use cpu_info::{CPUStat, CPU};
-use free::Free;
-use load_average::LoadAverage;
-use network::NetworkWithSpeed;
-use process::Process;
-use time::RTCDateTime;
-use volume::{Volume, VolumeWithSpeed};
 
 const DEFAULT_TERMINAL_WIDTH: usize = 64;
 const MIN_TERMINAL_WIDTH: usize = 60;
@@ -1457,7 +1446,7 @@ pub fn run(config: Config) -> Result<i32, String> {
 }
 
 fn draw_uptime(second: bool, monitor: bool) -> Result<(), ScannerError> {
-    let uptime = time::get_uptime()?;
+    let uptime = uptime::get_uptime()?.total_uptime;
 
     let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
@@ -1484,7 +1473,7 @@ fn draw_uptime(second: bool, monitor: bool) -> Result<(), ScannerError> {
             write!(&mut stdout, "s")?;
         }
     } else {
-        let s = time::format_duration(uptime);
+        let s = format_duration(uptime);
 
         stdout.set_color(&*COLOR_BOLD_TEXT)?;
         stdout.write_all(s.as_bytes())?;
@@ -1502,7 +1491,7 @@ fn draw_uptime(second: bool, monitor: bool) -> Result<(), ScannerError> {
 }
 
 fn draw_time(monitor: bool) -> Result<(), ScannerError> {
-    let rtc_date_time: RTCDateTime = RTCDateTime::get_rtc_date_time()?;
+    let rtc_date_time = rtc_time::get_rtc_date_time()?;
 
     let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
@@ -1522,7 +1511,7 @@ fn draw_time(monitor: bool) -> Result<(), ScannerError> {
     write!(&mut stdout, " ")?;
 
     stdout.set_color(&*COLOR_BOLD_TEXT)?;
-    stdout.write_all(rtc_date_time.rtc_date.as_bytes())?;
+    write!(&mut stdout, "{}", rtc_date_time.date())?;
 
     writeln!(&mut stdout)?;
 
@@ -1532,7 +1521,7 @@ fn draw_time(monitor: bool) -> Result<(), ScannerError> {
     write!(&mut stdout, " ")?;
 
     stdout.set_color(&*COLOR_BOLD_TEXT)?;
-    stdout.write_all(rtc_date_time.rtc_time.as_bytes())?;
+    write!(&mut stdout, "{}", rtc_date_time.time())?;
 
     stdout.set_color(&*COLOR_DEFAULT)?;
     writeln!(&mut stdout)?;
@@ -1565,8 +1554,8 @@ fn draw_cpu_info(
         DEFAULT_TERMINAL_WIDTH
     };
 
-    let mut draw_load_average = |cpus: &[CPU]| -> Result<(), ScannerError> {
-        let load_average: LoadAverage = LoadAverage::get_load_average()?;
+    let mut draw_load_average = |cpus: &[cpu::CPU]| -> Result<(), ScannerError> {
+        let load_average = load_average::get_load_average()?;
 
         let logical_cores_number: usize = cpus.iter().map(|cpu| cpu.siblings).sum();
         let logical_cores_number_f64 = logical_cores_number as f64;
@@ -1742,13 +1731,13 @@ fn draw_cpu_info(
         let all_percentage: Vec<f64> = if only_information {
             Vec::new()
         } else {
-            CPUStat::get_all_percentage(false, match monitor {
+            cpu::get_all_cpu_utilization_in_percentage(false, match monitor {
                 Some(monitor) => monitor,
                 None => Duration::from_millis(DEFAULT_INTERVAL),
             })?
         };
 
-        let cpus: Vec<CPU> = CPU::get_cpus()?;
+        let cpus = cpu::get_cpus()?;
 
         draw_load_average(&cpus)?;
 
@@ -1881,17 +1870,18 @@ fn draw_cpu_info(
         let (average_percentage, average_percentage_string) = if only_information {
             (0f64, "".to_string())
         } else {
-            let average_percentage = CPUStat::get_average_percentage(match monitor {
-                Some(monitor) => monitor,
-                None => Duration::from_millis(DEFAULT_INTERVAL),
-            })?;
+            let average_percentage =
+                cpu::get_average_cpu_utilization_in_percentage(match monitor {
+                    Some(monitor) => monitor,
+                    None => Duration::from_millis(DEFAULT_INTERVAL),
+                })?;
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
 
             (average_percentage, average_percentage_string)
         };
 
-        let cpus: Vec<CPU> = CPU::get_cpus()?;
+        let cpus = cpu::get_cpus()?;
 
         draw_load_average(&cpus)?;
 
@@ -1957,7 +1947,7 @@ fn draw_cpu_info(
 }
 
 fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError> {
-    let free = Free::get_free()?;
+    let free = memory::free()?;
 
     let output = if unsafe { FORCE_PLAIN_MODE } {
         BufferWriter::stdout(ColorChoice::Never)
@@ -2162,7 +2152,7 @@ fn draw_memory(unit: Option<ByteUnit>, monitor: bool) -> Result<(), ScannerError
 }
 
 fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
-    let networks_with_speed = NetworkWithSpeed::get_networks_with_speed(match monitor {
+    let networks_with_speed = network::get_networks_with_speed(match monitor {
         Some(monitor) => monitor,
         None => Duration::from_millis(DEFAULT_INTERVAL),
     })?;
@@ -2189,12 +2179,12 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
     let mut downloads: Vec<String> = Vec::with_capacity(networks_with_speed_len);
     let mut downloads_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
 
-    for network_with_speed in networks_with_speed.iter() {
-        let upload = Byte::from_unit(network_with_speed.speed.transmit, ByteUnit::B).unwrap();
-        let upload_total = Byte::from_bytes(u128::from(network_with_speed.network.transmit_bytes));
+    for (network, network_speed) in networks_with_speed.iter() {
+        let upload = Byte::from_unit(network_speed.transmit, ByteUnit::B).unwrap();
+        let upload_total = Byte::from_bytes(u128::from(network.stat.transmit_bytes));
 
-        let download = Byte::from_unit(network_with_speed.speed.receive, ByteUnit::B).unwrap();
-        let download_total = Byte::from_bytes(u128::from(network_with_speed.network.receive_bytes));
+        let download = Byte::from_unit(network_speed.receive, ByteUnit::B).unwrap();
+        let download_total = Byte::from_bytes(u128::from(network.stat.receive_bytes));
 
         let (mut upload, upload_total, mut download, download_total) = match unit {
             Some(unit) => {
@@ -2224,11 +2214,8 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
         downloads_total.push(download_total);
     }
 
-    let interface_len = networks_with_speed
-        .iter()
-        .map(|network_with_sppeed| network_with_sppeed.network.interface.len())
-        .max()
-        .unwrap();
+    let interface_len =
+        networks_with_speed.iter().map(|(network, _)| network.interface.len()).max().unwrap();
     let interface_len_inc = interface_len + 1;
 
     let upload_len = uploads.iter().map(|upload| upload.len()).max().unwrap().max(11);
@@ -2266,7 +2253,7 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
     let mut downloads_iter = downloads.into_iter();
     let mut downloads_total_iter = downloads_total.into_iter();
 
-    for network_with_speed in networks_with_speed.into_iter() {
+    for (network, _) in networks_with_speed.into_iter() {
         let upload = uploads_iter.next().unwrap();
         let upload_total = uploads_total_iter.next().unwrap();
 
@@ -2274,7 +2261,7 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
         let download_total = downloads_total_iter.next().unwrap();
 
         stdout.set_color(&*COLOR_LABEL)?;
-        write!(&mut stdout, "{1:<0$}", interface_len_inc, network_with_speed.network.interface)?;
+        write!(&mut stdout, "{1:<0$}", interface_len_inc, network.interface)?;
 
         stdout.set_color(&*COLOR_BOLD_TEXT)?;
 
@@ -2343,7 +2330,7 @@ fn draw_volume(
     };
 
     if only_information {
-        let volumes = Volume::get_volumes()?;
+        let volumes = volume::get_volumes()?;
 
         let volumes_len = volumes.len();
 
@@ -2367,9 +2354,9 @@ fn draw_volume(
             let used_percentage =
                 format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
 
-            let read_total = Byte::from_bytes(u128::from(volume.read_bytes));
+            let read_total = Byte::from_bytes(u128::from(volume.stat.read_bytes));
 
-            let write_total = Byte::from_bytes(u128::from(volume.write_bytes));
+            let write_total = Byte::from_bytes(u128::from(volume.stat.write_bytes));
 
             let (size, used, read_total, write_total) = match unit {
                 Some(unit) => {
@@ -2541,7 +2528,7 @@ fn draw_volume(
             }
         }
     } else {
-        let volumes_with_speed = VolumeWithSpeed::get_volumes_with_speed(match monitor {
+        let volumes_with_speed = volume::get_volumes_with_speed(match monitor {
             Some(monitor) => monitor,
             None => Duration::from_millis(DEFAULT_INTERVAL),
         })?;
@@ -2564,21 +2551,19 @@ fn draw_volume(
 
         let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
-        for volume_with_speed in volumes_with_speed.iter() {
-            let size = Byte::from_bytes(u128::from(volume_with_speed.volume.size));
+        for (volume, volume_speed) in volumes_with_speed.iter() {
+            let size = Byte::from_bytes(u128::from(volume.size));
 
-            let used = Byte::from_bytes(u128::from(volume_with_speed.volume.used));
+            let used = Byte::from_bytes(u128::from(volume.used));
 
-            let used_percentage = format!(
-                "{:.2}%",
-                (volume_with_speed.volume.used * 100) as f64 / volume_with_speed.volume.size as f64
-            );
+            let used_percentage =
+                format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
 
-            let read = Byte::from_unit(volume_with_speed.speed.read, ByteUnit::B).unwrap();
-            let read_total = Byte::from_bytes(u128::from(volume_with_speed.volume.read_bytes));
+            let read = Byte::from_unit(volume_speed.read, ByteUnit::B).unwrap();
+            let read_total = Byte::from_bytes(u128::from(volume.stat.read_bytes));
 
-            let write = Byte::from_unit(volume_with_speed.speed.write, ByteUnit::B).unwrap();
-            let write_total = Byte::from_bytes(u128::from(volume_with_speed.volume.write_bytes));
+            let write = Byte::from_unit(volume_speed.write, ByteUnit::B).unwrap();
+            let write_total = Byte::from_bytes(u128::from(volume.stat.write_bytes));
 
             let (size, used, mut read, read_total, mut write, write_total) = match unit {
                 Some(unit) => {
@@ -2615,11 +2600,8 @@ fn draw_volume(
             volumes_write_total.push(write_total);
         }
 
-        let devices_len = volumes_with_speed
-            .iter()
-            .map(|volume_with_speed| volume_with_speed.volume.device.len())
-            .max()
-            .unwrap();
+        let devices_len =
+            volumes_with_speed.iter().map(|(volume, _)| volume.device.len()).max().unwrap();
         let devices_len_inc = devices_len + 1;
 
         let volumes_size_len = volumes_size.iter().map(|size| size.len()).max().unwrap();
@@ -2678,7 +2660,7 @@ fn draw_volume(
         let mut volumes_write_iter = volumes_write.into_iter();
         let mut volumes_write_total_iter = volumes_write_total.into_iter();
 
-        for volume_with_speed in volumes_with_speed.into_iter() {
+        for (volume, _) in volumes_with_speed.into_iter() {
             let size = volumes_size_iter.next().unwrap();
 
             let used = volumes_used_iter.next().unwrap();
@@ -2692,7 +2674,7 @@ fn draw_volume(
             let write_total = volumes_write_total_iter.next().unwrap();
 
             stdout.set_color(&*COLOR_LABEL)?;
-            write!(&mut stdout, "{1:<0$}", devices_len_inc, volume_with_speed.volume.device)?;
+            write!(&mut stdout, "{1:<0$}", devices_len_inc, volume.device)?;
 
             stdout.set_color(&*COLOR_BOLD_TEXT)?;
 
@@ -2736,9 +2718,9 @@ fn draw_volume(
 
             write!(&mut stdout, " [")?; // 2
 
-            let f = progress_max as f64 / volume_with_speed.volume.size as f64;
+            let f = progress_max as f64 / volume.size as f64;
 
-            let progress_used = (volume_with_speed.volume.used as f64 * f).floor() as usize;
+            let progress_used = (volume.used as f64 * f).floor() as usize;
 
             stdout.set_color(&*COLOR_USED)?;
             for _ in 0..progress_used {
@@ -2785,7 +2767,7 @@ fn draw_volume(
             if mounts {
                 stdout.set_color(&*COLOR_NORMAL_TEXT)?;
 
-                for point in volume_with_speed.volume.points {
+                for point in volume.points {
                     for _ in 0..devices_len_inc {
                         write!(&mut stdout, " ")?;
                     }
@@ -2868,15 +2850,17 @@ fn draw_process(
         None => None,
     };
 
-    let mut processes_with_stats = Process::get_processes_with_stats(
+    let process_filter = process::ProcessFilter {
         uid_filter,
         gid_filter,
         program_filter,
         tty_filter,
         pid_filter,
-    )?;
+    };
 
-    let (processes, percentage): (Vec<Process>, BTreeMap<u32, f64>) = if only_information {
+    let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {
+        let mut processes_with_stats = process::get_processes_with_stat(&process_filter)?;
+
         processes_with_stats.sort_by(|(a, _), (b, _)| b.vsz.cmp(&a.vsz));
 
         if let Some(top) = top {
@@ -2890,10 +2874,13 @@ fn draw_process(
         (processes_with_stats.into_iter().map(|(process, _)| process).collect(), BTreeMap::new())
     } else {
         let mut processes_with_percentage =
-            Process::get_processes_with_percentage(processes_with_stats, match monitor {
-                Some(monitor) => monitor,
-                None => Duration::from_millis(DEFAULT_INTERVAL),
-            })?;
+            process::get_processes_with_cpu_utilization_in_percentage(
+                &process_filter,
+                match monitor {
+                    Some(monitor) => monitor,
+                    None => Duration::from_millis(DEFAULT_INTERVAL),
+                },
+            )?;
 
         processes_with_percentage.sort_by(
             |(process_a, percentage_a), (process_b, percentage_b)| {

@@ -1,3 +1,5 @@
+extern crate benchmarking;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -8,13 +10,10 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
+use crate::mprober_lib::*;
+
 use crate::byte_unit::{Byte, ByteUnit};
 use crate::rand::{self, Rng};
-use crate::scanner_rust::ScannerError;
-
-use crate::benchmarking;
-use crate::cpu_info::CPU;
-use crate::volume::Volume;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BenchmarkLog {
@@ -115,7 +114,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
         return Err(BenchmarkError::NoNeedBenchmark);
     }
 
-    let cpus = CPU::get_cpus()?;
+    let cpus = cpu::get_cpus()?;
 
     let cpus_num = cpus.iter().map(|cpu| cpu.siblings).sum();
 
@@ -132,7 +131,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
         }
 
         if config.print_out.has_stdout() {
-            let cpus = CPU::get_cpus()?;
+            let cpus = cpu::get_cpus()?;
 
             for cpu in cpus {
                 println!("{} {}C/{}T", cpu.model_name, cpu.cpu_cores, cpu.siblings);
@@ -315,7 +314,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             const TEST_FILE_SIZE: u64 = 1024 * 1024 * 1024; // N times of BUFFER_SIZE
 
             {
-                let volumes = Volume::get_volumes()?;
+                let volumes = volume::get_volumes()?;
 
                 if !volumes.is_empty() {
                     if config.print_out.has_stderr() {

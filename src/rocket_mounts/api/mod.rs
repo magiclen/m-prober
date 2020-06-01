@@ -13,14 +13,7 @@ use crate::rocket_simple_authorization::SimpleAuthorization;
 
 use crate::byte_unit::{Byte, ByteUnit};
 
-use crate::cpu_info::{CPUStat, CPU};
-use crate::free::Free;
-use crate::hostname;
-use crate::kernel;
-use crate::load_average::LoadAverage;
-use crate::network::NetworkWithSpeed;
-use crate::time::{self, RTCDateTime};
-use crate::volume::{Volume, VolumeWithSpeed};
+use crate::mprober_lib::*;
 
 static mut CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static mut NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
@@ -38,8 +31,10 @@ lazy_static! {
 
 lazy_static! {
     static ref CPUS_STAT: Mutex<Option<Vec<f64>>> = Mutex::new(None);
-    static ref NETWORK_STAT: Mutex<Option<Vec<NetworkWithSpeed>>> = Mutex::new(None);
-    static ref VOLUMES_STAT: Mutex<Option<Vec<VolumeWithSpeed>>> = Mutex::new(None);
+    static ref NETWORK_STAT: Mutex<Option<Vec<(network::Network, network::NetworkSpeed)>>> =
+        Mutex::new(None);
+    static ref VOLUMES_STAT: Mutex<Option<Vec<(volume::Volume, volume::VolumeSpeed)>>> =
+        Mutex::new(None);
 }
 
 pub struct Auth;
@@ -191,7 +186,8 @@ fn fetch_cpus_stat(detect_interval: Duration) {
     if !unsafe { CPUS_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         CPUS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let cpus_stat = CPUStat::get_all_percentage(true, detect_interval).unwrap();
+            let cpus_stat =
+                cpu::get_all_cpu_utilization_in_percentage(true, detect_interval).unwrap();
 
             CPUS_STAT.lock().unwrap().replace(cpus_stat);
 
@@ -206,7 +202,7 @@ fn fetch_network_stat(detect_interval: Duration) {
     if !unsafe { NETWORK_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         NETWORK_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let network_stat = NetworkWithSpeed::get_networks_with_speed(detect_interval).unwrap();
+            let network_stat = network::get_networks_with_speed(detect_interval).unwrap();
 
             NETWORK_STAT.lock().unwrap().replace(network_stat);
 
@@ -221,7 +217,7 @@ fn fetch_volumes_stat(detect_interval: Duration) {
     if !unsafe { VOLUMES_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
         VOLUMES_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let volume_stat = VolumeWithSpeed::get_volumes_with_speed(detect_interval).unwrap();
+            let volume_stat = volume::get_volumes_with_speed(detect_interval).unwrap();
 
             VOLUMES_STAT.lock().unwrap().replace(volume_stat);
 
@@ -259,7 +255,7 @@ fn kernel_401() -> Status {
 #[get("/uptime")]
 fn uptime(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_u64(
-        time::get_uptime().unwrap().as_secs(),
+        uptime::get_uptime().unwrap().total_uptime.as_secs(),
     )))
 }
 
@@ -270,11 +266,11 @@ fn uptime_401() -> Status {
 
 #[get("/time")]
 fn time(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    let rtc_date_time = RTCDateTime::get_rtc_date_time().unwrap();
+    let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
 
     let json_rtc_date_time = json!({
-        "date": rtc_date_time.rtc_date,
-        "time": rtc_date_time.rtc_time
+        "date": rtc_date_time.date().to_string(),
+        "time": rtc_date_time.time().to_string()
     });
 
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json_rtc_date_time)))
@@ -287,9 +283,9 @@ fn time_401() -> Status {
 
 #[get("/cpu")]
 fn cpu(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    let cpus = CPU::get_cpus().unwrap();
+    let cpus = cpu::get_cpus().unwrap();
 
-    let load_average = LoadAverage::get_load_average().unwrap();
+    let load_average = load_average::get_load_average().unwrap();
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -336,9 +332,9 @@ fn cpu_detect(
 
     let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
-    let load_average = LoadAverage::get_load_average().unwrap();
+    let load_average = load_average::get_load_average().unwrap();
 
-    let cpus = CPU::get_cpus().unwrap();
+    let cpus = cpu::get_cpus().unwrap();
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -375,7 +371,7 @@ fn cpu_detect_401() -> Status {
 
 #[get("/memory")]
 fn memory(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    let free = Free::get_free().unwrap();
+    let free = memory::free().unwrap();
 
     let json_memory = json!({
         "total": free.mem.total,
@@ -419,17 +415,18 @@ fn network_detect(
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
 
-        let network_stat: &[NetworkWithSpeed] = network_stat.as_ref().unwrap();
+        let network_stat: &[(network::Network, network::NetworkSpeed)] =
+            network_stat.as_ref().unwrap();
 
         let mut json_network = Vec::with_capacity(network_stat.len());
 
-        for network_with_speed in network_stat {
+        for (network, network_speed) in network_stat {
             json_network.push(json!({
-                "interface": network_with_speed.network.interface,
-                "upload_total": network_with_speed.network.transmit_bytes,
-                "download_total": network_with_speed.network.receive_bytes,
-                "upload_rate": network_with_speed.speed.transmit,
-                "download_rate": network_with_speed.speed.receive
+                "interface": network.interface,
+                "upload_total": network.stat.transmit_bytes,
+                "download_total": network.stat.receive_bytes,
+                "upload_rate": network_speed.transmit,
+                "download_rate": network_speed.receive
             }));
         }
 
@@ -447,7 +444,7 @@ fn network_detect_401() -> Status {
 #[get("/volume")]
 fn volume(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     let json_volumes = {
-        let volumes = Volume::get_volumes().unwrap();
+        let volumes = volume::get_volumes().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes.len());
 
@@ -456,8 +453,8 @@ fn volume(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
                 "device": volume.device,
                 "size": volume.size,
                 "used": volume.used,
-                "read_total": volume.read_bytes,
-                "write_total": volume.write_bytes,
+                "read_total": volume.stat.read_bytes,
+                "write_total": volume.stat.write_bytes,
                 "mount_points": volume.points
             }));
         }
@@ -485,20 +482,20 @@ fn volume_detect(
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
-        let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
+        let volumes_stat: &[(volume::Volume, volume::VolumeSpeed)] = volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
-        for volume_with_speed in volumes_stat {
+        for (volume, volume_speed) in volumes_stat {
             json_volumes.push(json!({
-                "device": volume_with_speed.volume.device,
-                "size": volume_with_speed.volume.size,
-                "used": volume_with_speed.volume.used,
-                "read_total": volume_with_speed.volume.read_bytes,
-                "write_total": volume_with_speed.volume.write_bytes,
-                "read_rate": volume_with_speed.speed.read,
-                "write_rate": volume_with_speed.speed.write,
-                "mount_points": volume_with_speed.volume.points
+                "device": volume.device,
+                "size": volume.size,
+                "used": volume.used,
+                "read_total": volume.stat.read_bytes,
+                "write_total": volume.stat.write_bytes,
+                "read_rate": volume_speed.read,
+                "write_rate": volume_speed.write,
+                "mount_points": volume.points
             }));
         }
 
@@ -528,19 +525,19 @@ fn all(
 
     let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
-    let load_average = LoadAverage::get_load_average().unwrap();
+    let load_average = load_average::get_load_average().unwrap();
 
-    let cpus = CPU::get_cpus().unwrap();
+    let cpus = cpu::get_cpus().unwrap();
 
-    let free = Free::get_free().unwrap();
+    let free = memory::free().unwrap();
 
     let hostname = hostname::get_hostname().unwrap();
 
     let kernel = kernel::get_kernel_version().unwrap();
 
-    let uptime = time::get_uptime().unwrap();
+    let uptime = uptime::get_uptime().unwrap().total_uptime;
 
-    let rtc_date_time = RTCDateTime::get_rtc_date_time().unwrap();
+    let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -583,17 +580,18 @@ fn all(
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
 
-        let network_stat: &[NetworkWithSpeed] = network_stat.as_ref().unwrap();
+        let network_stat: &[(network::Network, network::NetworkSpeed)] =
+            network_stat.as_ref().unwrap();
 
         let mut json_network = Vec::with_capacity(network_stat.len());
 
-        for network_with_speed in network_stat {
+        for (network, network_speed) in network_stat {
             json_network.push(json!({
-                "interface": network_with_speed.network.interface,
-                "upload_total": network_with_speed.network.transmit_bytes,
-                "download_total": network_with_speed.network.receive_bytes,
-                "upload_rate": network_with_speed.speed.transmit,
-                "download_rate": network_with_speed.speed.receive
+                "interface": network.interface,
+                "upload_total": network.stat.transmit_bytes,
+                "download_total": network.stat.receive_bytes,
+                "upload_rate": network_speed.transmit,
+                "download_rate": network_speed.receive
             }));
         }
 
@@ -603,20 +601,20 @@ fn all(
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
-        let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
+        let volumes_stat: &[(volume::Volume, volume::VolumeSpeed)] = volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
-        for volume_with_speed in volumes_stat {
+        for (volume, volume_speed) in volumes_stat {
             json_volumes.push(json!({
-                "device": volume_with_speed.volume.device,
-                "size": volume_with_speed.volume.size,
-                "used": volume_with_speed.volume.used,
-                "read_total": volume_with_speed.volume.read_bytes,
-                "write_total": volume_with_speed.volume.write_bytes,
-                "read_rate": volume_with_speed.speed.read,
-                "write_rate": volume_with_speed.speed.write,
-                "mount_points": volume_with_speed.volume.points
+                "device": volume.device,
+                "size": volume.size,
+                "used": volume.used,
+                "read_total": volume.stat.read_bytes,
+                "write_total": volume.stat.write_bytes,
+                "read_rate": volume_speed.read,
+                "write_rate": volume_speed.write,
+                "mount_points": volume.points
             }));
         }
 
@@ -624,8 +622,8 @@ fn all(
     };
 
     let json_rtc_date_time = json!({
-        "date": rtc_date_time.rtc_date,
-        "time": rtc_date_time.rtc_time
+        "date": rtc_date_time.date().to_string(),
+        "time": rtc_date_time.time().to_string()
     });
 
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_json_value(json!({
@@ -659,25 +657,25 @@ fn monitor(
 
     detect_all_sleep(detect_interval.get_value(), false);
 
-    let load_average = LoadAverage::get_load_average().unwrap();
+    let load_average = load_average::get_load_average().unwrap();
 
-    let cpus = CPU::get_cpus().unwrap();
+    let cpus = cpu::get_cpus().unwrap();
 
-    let memory = Free::get_free().unwrap();
+    let memory = memory::free().unwrap();
 
     let hostname = hostname::get_hostname().unwrap();
 
     let kernel = kernel::get_kernel_version().unwrap();
 
-    let uptime = time::get_uptime().unwrap();
+    let uptime = uptime::get_uptime().unwrap().total_uptime;
 
-    let time = RTCDateTime::get_rtc_date_time().unwrap();
+    let time = rtc_time::get_rtc_date_time().unwrap();
 
     let cpus_stat = CPUS_STAT.lock().unwrap();
 
     let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
-    let uptime_string = time::format_duration(uptime);
+    let uptime_string = format_duration(uptime);
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -754,22 +752,21 @@ fn monitor(
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
 
-        let network_stat: &[NetworkWithSpeed] = network_stat.as_ref().unwrap();
+        let network_stat: &[(network::Network, network::NetworkSpeed)] =
+            network_stat.as_ref().unwrap();
 
         let mut json_network = Vec::with_capacity(network_stat.len());
 
-        for network_with_speed in network_stat {
-            let upload_total_string =
-                Byte::from_bytes(u128::from(network_with_speed.network.transmit_bytes))
-                    .get_appropriate_unit(false)
-                    .to_string();
-            let download_total_string =
-                Byte::from_bytes(u128::from(network_with_speed.network.receive_bytes))
-                    .get_appropriate_unit(false)
-                    .to_string();
+        for (network, network_speed) in network_stat {
+            let upload_total_string = Byte::from_bytes(u128::from(network.stat.transmit_bytes))
+                .get_appropriate_unit(false)
+                .to_string();
+            let download_total_string = Byte::from_bytes(u128::from(network.stat.receive_bytes))
+                .get_appropriate_unit(false)
+                .to_string();
 
             let upload_rate_string = {
-                let mut s = Byte::from_unit(network_with_speed.speed.transmit, ByteUnit::B)
+                let mut s = Byte::from_unit(network_speed.transmit, ByteUnit::B)
                     .unwrap()
                     .get_appropriate_unit(false)
                     .to_string();
@@ -780,7 +777,7 @@ fn monitor(
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_unit(network_with_speed.speed.receive, ByteUnit::B)
+                let mut s = Byte::from_unit(network_speed.receive, ByteUnit::B)
                     .unwrap()
                     .get_appropriate_unit(false)
                     .to_string();
@@ -791,21 +788,21 @@ fn monitor(
             };
 
             json_network.push(json!({
-                "interface": network_with_speed.network.interface,
+                "interface": network.interface,
                 "upload_total": {
-                    "value": network_with_speed.network.transmit_bytes,
+                    "value": network.stat.transmit_bytes,
                     "text": upload_total_string
                 },
                 "download_total": {
-                    "value": network_with_speed.network.receive_bytes,
+                    "value": network.stat.receive_bytes,
                     "text": download_total_string
                 },
                 "upload_rate": {
-                    "value": network_with_speed.speed.transmit,
+                    "value": network_speed.transmit,
                     "text": upload_rate_string
                 },
                 "download_rate": {
-                    "value": network_with_speed.speed.receive,
+                    "value": network_speed.receive,
                     "text": download_rate_string
                 },
             }));
@@ -817,29 +814,25 @@ fn monitor(
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
-        let volumes_stat: &[VolumeWithSpeed] = volumes_stat.as_ref().unwrap();
+        let volumes_stat: &[(volume::Volume, volume::VolumeSpeed)] = volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
-        for volume_with_speed in volumes_stat {
-            let size_string = Byte::from_bytes(u128::from(volume_with_speed.volume.size))
-                .get_appropriate_unit(false)
-                .to_string();
-            let used_string = Byte::from_bytes(u128::from(volume_with_speed.volume.used))
-                .get_appropriate_unit(false)
-                .to_string();
+        for (volume, volume_speed) in volumes_stat {
+            let size_string =
+                Byte::from_bytes(u128::from(volume.size)).get_appropriate_unit(false).to_string();
+            let used_string =
+                Byte::from_bytes(u128::from(volume.used)).get_appropriate_unit(false).to_string();
 
-            let read_total_string =
-                Byte::from_bytes(u128::from(volume_with_speed.volume.read_bytes))
-                    .get_appropriate_unit(false)
-                    .to_string();
-            let write_total_string =
-                Byte::from_bytes(u128::from(volume_with_speed.volume.write_bytes))
-                    .get_appropriate_unit(false)
-                    .to_string();
+            let read_total_string = Byte::from_bytes(u128::from(volume.stat.read_bytes))
+                .get_appropriate_unit(false)
+                .to_string();
+            let write_total_string = Byte::from_bytes(u128::from(volume.stat.write_bytes))
+                .get_appropriate_unit(false)
+                .to_string();
 
             let read_rate_string = {
-                let mut s = Byte::from_bytes(volume_with_speed.speed.read as u128)
+                let mut s = Byte::from_bytes(volume_speed.read as u128)
                     .get_appropriate_unit(false)
                     .to_string();
 
@@ -849,7 +842,7 @@ fn monitor(
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_bytes(volume_with_speed.speed.write as u128)
+                let mut s = Byte::from_bytes(volume_speed.write as u128)
                     .get_appropriate_unit(false)
                     .to_string();
 
@@ -859,32 +852,32 @@ fn monitor(
             };
 
             json_volumes.push(json!({
-                "device": volume_with_speed.volume.device,
+                "device": volume.device,
                 "size": {
-                    "value": volume_with_speed.volume.size,
+                    "value": volume.size,
                     "text": size_string
                 },
                 "used": {
-                    "value": volume_with_speed.volume.used,
+                    "value": volume.used,
                     "text": used_string
                 },
                 "read_total": {
-                    "value": volume_with_speed.volume.read_bytes,
+                    "value": volume.stat.read_bytes,
                     "text": read_total_string
                 },
                 "write_total": {
-                    "value": volume_with_speed.volume.write_bytes,
+                    "value": volume.stat.write_bytes,
                     "text": write_total_string
                 },
                 "read_rate": {
-                    "value": volume_with_speed.speed.read,
+                    "value": volume_speed.read,
                     "text": read_rate_string
                 },
                 "write_rate": {
-                    "value": volume_with_speed.speed.write,
+                    "value": volume_speed.write,
                     "text": download_rate_string
                 },
-                "mount_points": volume_with_speed.volume.points
+                "mount_points": volume.points
             }));
         }
 
@@ -898,7 +891,7 @@ fn monitor(
             "value": uptime.as_secs(),
             "text": uptime_string
         },
-        "rtc_time": format!("{} {}", time.rtc_date, time.rtc_time),
+        "rtc_time": format!("{} {}", time.date(), time.time()),
         "load_average": {
             "one": load_average.one,
             "five": load_average.five,

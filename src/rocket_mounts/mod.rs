@@ -1,3 +1,5 @@
+extern crate base64;
+
 mod api;
 mod monitor;
 mod static_resources;
@@ -7,7 +9,6 @@ use std::time::Duration;
 
 use crate::rocket::{config::Environment, Config};
 
-use crate::base64;
 use crate::rand::{self, RngCore};
 
 #[derive(Debug)]

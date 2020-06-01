@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.11.0-beta.1"
+version = "0.11.0-beta.2"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
@@ -20,7 +20,8 @@ branch = "master"
 panic = "abort"
 
 [dependencies]
-scanner-rust = "1.4.1"
+mprober-lib = "0.1"
+
 clap = "2"
 byte-unit = "3"
 termcolor = "1"
@@ -28,16 +29,14 @@ terminal_size = "0.1"
 getch = "0.2"
 lazy_static = "1"
 
-libc = "0.2"
-
 rand = "0.7"
-base64 = "0.12"
 serde_json = "1"
-benchmarking = "0.4"
 chrono = "0.4"
 regex = "1"
 users = "0.10"
-page_size = "0.4.2"
+
+benchmarking = "0.4"
+base64 = "0.12"
 
 rocket = "0.4.2"
 rocket-simple-authorization = "0.9"
