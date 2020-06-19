@@ -19,6 +19,7 @@ extern crate lazy_static;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::env;
+use std::error::Error;
 use std::io::{self, ErrorKind, Write};
 use std::process as std_process;
 use std::sync::Arc;
@@ -201,7 +202,7 @@ macro_rules! monitor_handler {
                 let sleep_interval = monitor;
 
                 loop {
-                    io::stdout().write_all(&CLEAR_SCREEN_DATA).map_err(|err| err.to_string())?;
+                    io::stdout().write_all(&CLEAR_SCREEN_DATA)?;
 
                     $s
 
@@ -232,7 +233,7 @@ macro_rules! monitor_handler {
             let sleep_interval = Duration::from_millis($monitor_interval_milli_secs);
 
             loop {
-                io::stdout().write_all(&CLEAR_SCREEN_DATA).map_err(|err| err.to_string())?;
+                io::stdout().write_all(&CLEAR_SCREEN_DATA)?;
 
                 $s
 
@@ -259,7 +260,7 @@ macro_rules! monitor_handler {
                     std_process::exit(0);
                 });
 
-                io::stdout().write_all(&CLEAR_SCREEN_DATA).map_err(|err| err.to_string())?;
+                io::stdout().write_all(&CLEAR_SCREEN_DATA)?;
 
                 $si
 
@@ -270,7 +271,7 @@ macro_rules! monitor_handler {
                         thread::sleep(sleep_interval);
                     }
 
-                    io::stdout().write_all(&CLEAR_SCREEN_DATA).map_err(|err| err.to_string())?;
+                    io::stdout().write_all(&CLEAR_SCREEN_DATA)?;
 
                     $s
                 }
@@ -284,7 +285,7 @@ macro_rules! monitor_handler {
     };
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), Box<dyn Error>> {
     let matches = get_matches();
 
     if matches.subcommand_matches("hostname").is_some() {
@@ -346,13 +347,13 @@ fn main() -> Result<(), String> {
         let only_information = sub_matches.is_present("ONLY_INFORMATION");
 
         let top = match sub_matches.value_of("TOP") {
-            Some(top) => Some(top.parse::<usize>().map_err(|err| err.to_string())?),
+            Some(top) => Some(top.parse::<usize>()?),
             None => None,
         };
 
         let truncate = match sub_matches.value_of("TRUNCATE") {
             Some(truncate) => {
-                let truncate = truncate.parse::<usize>().map_err(|err| err.to_string())?;
+                let truncate = truncate.parse::<usize>()?;
 
                 if truncate > 0 {
                     Some(truncate)
@@ -369,19 +370,17 @@ fn main() -> Result<(), String> {
         let group_filter = sub_matches.value_of("GROUP_FILTER");
 
         let program_filter = match sub_matches.value_of("PROGRAM_FILTER") {
-            Some(program_filter) => {
-                Some(Regex::new(program_filter).map_err(|err| err.to_string())?)
-            }
+            Some(program_filter) => Some(Regex::new(program_filter)?),
             None => None,
         };
 
         let tty_filter = match sub_matches.value_of("TTY_FILTER") {
-            Some(tty_filter) => Some(Regex::new(tty_filter).map_err(|err| err.to_string())?),
+            Some(tty_filter) => Some(Regex::new(tty_filter)?),
             None => None,
         };
 
         let pid_filter = match sub_matches.value_of("PID_FILTER") {
-            Some(pid_filter) => Some(pid_filter.parse::<u32>().map_err(|err| err.to_string())?),
+            Some(pid_filter) => Some(pid_filter.parse::<u32>()?),
             None => None,
         };
 
@@ -460,27 +459,21 @@ fn main() -> Result<(), String> {
         let enable_cpu = sub_matches.is_present("ENABLE_CPU");
 
         if enable_cpu && disable_cpu {
-            return Err(String::from(
-                "Cannot determine whether to enable benchmarking CPU or not.",
-            ));
+            return Err("Cannot determine whether to enable benchmarking CPU or not.".into());
         }
 
         let disable_memory = sub_matches.is_present("DISABLE_MEMORY");
         let enable_memory = sub_matches.is_present("ENABLE_MEMORY");
 
         if disable_memory && enable_memory {
-            return Err(String::from(
-                "Cannot determine whether to enable benchmarking memory or not.",
-            ));
+            return Err("Cannot determine whether to enable benchmarking memory or not.".into());
         }
 
         let disable_volume = sub_matches.is_present("DISABLE_VOLUME");
         let enable_volume = sub_matches.is_present("ENABLE_VOLUME");
 
         if disable_volume && enable_volume {
-            return Err(String::from(
-                "Cannot determine whether to enable benchmarking volumes or not.",
-            ));
+            return Err("Cannot determine whether to enable benchmarking volumes or not.".into());
         }
 
         let default = !(enable_cpu || enable_memory || enable_volume);
@@ -505,7 +498,7 @@ fn main() -> Result<(), String> {
 
         handle_benchmark(warming_up_duration, benchmark_duration, print_out, cpu, memory, volume)
     } else {
-        Err(String::from("Please input a subcommand. Use `help` to see how to use this program."))
+        Err("Please input a subcommand. Use `help` to see how to use this program.".into())
     }
 }
 
@@ -517,7 +510,7 @@ fn handle_benchmark(
     cpu: bool,
     memory: bool,
     volume: bool,
-) -> Result<(), String> {
+) -> Result<(), Box<dyn Error>> {
     let benchmark_config = benchmark::BenchmarkConfig {
         warming_up_duration,
         benchmark_duration,
@@ -527,7 +520,7 @@ fn handle_benchmark(
         volume,
     };
 
-    benchmark::run_benchmark(&benchmark_config).map_err(|err| err.to_string())?;
+    benchmark::run_benchmark(&benchmark_config)?;
     Ok(())
 }
 
@@ -538,7 +531,7 @@ fn handle_web(
     listen_port: u16,
     auth_key: Option<&str>,
     only_api: bool,
-) -> Result<(), String> {
+) -> Result<(), Box<dyn Error>> {
     rocket_mounts::launch(
         monitor,
         address.to_string(),
@@ -563,7 +556,7 @@ fn handle_process(
     program_filter: Option<Regex>,
     tty_filter: Option<Regex>,
     pid_filter: Option<u32>,
-) -> Result<(), String> {
+) -> Result<(), Box<dyn Error>> {
     let user_filter = user_filter.as_deref();
     let group_filter = group_filter.as_deref();
     let program_filter = program_filter.as_ref();
@@ -583,8 +576,7 @@ fn handle_process(
             program_filter,
             tty_filter,
             pid_filter,
-        )
-        .map_err(|err| err.to_string())?,
+        )?,
         draw_process(
             top,
             truncate,
@@ -597,8 +589,7 @@ fn handle_process(
             program_filter,
             tty_filter,
             pid_filter,
-        )
-        .map_err(|err| err.to_string())?,
+        )?,
         only_information
     );
 }
@@ -1367,11 +1358,11 @@ fn handle_volume(
     unit: Option<ByteUnit>,
     only_information: bool,
     mounts: bool,
-) -> Result<(), String> {
+) -> Result<(), Box<dyn Error>> {
     monitor_handler!(
         monitor,
-        draw_volume(unit, only_information, mounts, monitor).map_err(|err| err.to_string())?,
-        draw_volume(unit, only_information, mounts, None).map_err(|err| err.to_string())?,
+        draw_volume(unit, only_information, mounts, monitor)?,
+        draw_volume(unit, only_information, mounts, None)?,
         only_information
     );
 }
@@ -1851,13 +1842,8 @@ fn draw_volume(
     Ok(())
 }
 
-fn handle_network(monitor: Option<Duration>, unit: Option<ByteUnit>) -> Result<(), String> {
-    monitor_handler!(
-        monitor,
-        draw_network(unit, monitor).map_err(|err| err.to_string())?,
-        draw_network(unit, None).map_err(|err| err.to_string())?,
-        false
-    );
+fn handle_network(monitor: Option<Duration>, unit: Option<ByteUnit>) -> Result<(), Box<dyn Error>> {
+    monitor_handler!(monitor, draw_network(unit, monitor)?, draw_network(unit, None)?, false);
 }
 
 fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(), ScannerError> {
@@ -2009,8 +1995,8 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
     Ok(())
 }
 
-fn handle_memory(monitor: Option<Duration>, unit: Option<ByteUnit>) -> Result<(), String> {
-    monitor_handler!(monitor, draw_memory(unit).map_err(|err| err.to_string())?);
+fn handle_memory(monitor: Option<Duration>, unit: Option<ByteUnit>) -> Result<(), Box<dyn Error>> {
+    monitor_handler!(monitor, draw_memory(unit)?);
 }
 
 fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
@@ -2216,11 +2202,11 @@ fn handle_cpu(
     monitor: Option<Duration>,
     separate: bool,
     only_information: bool,
-) -> Result<(), String> {
+) -> Result<(), Box<dyn Error>> {
     monitor_handler!(
         monitor,
-        draw_cpu_info(separate, only_information, monitor).map_err(|err| err.to_string())?,
-        draw_cpu_info(separate, only_information, None).map_err(|err| err.to_string())?,
+        draw_cpu_info(separate, only_information, monitor)?,
+        draw_cpu_info(separate, only_information, None)?,
         only_information
     );
 }
@@ -2634,8 +2620,8 @@ fn draw_cpu_info(
     Ok(())
 }
 
-fn handle_time(monitor: bool) -> Result<(), String> {
-    monitor_handler!(monitor, 1000, draw_time().map_err(|err| err.to_string())?);
+fn handle_time(monitor: bool) -> Result<(), Box<dyn Error>> {
+    monitor_handler!(monitor, 1000, draw_time()?);
 }
 
 fn draw_time() -> Result<(), ScannerError> {
@@ -2675,8 +2661,8 @@ fn draw_time() -> Result<(), ScannerError> {
     Ok(())
 }
 
-fn handle_uptime(monitor: bool, second: bool) -> Result<(), String> {
-    monitor_handler!(monitor, 1000, draw_uptime(second).map_err(|err| err.to_string())?);
+fn handle_uptime(monitor: bool, second: bool) -> Result<(), Box<dyn Error>> {
+    monitor_handler!(monitor, 1000, draw_uptime(second)?);
 }
 
 fn draw_uptime(second: bool) -> Result<(), ScannerError> {
@@ -2721,8 +2707,8 @@ fn draw_uptime(second: bool) -> Result<(), ScannerError> {
 }
 
 #[inline]
-fn handle_hostname() -> Result<(), String> {
-    let hostname = hostname::get_hostname().map_err(|err| err.to_string())?;
+fn handle_hostname() -> Result<(), Box<dyn Error>> {
+    let hostname = hostname::get_hostname()?;
 
     println!("{}", hostname);
 
@@ -2730,8 +2716,8 @@ fn handle_hostname() -> Result<(), String> {
 }
 
 #[inline]
-fn handle_kernel() -> Result<(), String> {
-    let kernel_version = kernel::get_kernel_version().map_err(|err| err.to_string())?;
+fn handle_kernel() -> Result<(), Box<dyn Error>> {
+    let kernel_version = kernel::get_kernel_version()?;
 
     println!("{}", kernel_version);
 
@@ -3195,7 +3181,7 @@ fn get_matches<'a>() -> ArgMatches<'a> {
 }
 
 #[inline]
-fn get_monitor_duration(matches: &ArgMatches) -> Result<Option<Duration>, String> {
+fn get_monitor_duration(matches: &ArgMatches) -> Result<Option<Duration>, Box<dyn Error>> {
     match matches.value_of("MONITOR") {
         Some(monitor) => {
             let monitor = NumberGtZero::from_str(monitor)
@@ -3209,7 +3195,7 @@ fn get_monitor_duration(matches: &ArgMatches) -> Result<Option<Duration>, String
 }
 
 #[inline]
-fn get_byte_unit(matches: &ArgMatches) -> Result<Option<ByteUnit>, String> {
+fn get_byte_unit(matches: &ArgMatches) -> Result<Option<ByteUnit>, Box<dyn Error>> {
     match matches.value_of("UNIT") {
         Some(unit) => {
             let unit = ByteUnit::from_str(unit)
