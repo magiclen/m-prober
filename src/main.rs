@@ -675,7 +675,7 @@ fn draw_process(
     let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {
         let mut processes_with_stats = process::get_processes_with_stat(&process_filter)?;
 
-        processes_with_stats.sort_by(|(a, _), (b, _)| b.vsz.cmp(&a.vsz));
+        processes_with_stats.sort_unstable_by(|(a, _), (b, _)| b.vsz.cmp(&a.vsz));
 
         if let Some(top) = top {
             if top < processes_with_stats.len() {
@@ -696,7 +696,7 @@ fn draw_process(
                 },
             )?;
 
-        processes_with_percentage.sort_by(
+        processes_with_percentage.sort_unstable_by(
             |(process_a, percentage_a), (process_b, percentage_b)| {
                 let percentage_a = *percentage_a;
                 let percentage_b = *percentage_b;
