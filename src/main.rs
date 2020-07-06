@@ -2433,7 +2433,7 @@ fn draw_cpu_info(
 
             let mut hz_string: Vec<String> = Vec::with_capacity(cpu.siblings);
 
-            for &cpu_mhz in cpu.cpus_mhz.iter() {
+            for cpu_mhz in cpu.cpus_mhz.iter().copied() {
                 let cpu_hz =
                     Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
 
@@ -2475,7 +2475,7 @@ fn draw_cpu_info(
             } else {
                 let mut percentage_string: Vec<String> = Vec::with_capacity(cpu.siblings);
 
-                for &p in all_percentage[i..].iter().take(cpu.siblings) {
+                for p in all_percentage[i..].iter().copied().take(cpu.siblings) {
                     percentage_string.push(format!("{:.2}%", p * 100f64));
                 }
 
