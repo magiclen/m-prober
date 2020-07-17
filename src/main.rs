@@ -4,6 +4,7 @@ extern crate clap;
 extern crate terminal_size;
 
 extern crate mprober_lib;
+extern crate validators;
 
 extern crate byte_unit;
 extern crate chrono;
@@ -30,6 +31,8 @@ use mprober::*;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use terminal_size::terminal_size;
+
+use validators::prelude::*;
 
 use byte_unit::{Byte, ByteUnit};
 use chrono::SecondsFormat;
@@ -400,7 +403,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else if let Some(sub_matches) = matches.subcommand_matches("web") {
         let monitor = match sub_matches.value_of("MONITOR") {
             Some(monitor) => {
-                let monitor = WebMonitorInterval::from_str(monitor)
+                let monitor = WebMonitorInterval::parse_str(monitor)
                     .map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
 
                 Duration::from_secs(monitor.get_number())
@@ -3184,7 +3187,7 @@ fn get_matches<'a>() -> ArgMatches<'a> {
 fn get_monitor_duration(matches: &ArgMatches) -> Result<Option<Duration>, Box<dyn Error>> {
     match matches.value_of("MONITOR") {
         Some(monitor) => {
-            let monitor = NumberGtZero::from_str(monitor)
+            let monitor = MonitorInterval::parse_str(monitor)
                 .map_err(|_| format!("`{}` is not a correct value for MILLI_SECONDS", monitor))?
                 .get_number();
 
