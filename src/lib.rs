@@ -10,8 +10,7 @@ extern crate validators_derive;
 
 extern crate validators;
 
-#[macro_use]
-extern crate lazy_static;
+extern crate once_cell;
 
 #[macro_use]
 extern crate serde_json;

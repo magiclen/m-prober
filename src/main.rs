@@ -14,8 +14,7 @@ extern crate users;
 extern crate getch;
 extern crate termcolor;
 
-#[macro_use]
-extern crate lazy_static;
+extern crate once_cell;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -41,6 +40,8 @@ use users::{Group, Groups, User, Users, UsersCache};
 
 use getch::Getch;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+
+use once_cell::sync::Lazy;
 
 const APP_NAME: &str = "M Prober";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -71,87 +72,85 @@ const ENV_FORCE_PLAIN: &str = "MPROBER_FORCE_PLAIN";
 static mut LIGHT_MODE: bool = false;
 static mut FORCE_PLAIN_MODE: bool = false;
 
-lazy_static! {
-    static ref COLOR_DEFAULT: ColorSpec = ColorSpec::new();
-    static ref COLOR_LABEL: ColorSpec = {
-        let mut color_spec = ColorSpec::new();
+static COLOR_DEFAULT: Lazy<ColorSpec> = Lazy::new(ColorSpec::new);
+static COLOR_LABEL: Lazy<ColorSpec> = Lazy::new(|| {
+    let mut color_spec = ColorSpec::new();
 
-        if !unsafe { FORCE_PLAIN_MODE } {
-            if unsafe { LIGHT_MODE } {
-                color_spec.set_fg(Some(DARK_CYAN_COLOR));
-            } else {
-                color_spec.set_fg(Some(CYAN_COLOR));
-            }
+    if !unsafe { FORCE_PLAIN_MODE } {
+        if unsafe { LIGHT_MODE } {
+            color_spec.set_fg(Some(DARK_CYAN_COLOR));
+        } else {
+            color_spec.set_fg(Some(CYAN_COLOR));
         }
+    }
 
-        color_spec
-    };
-    static ref COLOR_NORMAL_TEXT: ColorSpec = {
-        let mut color_spec = ColorSpec::new();
+    color_spec
+});
+static COLOR_NORMAL_TEXT: Lazy<ColorSpec> = Lazy::new(|| {
+    let mut color_spec = ColorSpec::new();
 
-        if !unsafe { FORCE_PLAIN_MODE } {
-            if unsafe { LIGHT_MODE } {
-                color_spec.set_fg(Some(BLACK_COLOR));
-            } else {
-                color_spec.set_fg(Some(WHITE_COLOR));
-            }
+    if !unsafe { FORCE_PLAIN_MODE } {
+        if unsafe { LIGHT_MODE } {
+            color_spec.set_fg(Some(BLACK_COLOR));
+        } else {
+            color_spec.set_fg(Some(WHITE_COLOR));
         }
+    }
 
-        color_spec
-    };
-    static ref COLOR_BOLD_TEXT: ColorSpec = {
-        let mut color_spec = ColorSpec::new();
+    color_spec
+});
+static COLOR_BOLD_TEXT: Lazy<ColorSpec> = Lazy::new(|| {
+    let mut color_spec = ColorSpec::new();
 
-        if !unsafe { FORCE_PLAIN_MODE } {
-            if unsafe { LIGHT_MODE } {
-                color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
-            } else {
-                color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
-            }
+    if !unsafe { FORCE_PLAIN_MODE } {
+        if unsafe { LIGHT_MODE } {
+            color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
+        } else {
+            color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
         }
+    }
 
-        color_spec
-    };
-    static ref COLOR_USED: ColorSpec = {
-        let mut color_spec = ColorSpec::new();
+    color_spec
+});
+static COLOR_USED: Lazy<ColorSpec> = Lazy::new(|| {
+    let mut color_spec = ColorSpec::new();
 
-        if !unsafe { FORCE_PLAIN_MODE } {
-            if unsafe { LIGHT_MODE } {
-                color_spec.set_fg(Some(WINE_COLOR));
-            } else {
-                color_spec.set_fg(Some(RED_COLOR));
-            }
+    if !unsafe { FORCE_PLAIN_MODE } {
+        if unsafe { LIGHT_MODE } {
+            color_spec.set_fg(Some(WINE_COLOR));
+        } else {
+            color_spec.set_fg(Some(RED_COLOR));
         }
+    }
 
-        color_spec
-    };
-    static ref COLOR_CACHE: ColorSpec = {
-        let mut color_spec = ColorSpec::new();
+    color_spec
+});
+static COLOR_CACHE: Lazy<ColorSpec> = Lazy::new(|| {
+    let mut color_spec = ColorSpec::new();
 
-        if !unsafe { FORCE_PLAIN_MODE } {
-            if unsafe { LIGHT_MODE } {
-                color_spec.set_fg(Some(ORANGE_COLOR));
-            } else {
-                color_spec.set_fg(Some(YELLOW_COLOR));
-            }
+    if !unsafe { FORCE_PLAIN_MODE } {
+        if unsafe { LIGHT_MODE } {
+            color_spec.set_fg(Some(ORANGE_COLOR));
+        } else {
+            color_spec.set_fg(Some(YELLOW_COLOR));
         }
+    }
 
-        color_spec
-    };
-    static ref COLOR_BUFFERS: ColorSpec = {
-        let mut color_spec = ColorSpec::new();
+    color_spec
+});
+static COLOR_BUFFERS: Lazy<ColorSpec> = Lazy::new(|| {
+    let mut color_spec = ColorSpec::new();
 
-        if !unsafe { FORCE_PLAIN_MODE } {
-            if unsafe { LIGHT_MODE } {
-                color_spec.set_fg(Some(DARK_BLUE_COLOR));
-            } else {
-                color_spec.set_fg(Some(SKY_CYAN_COLOR));
-            }
+    if !unsafe { FORCE_PLAIN_MODE } {
+        if unsafe { LIGHT_MODE } {
+            color_spec.set_fg(Some(DARK_BLUE_COLOR));
+        } else {
+            color_spec.set_fg(Some(SKY_CYAN_COLOR));
         }
+    }
 
-        color_spec
-    };
-}
+    color_spec
+});
 
 macro_rules! set_color_mode {
     ($sub_matches:ident) => {

@@ -15,27 +15,26 @@ use crate::byte_unit::{Byte, ByteUnit};
 
 use crate::mprober_lib::*;
 
+use crate::once_cell::sync::Lazy;
+
 static mut CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static mut NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static mut VOLUMES_STAT_DOING: AtomicBool = AtomicBool::new(false);
 
 static DELAY_DURATION: Duration = Duration::from_millis(33);
 
-lazy_static! {
-    static ref CPUS_STAT_LATEST_DETECT: Mutex<Option<Instant>> = Mutex::new(Some(Instant::now()));
-    static ref NETWORK_STAT_LATEST_DETECT: Mutex<Option<Instant>> =
-        Mutex::new(Some(Instant::now()));
-    static ref VOLUMES_STAT_LATEST_DETECT: Mutex<Option<Instant>> =
-        Mutex::new(Some(Instant::now()));
-}
+static CPUS_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
+    Lazy::new(|| Mutex::new(Some(Instant::now())));
+static NETWORK_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
+    Lazy::new(|| Mutex::new(Some(Instant::now())));
+static VOLUMES_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
+    Lazy::new(|| Mutex::new(Some(Instant::now())));
 
-lazy_static! {
-    static ref CPUS_STAT: Mutex<Option<Vec<f64>>> = Mutex::new(None);
-    static ref NETWORK_STAT: Mutex<Option<Vec<(network::Network, network::NetworkSpeed)>>> =
-        Mutex::new(None);
-    static ref VOLUMES_STAT: Mutex<Option<Vec<(volume::Volume, volume::VolumeSpeed)>>> =
-        Mutex::new(None);
-}
+static CPUS_STAT: Lazy<Mutex<Option<Vec<f64>>>> = Lazy::new(|| Mutex::new(None));
+static NETWORK_STAT: Lazy<Mutex<Option<Vec<(network::Network, network::NetworkSpeed)>>>> =
+    Lazy::new(|| Mutex::new(None));
+static VOLUMES_STAT: Lazy<Mutex<Option<Vec<(volume::Volume, volume::VolumeSpeed)>>>> =
+    Lazy::new(|| Mutex::new(None));
 
 pub struct Auth;
 
