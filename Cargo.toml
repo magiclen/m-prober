@@ -26,7 +26,7 @@ clap = "2.33.1"
 concat-with = "0.2"
 terminal_size = "0.1"
 
-validators = "0.21"
+validators = "0.22"
 byte-unit = "4"
 termcolor = "1"
 getch = "0.2"
@@ -49,6 +49,6 @@ rocket-include-static-resources = "0.9"
 rocket-include-handlebars = "0.12"
 
 [dependencies.validators-derive]
-version = "0.21"
+version = "0.22"
 default-features = false
 features = ["unsigned_integer", "number"]
