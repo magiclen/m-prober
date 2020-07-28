@@ -1,22 +1,24 @@
 [package]
 name = "mprober"
-version = "0.11.0-beta.4"
+version = "0.11.0-beta.5"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
 homepage = "https://magiclen.org/m-prober"
 keywords = ["probe", "mprober", "m-prober", "linux", "monitor"]
 categories = ["command-line-utilities"]
-description= "This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs."
+description = "This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs."
 readme = "README.md"
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "front-end/**/*", "views/**/*"]
+include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "front-end/**/*", "views/**/*"]
 
 [badges.travis-ci]
 repository = "magiclen/m-prober"
 branch = "master"
 
 [profile.release]
+lto = true
+codegen-units = 1
 panic = "abort"
 
 [dependencies]
@@ -41,7 +43,7 @@ users = "0.10"
 benchmarking = "0.4"
 base64 = "0.12"
 
-rocket = "0.4.2"
+rocket = "0.4.5"
 rocket-simple-authorization = "0.9"
 rocket-cache-response = "0.5"
 rocket-json-response = "0.5"
