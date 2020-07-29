@@ -19,7 +19,7 @@ $(EXE_i686): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | sed 's
 install:
 	$(MAKE)
 	sudo cp $(EXE_x86_64) $(INSTALLED_EXE)
-	sudo chown root. $(INSTALLED_EXE)
+	sudo chown root: $(INSTALLED_EXE)
 	sudo chmod 0755 $(INSTALLED_EXE)
 
 uninstall:
