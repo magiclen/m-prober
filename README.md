@@ -620,7 +620,7 @@ The unit of totals is **bytes**. The unit of rates is **bytes/second**.
 
 ##### Authorization
 
-If you need expose above HTTP APIs to the Internet. In order to prevent these APIs from being invoked by anyone, you can enable a simple authorization mechanism that is built in this program.
+If you need to expose above HTTP APIs to the Internet. In order to prevent these APIs from being invoked by anyone, you can enable a simple authorization mechanism that is built in this program.
  
 When starting the HTTP server from CLI, you can add a `-a <AUTH_KEY>` option. Then, every API needs to be invoked by a request which contains a `Authorization` header to send the `AUTH_KEY`.
 
