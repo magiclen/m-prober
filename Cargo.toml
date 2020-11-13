@@ -40,7 +40,7 @@ regex = "1"
 users = "0.10"
 
 benchmarking = "0.4"
-base64 = "0.12"
+base64 = "0.13"
 
 rocket = "0.4.5"
 rocket-simple-authorization = "0.9"
