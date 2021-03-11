@@ -348,6 +348,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let only_information = sub_matches.is_present("ONLY_INFORMATION");
 
+        #[allow(clippy::manual_map)]
         let top = match sub_matches.value_of("TOP") {
             Some(top) => Some(top.parse::<usize>()?),
             None => None,
@@ -371,16 +372,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         let user_filter = sub_matches.value_of("USER_FILTER");
         let group_filter = sub_matches.value_of("GROUP_FILTER");
 
+        #[allow(clippy::manual_map)]
         let program_filter = match sub_matches.value_of("PROGRAM_FILTER") {
             Some(program_filter) => Some(Regex::new(program_filter)?),
             None => None,
         };
 
+        #[allow(clippy::manual_map)]
         let tty_filter = match sub_matches.value_of("TTY_FILTER") {
             Some(tty_filter) => Some(Regex::new(tty_filter)?),
             None => None,
         };
 
+        #[allow(clippy::manual_map)]
         let pid_filter = match sub_matches.value_of("PID_FILTER") {
             Some(pid_filter) => Some(pid_filter.parse::<u32>()?),
             None => None,
@@ -667,11 +671,11 @@ fn draw_process(
     };
 
     let process_filter = process::ProcessFilter {
+        pid_filter,
         uid_filter,
         gid_filter,
         program_filter,
         tty_filter,
-        pid_filter,
     };
 
     let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {

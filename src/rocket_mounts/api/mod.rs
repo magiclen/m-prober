@@ -17,9 +17,9 @@ use crate::mprober_lib::*;
 
 use crate::once_cell::sync::Lazy;
 
-static mut CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
-static mut NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
-static mut VOLUMES_STAT_DOING: AtomicBool = AtomicBool::new(false);
+static CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
+static NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
+static VOLUMES_STAT_DOING: AtomicBool = AtomicBool::new(false);
 
 static DELAY_DURATION: Duration = Duration::from_millis(33);
 
@@ -31,8 +31,12 @@ static VOLUMES_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
     Lazy::new(|| Mutex::new(Some(Instant::now())));
 
 static CPUS_STAT: Lazy<Mutex<Option<Vec<f64>>>> = Lazy::new(|| Mutex::new(None));
+
+#[allow(clippy::type_complexity)]
 static NETWORK_STAT: Lazy<Mutex<Option<Vec<(network::Network, network::NetworkSpeed)>>>> =
     Lazy::new(|| Mutex::new(None));
+
+#[allow(clippy::type_complexity)]
 static VOLUMES_STAT: Lazy<Mutex<Option<Vec<(volume::Volume, volume::VolumeSpeed)>>>> =
     Lazy::new(|| Mutex::new(None));
 
@@ -182,7 +186,8 @@ fn detect_all_sleep(detect_interval: Duration, strict: bool) {
 }
 
 fn fetch_cpus_stat(detect_interval: Duration) {
-    if !unsafe { CPUS_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
+    if CPUS_STAT_DOING.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_err()
+    {
         CPUS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
             let cpus_stat =
@@ -190,39 +195,39 @@ fn fetch_cpus_stat(detect_interval: Duration) {
 
             CPUS_STAT.lock().unwrap().replace(cpus_stat);
 
-            unsafe {
-                CPUS_STAT_DOING.swap(false, Ordering::Relaxed);
-            }
+            CPUS_STAT_DOING.swap(false, Ordering::Relaxed);
         });
     }
 }
 
 fn fetch_network_stat(detect_interval: Duration) {
-    if !unsafe { NETWORK_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
+    if NETWORK_STAT_DOING
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
         NETWORK_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
             let network_stat = network::get_networks_with_speed(detect_interval).unwrap();
 
             NETWORK_STAT.lock().unwrap().replace(network_stat);
 
-            unsafe {
-                NETWORK_STAT_DOING.swap(false, Ordering::Relaxed);
-            }
+            NETWORK_STAT_DOING.swap(false, Ordering::Relaxed);
         });
     }
 }
 
 fn fetch_volumes_stat(detect_interval: Duration) {
-    if !unsafe { VOLUMES_STAT_DOING.compare_and_swap(false, true, Ordering::Relaxed) } {
+    if VOLUMES_STAT_DOING
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
         VOLUMES_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
             let volume_stat = volume::get_volumes_with_speed(detect_interval).unwrap();
 
             VOLUMES_STAT.lock().unwrap().replace(volume_stat);
 
-            unsafe {
-                VOLUMES_STAT_DOING.swap(false, Ordering::Relaxed);
-            }
+            VOLUMES_STAT_DOING.swap(false, Ordering::Relaxed);
         });
     }
 }

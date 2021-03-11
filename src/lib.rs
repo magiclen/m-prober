@@ -1,5 +1,5 @@
 #![feature(proc_macro_hygiene, decl_macro)]
-#![feature(seek_convenience)]
+#![feature(seek_stream_len)]
 
 extern crate mprober_lib;
 
