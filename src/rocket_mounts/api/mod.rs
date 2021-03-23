@@ -186,7 +186,7 @@ fn detect_all_sleep(detect_interval: Duration, strict: bool) {
 }
 
 fn fetch_cpus_stat(detect_interval: Duration) {
-    if CPUS_STAT_DOING.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_err()
+    if CPUS_STAT_DOING.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_ok()
     {
         CPUS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
@@ -203,7 +203,7 @@ fn fetch_cpus_stat(detect_interval: Duration) {
 fn fetch_network_stat(detect_interval: Duration) {
     if NETWORK_STAT_DOING
         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
+        .is_ok()
     {
         NETWORK_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
@@ -219,7 +219,7 @@ fn fetch_network_stat(detect_interval: Duration) {
 fn fetch_volumes_stat(detect_interval: Duration) {
     if VOLUMES_STAT_DOING
         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
+        .is_ok()
     {
         VOLUMES_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
