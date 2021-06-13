@@ -108,7 +108,6 @@ pub struct BenchmarkConfig {
     pub volume: bool,
 }
 
-#[allow(clippy::cognitive_complexity)]
 pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, BenchmarkError> {
     if !config.cpu && !config.memory && !config.volume {
         return Err(BenchmarkError::NoNeedBenchmark);
@@ -140,7 +139,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                 print!("{:.0}", cpu_mhz_iter.next().unwrap());
 
-                while let Some(cpu_mhz) = cpu_mhz_iter.next() {
+                for cpu_mhz in cpu_mhz_iter {
                     print!(" {:.0}", cpu_mhz);
                 }
 
@@ -173,7 +172,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                         let mut divisor = 1.0;
 
-                        let mut sum = 0;
+                        let mut sum = 0usize;
 
                         for i in 0..1_000_000 {
                             measurer.measure(|| {
@@ -219,7 +218,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                     let mut divisor = 1.0;
 
-                    let mut sum = 0;
+                    let mut sum = 0usize;
 
                     for i in 0..1_000_000 {
                         measurer.measure(|| {
@@ -356,10 +355,10 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                         }
 
                                         let file = Rc::new(RefCell::new(file));
-                                        let file_2 = Rc::clone(&file);
+                                        let file_2 = file.clone();
 
                                         let write = Rc::new(RefCell::new((true, 1)));
-                                        let write_2 = Rc::clone(&write);
+                                        let write_2 = write.clone();
 
                                         let bench_result_r =
                                             benchmarking::bench_function_with_duration(
@@ -415,7 +414,24 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                                     bench_result.speed() * BUFFER_SIZE as f64;
                                                 let mut file = file.borrow_mut();
 
-                                                match file.stream_len() {
+                                                /// Returns the length of this stream (in bytes).
+                                                ///
+                                                /// `Seek.stream_len(&mut self)` is unstable, so it is re-implemented here
+                                                fn stream_len(
+                                                    file: &mut File,
+                                                ) -> Result<u64, io::Error>
+                                                {
+                                                    let old_pos = file.stream_position()?;
+                                                    let len = file.seek(SeekFrom::End(0))?;
+
+                                                    if old_pos != len {
+                                                        file.seek(SeekFrom::Start(old_pos))?;
+                                                    }
+
+                                                    Ok(len)
+                                                }
+
+                                                match stream_len(&mut file) {
                                                     Ok(file_size) => {
                                                         let read = if file_size < TEST_FILE_SIZE {
                                                             let buffer = [0u8; BUFFER_SIZE];
