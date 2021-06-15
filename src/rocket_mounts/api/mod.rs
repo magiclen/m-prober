@@ -974,13 +974,13 @@ mod test {
     use std::time::Duration;
 
     use rocket::http::Header;
-    use rocket::local::Client;
+    use rocket::local::blocking::Client;
 
     const TEST_DETECT_INTERVAL: u64 = 1000;
     const TEST_AUTH_KEY: &str = "magic";
 
-    fn create_basic_rocket(has_auth_key: bool) -> Rocket {
-        let rocket = rocket::ignite()
+    fn create_basic_rocket(has_auth_key: bool) -> Rocket<Build> {
+        let rocket = rocket::build()
             .manage(super::super::DetectInterval(Duration::from_millis(TEST_DETECT_INTERVAL)));
 
         if has_auth_key {
@@ -994,7 +994,7 @@ mod test {
     fn test_no_need_auth() {
         let rocket = create_basic_rocket(false).mount("/api", routes![hostname, hostname_401]);
 
-        let client = Client::new(rocket).unwrap();
+        let client = Client::tracked(rocket).unwrap();
 
         {
             let mut req = client.get("/api/hostname");
@@ -1019,7 +1019,7 @@ mod test {
     fn test_need_auth() {
         let rocket = create_basic_rocket(true).mount("/api", routes![hostname, hostname_401]);
 
-        let client = Client::new(rocket).unwrap();
+        let client = Client::tracked(rocket).unwrap();
 
         {
             let mut req = client.get("/api/hostname");

@@ -1,5 +1,3 @@
-#![feature(decl_macro)]
-
 extern crate mprober_lib;
 
 extern crate byte_unit;
