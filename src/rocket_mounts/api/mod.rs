@@ -6,14 +6,17 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::rocket::{http::Status, request::Request, Rocket, State};
+use crate::rocket::http::Status;
+use crate::rocket::request::Request;
+use crate::rocket::{Build, Rocket, State};
+
 use crate::rocket_cache_response::CacheResponse;
 use crate::rocket_json_response::{json_gettext::JSONGetTextValue, JSONResponse};
 use crate::rocket_simple_authorization::SimpleAuthorization;
 
 use crate::byte_unit::{Byte, ByteUnit};
 
-use crate::mprober_lib::*;
+use crate::mprober_lib;
 
 use crate::once_cell::sync::Lazy;
 
@@ -33,18 +36,21 @@ static VOLUMES_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
 static CPUS_STAT: Lazy<Mutex<Option<Vec<f64>>>> = Lazy::new(|| Mutex::new(None));
 
 #[allow(clippy::type_complexity)]
-static NETWORK_STAT: Lazy<Mutex<Option<Vec<(network::Network, network::NetworkSpeed)>>>> =
-    Lazy::new(|| Mutex::new(None));
+static NETWORK_STAT: Lazy<
+    Mutex<Option<Vec<(mprober_lib::network::Network, mprober_lib::network::NetworkSpeed)>>>,
+> = Lazy::new(|| Mutex::new(None));
 
 #[allow(clippy::type_complexity)]
-static VOLUMES_STAT: Lazy<Mutex<Option<Vec<(volume::Volume, volume::VolumeSpeed)>>>> =
-    Lazy::new(|| Mutex::new(None));
+static VOLUMES_STAT: Lazy<
+    Mutex<Option<Vec<(mprober_lib::volume::Volume, mprober_lib::volume::VolumeSpeed)>>>,
+> = Lazy::new(|| Mutex::new(None));
 
 pub struct Auth;
 
-impl<'a, 'r> SimpleAuthorization<'a, 'r> for Auth {
-    fn authorizing(request: &'a Request<'r>, authorization: Option<&'a str>) -> Option<Self> {
-        let auth_key = request.guard::<State<super::AuthKey>>().unwrap();
+#[async_trait]
+impl<'r> SimpleAuthorization<'r> for Auth {
+    async fn authorizing(request: &'r Request<'_>, authorization: Option<&'r str>) -> Option<Self> {
+        let auth_key = request.rocket().state::<super::AuthKey>().unwrap();
 
         match auth_key.get_value() {
             Some(auth_key) => {
@@ -190,7 +196,8 @@ fn fetch_cpus_stat(detect_interval: Duration) {
         CPUS_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
             let cpus_stat =
-                cpu::get_all_cpu_utilization_in_percentage(true, detect_interval).unwrap();
+                mprober_lib::cpu::get_all_cpu_utilization_in_percentage(true, detect_interval)
+                    .unwrap();
 
             CPUS_STAT.lock().unwrap().replace(cpus_stat);
 
@@ -206,7 +213,8 @@ fn fetch_network_stat(detect_interval: Duration) {
     {
         NETWORK_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let network_stat = network::get_networks_with_speed(detect_interval).unwrap();
+            let network_stat =
+                mprober_lib::network::get_networks_with_speed(detect_interval).unwrap();
 
             NETWORK_STAT.lock().unwrap().replace(network_stat);
 
@@ -222,7 +230,7 @@ fn fetch_volumes_stat(detect_interval: Duration) {
     {
         VOLUMES_STAT_LATEST_DETECT.lock().unwrap().replace(Instant::now());
         thread::spawn(move || {
-            let volume_stat = volume::get_volumes_with_speed(detect_interval).unwrap();
+            let volume_stat = mprober_lib::volume::get_volumes_with_speed(detect_interval).unwrap();
 
             VOLUMES_STAT.lock().unwrap().replace(volume_stat);
 
@@ -234,7 +242,7 @@ fn fetch_volumes_stat(detect_interval: Duration) {
 #[get("/hostname")]
 fn hostname(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(
-        hostname::get_hostname().unwrap(),
+        mprober_lib::hostname::get_hostname().unwrap(),
     )))
 }
 
@@ -246,7 +254,7 @@ fn hostname_401() -> Status {
 #[get("/kernel")]
 fn kernel(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_string(
-        kernel::get_kernel_version().unwrap(),
+        mprober_lib::kernel::get_kernel_version().unwrap(),
     )))
 }
 
@@ -258,7 +266,7 @@ fn kernel_401() -> Status {
 #[get("/uptime")]
 fn uptime(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     CacheResponse::NoStore(JSONResponse::ok(JSONGetTextValue::from_u64(
-        uptime::get_uptime().unwrap().total_uptime.as_secs(),
+        mprober_lib::uptime::get_uptime().unwrap().total_uptime.as_secs(),
     )))
 }
 
@@ -269,7 +277,7 @@ fn uptime_401() -> Status {
 
 #[get("/time")]
 fn time(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
+    let rtc_date_time = mprober_lib::rtc_time::get_rtc_date_time().unwrap();
 
     let json_rtc_date_time = json!({
         "date": rtc_date_time.date().to_string(),
@@ -286,9 +294,9 @@ fn time_401() -> Status {
 
 #[get("/cpu")]
 fn cpu(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    let cpus = cpu::get_cpus().unwrap();
+    let cpus = mprober_lib::cpu::get_cpus().unwrap();
 
-    let load_average = load_average::get_load_average().unwrap();
+    let load_average = mprober_lib::load_average::get_load_average().unwrap();
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -325,7 +333,7 @@ fn cpu_401() -> Status {
 #[get("/cpu-detect")]
 fn cpu_detect(
     _auth: Auth,
-    detect_interval: State<super::DetectInterval>,
+    detect_interval: &State<super::DetectInterval>,
 ) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat(detect_interval.get_value());
 
@@ -335,9 +343,9 @@ fn cpu_detect(
 
     let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
-    let load_average = load_average::get_load_average().unwrap();
+    let load_average = mprober_lib::load_average::get_load_average().unwrap();
 
-    let cpus = cpu::get_cpus().unwrap();
+    let cpus = mprober_lib::cpu::get_cpus().unwrap();
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -374,7 +382,7 @@ fn cpu_detect_401() -> Status {
 
 #[get("/memory")]
 fn memory(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
-    let free = memory::free().unwrap();
+    let free = mprober_lib::memory::free().unwrap();
 
     let json_memory = json!({
         "total": free.mem.total,
@@ -409,7 +417,7 @@ fn memory_401() -> Status {
 #[get("/network-detect")]
 fn network_detect(
     _auth: Auth,
-    detect_interval: State<super::DetectInterval>,
+    detect_interval: &State<super::DetectInterval>,
 ) -> CacheResponse<JSONResponse<'static>> {
     fetch_network_stat(detect_interval.get_value());
 
@@ -418,7 +426,7 @@ fn network_detect(
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
 
-        let network_stat: &[(network::Network, network::NetworkSpeed)] =
+        let network_stat: &[(mprober_lib::network::Network, mprober_lib::network::NetworkSpeed)] =
             network_stat.as_ref().unwrap();
 
         let mut json_network = Vec::with_capacity(network_stat.len());
@@ -447,7 +455,7 @@ fn network_detect_401() -> Status {
 #[get("/volume")]
 fn volume(_auth: Auth) -> CacheResponse<JSONResponse<'static>> {
     let json_volumes = {
-        let volumes = volume::get_volumes().unwrap();
+        let volumes = mprober_lib::volume::get_volumes().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes.len());
 
@@ -476,7 +484,7 @@ fn volume_401() -> Status {
 #[get("/volume-detect")]
 fn volume_detect(
     _auth: Auth,
-    detect_interval: State<super::DetectInterval>,
+    detect_interval: &State<super::DetectInterval>,
 ) -> CacheResponse<JSONResponse<'static>> {
     fetch_volumes_stat(detect_interval.get_value());
 
@@ -485,7 +493,8 @@ fn volume_detect(
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
-        let volumes_stat: &[(volume::Volume, volume::VolumeSpeed)] = volumes_stat.as_ref().unwrap();
+        let volumes_stat: &[(mprober_lib::volume::Volume, mprober_lib::volume::VolumeSpeed)] =
+            volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
@@ -516,7 +525,7 @@ fn volume_detect_401() -> Status {
 #[get("/all")]
 fn all(
     _auth: Auth,
-    detect_interval: State<super::DetectInterval>,
+    detect_interval: &State<super::DetectInterval>,
 ) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat(detect_interval.get_value());
     fetch_network_stat(detect_interval.get_value());
@@ -528,19 +537,19 @@ fn all(
 
     let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
-    let load_average = load_average::get_load_average().unwrap();
+    let load_average = mprober_lib::load_average::get_load_average().unwrap();
 
-    let cpus = cpu::get_cpus().unwrap();
+    let cpus = mprober_lib::cpu::get_cpus().unwrap();
 
-    let free = memory::free().unwrap();
+    let free = mprober_lib::memory::free().unwrap();
 
-    let hostname = hostname::get_hostname().unwrap();
+    let hostname = mprober_lib::hostname::get_hostname().unwrap();
 
-    let kernel = kernel::get_kernel_version().unwrap();
+    let kernel = mprober_lib::kernel::get_kernel_version().unwrap();
 
-    let uptime = uptime::get_uptime().unwrap().total_uptime;
+    let uptime = mprober_lib::uptime::get_uptime().unwrap().total_uptime;
 
-    let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
+    let rtc_date_time = mprober_lib::rtc_time::get_rtc_date_time().unwrap();
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -583,7 +592,7 @@ fn all(
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
 
-        let network_stat: &[(network::Network, network::NetworkSpeed)] =
+        let network_stat: &[(mprober_lib::network::Network, mprober_lib::network::NetworkSpeed)] =
             network_stat.as_ref().unwrap();
 
         let mut json_network = Vec::with_capacity(network_stat.len());
@@ -604,7 +613,8 @@ fn all(
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
-        let volumes_stat: &[(volume::Volume, volume::VolumeSpeed)] = volumes_stat.as_ref().unwrap();
+        let volumes_stat: &[(mprober_lib::volume::Volume, mprober_lib::volume::VolumeSpeed)] =
+            volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
@@ -652,7 +662,7 @@ fn all_401() -> Status {
 #[get("/monitor")]
 fn monitor(
     _auth: Auth,
-    detect_interval: State<super::DetectInterval>,
+    detect_interval: &State<super::DetectInterval>,
 ) -> CacheResponse<JSONResponse<'static>> {
     fetch_cpus_stat(detect_interval.get_value());
     fetch_network_stat(detect_interval.get_value());
@@ -660,25 +670,25 @@ fn monitor(
 
     detect_all_sleep(detect_interval.get_value(), false);
 
-    let load_average = load_average::get_load_average().unwrap();
+    let load_average = mprober_lib::load_average::get_load_average().unwrap();
 
-    let cpus = cpu::get_cpus().unwrap();
+    let cpus = mprober_lib::cpu::get_cpus().unwrap();
 
-    let memory = memory::free().unwrap();
+    let memory = mprober_lib::memory::free().unwrap();
 
-    let hostname = hostname::get_hostname().unwrap();
+    let hostname = mprober_lib::hostname::get_hostname().unwrap();
 
-    let kernel = kernel::get_kernel_version().unwrap();
+    let kernel = mprober_lib::kernel::get_kernel_version().unwrap();
 
-    let uptime = uptime::get_uptime().unwrap().total_uptime;
+    let uptime = mprober_lib::uptime::get_uptime().unwrap().total_uptime;
 
-    let time = rtc_time::get_rtc_date_time().unwrap();
+    let time = mprober_lib::rtc_time::get_rtc_date_time().unwrap();
 
     let cpus_stat = CPUS_STAT.lock().unwrap();
 
     let cpus_stat: &[f64] = cpus_stat.as_ref().unwrap();
 
-    let uptime_string = format_duration(uptime);
+    let uptime_string = mprober_lib::format_duration(uptime);
 
     let json_cpus = {
         let mut json_cpus = Vec::with_capacity(cpus.len());
@@ -755,7 +765,7 @@ fn monitor(
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
 
-        let network_stat: &[(network::Network, network::NetworkSpeed)] =
+        let network_stat: &[(mprober_lib::network::Network, mprober_lib::network::NetworkSpeed)] =
             network_stat.as_ref().unwrap();
 
         let mut json_network = Vec::with_capacity(network_stat.len());
@@ -817,7 +827,8 @@ fn monitor(
     let json_volumes = {
         let volumes_stat = VOLUMES_STAT.lock().unwrap();
 
-        let volumes_stat: &[(volume::Volume, volume::VolumeSpeed)] = volumes_stat.as_ref().unwrap();
+        let volumes_stat: &[(mprober_lib::volume::Volume, mprober_lib::volume::VolumeSpeed)] =
+            volumes_stat.as_ref().unwrap();
 
         let mut json_volumes = Vec::with_capacity(volumes_stat.len());
 
@@ -940,7 +951,7 @@ fn monitor_401() -> Status {
     Status::Unauthorized
 }
 
-pub fn mounts(rocket: Rocket) -> Rocket {
+pub fn mounts(rocket: Rocket<Build>) -> Rocket<Build> {
     rocket
         .mount("/api", routes![hostname, hostname_401])
         .mount("/api", routes![kernel, kernel_401])

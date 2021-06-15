@@ -38,12 +38,12 @@ users = "0.11"
 benchmarking = "0.4"
 base64 = "0.13"
 
-rocket = "0.4.5"
-rocket-simple-authorization = "0.9"
-rocket-cache-response = "0.5"
-rocket-json-response = "0.5"
-rocket-include-static-resources = "0.9"
-rocket-include-handlebars = "0.12"
+rocket = { git = "https://github.com/SergioBenitez/Rocket", version = "0.5.0-dev" }
+rocket-simple-authorization = { git = "https://github.com/magiclen/rocket-simple-authorization", version = "0.10" }
+rocket-cache-response = { git = "https://github.com/magiclen/rocket-cache-response", version = "0.6" }
+rocket-json-response = { git = "https://github.com/magiclen/rocket-json-response", version = "0.6" }
+rocket-include-static-resources = { git = "https://github.com/magiclen/rocket-include-static-resources", version = "0.10", features = ["cache"] }
+rocket-include-handlebars = { git = "https://github.com/magiclen/rocket-include-handlebars", version = "0.13" }
 
 [dependencies.validators-derive]
 version = "0.22"

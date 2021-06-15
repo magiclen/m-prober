@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use crate::rocket::{Rocket, State};
+use crate::rocket::{Build, Rocket, State};
 
 use crate::rocket_cache_response::CacheResponse;
-use crate::rocket_include_handlebars::HandlebarsResponse;
+use crate::rocket_include_handlebars::{
+    EtagIfNoneMatch, HandlebarsContextManager, HandlebarsResponse,
+};
 use crate::rocket_json_response::json_gettext::JSONGetTextValue;
 
 const HANDLEBARS_RESOURCES_CACHE_MAX_AGE: u32 = 259_200;
@@ -14,8 +16,10 @@ fn handlebars_response(responder: HandlebarsResponse) -> CacheResponse<Handlebar
 
 #[get("/")]
 fn index(
-    detect_interval: State<super::DetectInterval>,
-    auth_key: State<super::AuthKey>,
+    cm: &State<HandlebarsContextManager>,
+    etag_if_none_match: &EtagIfNoneMatch,
+    detect_interval: &State<super::DetectInterval>,
+    auth_key: &State<super::AuthKey>,
 ) -> CacheResponse<HandlebarsResponse> {
     let mut map = HashMap::new();
 
@@ -27,13 +31,13 @@ fn index(
         map.insert("authKey", JSONGetTextValue::from_str(auth_key));
     }
 
-    handlebars_response(handlebars_response!("index", &map))
+    handlebars_response(handlebars_response!(cm, etag_if_none_match, "index", &map))
 }
 
-pub fn rocket_handler(rocket: Rocket) -> Rocket {
+pub fn rocket_handler(rocket: Rocket<Build>) -> Rocket<Build> {
     rocket
-        .attach(HandlebarsResponse::fairing(|handlebars| {
-            handlebars_resources_initialize!(handlebars, "index", "views/index.hbs",);
-        }))
+        .attach(handlebars_resources_initializer!(
+            "index" => "views/index.hbs"
+        ))
         .mount("/", routes![index])
 }

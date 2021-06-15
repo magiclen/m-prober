@@ -4,12 +4,11 @@ mod api;
 mod monitor;
 mod static_resources;
 
+use std::net::IpAddr;
 use std::ops::Deref;
 use std::time::Duration;
 
-use crate::rocket::{config::Environment, Config};
-
-use crate::rand::{self, RngCore};
+use crate::rocket::{Config as RocketConfig, Error as RocketError};
 
 #[derive(Debug)]
 struct DetectInterval(Duration);
@@ -40,31 +39,20 @@ impl AuthKey {
     }
 }
 
-pub fn launch(
+pub async fn launch(
     monitor: Duration,
-    address: String,
+    address: IpAddr,
     listen_port: u16,
     auth_key: Option<String>,
     only_api: bool,
-) {
-    let mut config = Config::build(if cfg!(debug_assertions) {
-        Environment::Development
-    } else {
-        Environment::Production
-    });
+) -> Result<(), RocketError> {
+    let config = RocketConfig {
+        address,
+        port: listen_port,
+        ..RocketConfig::default()
+    };
 
-    let mut secret_key = [0u8; 32];
-
-    rand::thread_rng().fill_bytes(&mut secret_key);
-
-    config.secret_key = Some(base64::encode(&secret_key));
-
-    config.address = address;
-
-    config.port = listen_port;
-
-    let rocket =
-        rocket::custom(config.unwrap()).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
+    let rocket = rocket::custom(config).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
 
     let rocket = api::mounts(rocket);
 
@@ -76,5 +64,5 @@ pub fn launch(
         monitor::rocket_handler(rocket)
     };
 
-    rocket.launch();
+    rocket.launch().await
 }

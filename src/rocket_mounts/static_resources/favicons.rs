@@ -1,75 +1,22 @@
-const STATIC_RESOURCES_CACHE_MAX_AGE: u32 = 259_200;
+use crate::rocket::{Build, Rocket};
 
-use crate::rocket_cache_response::CacheResponse;
-use crate::rocket_include_static_resources::StaticResponse;
-
-fn static_response(id: &'static str) -> CacheResponse<StaticResponse> {
-    let responder = static_response!(id);
-
-    CacheResponse::public_only_release(responder, STATIC_RESOURCES_CACHE_MAX_AGE, false)
+cached_static_response_handler! {
+    259_200;
+    "/web-app.manifest" => web_app_manifest => "web-app.manifest",
+    "/browser-config.xml" => browser_config => "browser-config",
+    "/favicon-monochrome.svg" => favicon_monochrome => "favicon-monochrome",
+    "/favicon.ico" => favicon => "favicon",
+    "/favicon-512.png" => favicon_512 => "favicon-512",
+    "/favicon-192.png" => favicon_192 => "favicon-192",
+    "/favicon-32.png" => favicon_32 => "favicon-32",
+    "/favicon-16.png" => favicon_16 => "favicon-16",
+    "/favicon-180-i.png" => favicon_180_i => "favicon-180-i",
+    "/mstile-310.png" => mstile_310 => "mstile-310",
+    "/mstile-150.png" => mstile_150 => "mstile-150",
+    "/mstile-70.png" => mstile_70 => "mstile-70",
 }
 
-#[get("/web-app.manifest")]
-fn web_app_manifest() -> CacheResponse<StaticResponse> {
-    static_response("web-app.manifest")
-}
-
-#[get("/browser-config.xml")]
-fn browser_config() -> CacheResponse<StaticResponse> {
-    static_response("browser-config")
-}
-
-#[get("/favicon-monochrome.svg")]
-fn favicon_monochrome() -> CacheResponse<StaticResponse> {
-    static_response("favicon-monochrome")
-}
-
-#[get("/favicon.ico")]
-fn favicon() -> CacheResponse<StaticResponse> {
-    static_response("favicon")
-}
-
-#[get("/favicon-512.png")]
-fn favicon_512() -> CacheResponse<StaticResponse> {
-    static_response("favicon-512")
-}
-
-#[get("/favicon-192.png")]
-fn favicon_192() -> CacheResponse<StaticResponse> {
-    static_response("favicon-192")
-}
-
-#[get("/favicon-32.png")]
-fn favicon_32() -> CacheResponse<StaticResponse> {
-    static_response("favicon-32")
-}
-
-#[get("/favicon-16.png")]
-fn favicon_16() -> CacheResponse<StaticResponse> {
-    static_response("favicon-16")
-}
-
-#[get("/favicon-180-i.png")]
-fn favicon_180_i() -> CacheResponse<StaticResponse> {
-    static_response("favicon-180-i")
-}
-
-#[get("/mstile-310.png")]
-fn mstile_310() -> CacheResponse<StaticResponse> {
-    static_response("mstile-310")
-}
-
-#[get("/mstile-150.png")]
-fn mstile_150() -> CacheResponse<StaticResponse> {
-    static_response("mstile-150")
-}
-
-#[get("/mstile-70.png")]
-fn mstile_70() -> CacheResponse<StaticResponse> {
-    static_response("mstile-70")
-}
-
-pub fn mounts(rocket: rocket::Rocket) -> rocket::Rocket {
+pub fn mounts(rocket: Rocket<Build>) -> Rocket<Build> {
     rocket
         .mount("/", routes![web_app_manifest])
         .mount("/", routes![browser_config])

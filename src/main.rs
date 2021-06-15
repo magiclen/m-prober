@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::error::Error;
 use std::io::{self, ErrorKind, Write};
+use std::net::IpAddr;
 use std::process as std_process;
 use std::sync::Arc;
 use std::thread;
@@ -287,7 +288,8 @@ macro_rules! monitor_handler {
     };
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[rocket::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let matches = get_matches();
 
     if matches.subcommand_matches("hostname").is_some() {
@@ -414,7 +416,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             None => unreachable!(),
         };
 
-        let address = sub_matches.value_of("ADDRESS").unwrap();
+        let address = sub_matches.value_of("ADDRESS").unwrap().parse()?;
 
         let listen_port = match sub_matches.value_of("LISTEN_PORT") {
             Some(port) => {
@@ -431,7 +433,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let only_api = sub_matches.is_present("ONLY_API");
 
-        handle_web(monitor, address, listen_port, auth_key, only_api)
+        handle_web(monitor, address, listen_port, auth_key, only_api).await
     } else if let Some(sub_matches) = matches.subcommand_matches("benchmark") {
         let warming_up_duration = match sub_matches.value_of("WARMING_UP_DURATION") {
             Some(millisecond) => {
@@ -531,20 +533,15 @@ fn handle_benchmark(
 }
 
 #[inline]
-fn handle_web(
+async fn handle_web(
     monitor: Duration,
-    address: &str,
+    address: IpAddr,
     listen_port: u16,
     auth_key: Option<&str>,
     only_api: bool,
 ) -> Result<(), Box<dyn Error>> {
-    rocket_mounts::launch(
-        monitor,
-        address.to_string(),
-        listen_port,
-        auth_key.map(|s| s.to_string()),
-        only_api,
-    );
+    rocket_mounts::launch(monitor, address, listen_port, auth_key.map(|s| s.to_string()), only_api)
+        .await?;
 
     Ok(())
 }
