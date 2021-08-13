@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.11.0-beta.8"
+version = "0.11.0-beta.9"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/m-prober"
@@ -23,7 +23,7 @@ clap = "2.33.1"
 concat-with = "0.2"
 terminal_size = "0.1"
 
-validators = "0.22"
+validators = "0.23"
 byte-unit = "4"
 termcolor = "1"
 getch = "0.2"
@@ -38,14 +38,14 @@ users = "0.11"
 benchmarking = "0.4"
 base64 = "0.13"
 
-rocket = { git = "https://github.com/SergioBenitez/Rocket", version = "0.5.0-dev" }
-rocket-simple-authorization = { git = "https://github.com/magiclen/rocket-simple-authorization", version = "0.10" }
-rocket-cache-response = { git = "https://github.com/magiclen/rocket-cache-response", version = "0.6" }
-rocket-json-response = { git = "https://github.com/magiclen/rocket-json-response", version = "0.6" }
-rocket-include-static-resources = { git = "https://github.com/magiclen/rocket-include-static-resources", version = "0.10", features = ["cache"] }
-rocket-include-handlebars = { git = "https://github.com/magiclen/rocket-include-handlebars", version = "0.13" }
+rocket = "0.5.0-rc.1"
+rocket-simple-authorization = "0.10"
+rocket-cache-response = "0.6"
+rocket-json-response = "0.6"
+rocket-include-static-resources = { version = "0.10", features = ["cache"] }
+rocket-include-handlebars = "0.13"
 
 [dependencies.validators-derive]
-version = "0.22"
+version = "0.23"
 default-features = false
 features = ["unsigned_integer", "number"]
