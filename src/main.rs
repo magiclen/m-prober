@@ -560,8 +560,8 @@ fn handle_process(
     tty_filter: Option<Regex>,
     pid_filter: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
-    let user_filter = user_filter.as_deref();
-    let group_filter = group_filter.as_deref();
+    let user_filter = user_filter;
+    let group_filter = group_filter;
     let program_filter = program_filter.as_ref();
     let tty_filter = tty_filter.as_ref();
 
