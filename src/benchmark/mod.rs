@@ -10,10 +10,10 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
-use crate::mprober_lib::*;
+use mprober_lib::*;
 
-use crate::byte_unit::{Byte, ByteUnit};
-use crate::rand::{self, Rng};
+use byte_unit::{Byte, ByteUnit};
+use rand::{self, Rng};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BenchmarkLog {

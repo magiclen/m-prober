@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use mprober::*;
 
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{Arg, ArgMatches, Command};
 use terminal_size::terminal_size;
 
 use validators::prelude::*;
@@ -2467,7 +2467,7 @@ fn draw_cpu_info(
             if only_information {
                 for (i, hz_string) in hz_string.into_iter().enumerate() {
                     stdout.set_color(&*COLOR_LABEL)?;
-                    write!(&mut stdout, "{1:<0$}", d, format!("CPU{}", i))?;
+                    write!(&mut stdout, "{1:<0$}", d, format_args!("CPU{}", i))?;
 
                     stdout.set_color(&*COLOR_BOLD_TEXT)?;
                     write!(&mut stdout, "{1:>0$}", hz_string_len, hz_string)?;
@@ -2494,7 +2494,7 @@ fn draw_cpu_info(
                     let hz_string = hz_string_iter.next().unwrap();
 
                     stdout.set_color(&*COLOR_LABEL)?;
-                    write!(&mut stdout, "{1:<0$}", d, format!("CPU{}", i))?;
+                    write!(&mut stdout, "{1:<0$}", d, format_args!("CPU{}", i))?;
 
                     stdout.set_color(&*COLOR_NORMAL_TEXT)?;
                     write!(&mut stdout, "[")?; // 1
@@ -2727,9 +2727,9 @@ fn handle_kernel() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_matches<'a>() -> ArgMatches<'a> {
-    App::new(APP_NAME)
-        .set_term_width(terminal_size().map(|(width, _)| width.0 as usize).unwrap_or(0))
+fn get_matches() -> ArgMatches {
+    Command::new(APP_NAME)
+        .term_width(terminal_size().map(|(width, _)| width.0 as usize).unwrap_or(0))
         .version(CARGO_PKG_VERSION)
         .author(CARGO_PKG_AUTHORS)
         .about(concat!("M Prober is a free and simple probe utility for Linux.\n\nEXAMPLES:\n", concat_line!(prefix "mprober ",
@@ -2792,170 +2792,170 @@ fn get_matches<'a>() -> ArgMatches<'a> {
                 "benchmark --enable-memory   # Benchmark the memory",
             )))
         .subcommand(
-            SubCommand::with_name("hostname")
+            Command::new("hostname")
                 .aliases(&["h", "host", "name", "servername"])
-                .about("Shows the hostname")
+                .about("Show the hostname")
                 .display_order(0)
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("kernel")
+            Command::new("kernel")
                 .aliases(&["k", "l", "linux"])
-                .about("Shows the kernel version")
+                .about("Show the kernel version")
                 .display_order(1)
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("uptime")
+            Command::new("uptime")
                 .aliases(&["u", "up", "utime", "ut"])
-                .about("Shows the uptime")
+                .about("Show the uptime")
                 .display_order(2)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows the uptime and refreshes every second"),
+                        .short('m')
+                        .help("Show the uptime and refresh every second"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .arg(
-                    Arg::with_name("SECOND")
+                    Arg::new("SECOND")
                         .long("second")
-                        .short("s")
-                        .help("Shows the uptime in seconds"),
+                        .short('s')
+                        .help("Show the uptime in seconds"),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("time")
+            Command::new("time")
                 .aliases(&[
                     "t", "systime", "stime", "st", "utc", "utctime", "rtc", "rtctime", "date",
                 ])
-                .about("Shows the RTC (UTC) date and time")
+                .about("Show the RTC (UTC) date and time")
                 .display_order(3)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows the RTC (UTC) date and time, and refreshes every second"),
+                        .short('m')
+                        .help("Show the RTC (UTC) date and time, and refresh every second"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("cpu")
+            Command::new("cpu")
                 .aliases(&["c", "cpus", "core", "cores", "load", "processor", "processors"])
-                .about("Shows CPU stats")
+                .about("Show CPU stats")
                 .display_order(4)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows CPU stats and refreshes every N milliseconds")
+                        .short('m')
+                        .help("Show CPU stats and refresh every N milliseconds")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .arg(
-                    Arg::with_name("SEPARATE")
+                    Arg::new("SEPARATE")
                         .long("separate")
-                        .short("s")
+                        .short('s')
                         .help("Separates each CPU"),
                 )
                 .arg(
-                    Arg::with_name("ONLY_INFORMATION")
+                    Arg::new("ONLY_INFORMATION")
                         .long("only-information")
-                        .short("i")
-                        .help("Shows only information about CPUs"),
+                        .short('i')
+                        .help("Show only information about CPUs"),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("memory")
+            Command::new("memory")
                 .aliases(&[
                     "m", "mem", "f", "free", "memories", "swap", "ram", "dram", "ddr", "cache",
                     "buffer", "buffers", "buf", "buff",
                 ])
-                .about("Shows memory stats")
+                .about("Show memory stats")
                 .display_order(5)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows memory stats and refreshes every N milliseconds")
+                        .short('m')
+                        .help("Show memory stats and refresh every N milliseconds")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .arg(
-                    Arg::with_name("UNIT")
+                    Arg::new("UNIT")
                         .long("unit")
-                        .short("u")
+                        .short('u')
                         .help("Forces to use a fixed unit")
                         .takes_value(true),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("network")
+            Command::new("network")
                 .aliases(&["n", "net", "networks", "bandwidth", "traffic"])
-                .about("Shows network stats")
+                .about("Show network stats")
                 .display_order(6)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows network stats and refreshes every N milliseconds")
+                        .short('m')
+                        .help("Show network stats and refresh every N milliseconds")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .arg(
-                    Arg::with_name("UNIT")
+                    Arg::new("UNIT")
                         .long("unit")
-                        .short("u")
+                        .short('u')
                         .help("Forces to use a fixed unit")
                         .takes_value(true),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("volume")
+            Command::new("volume")
                 .aliases(&[
                     "v", "storage", "volumes", "d", "disk", "disks", "blk", "block", "blocks",
                     "mount", "mounts", "ssd", "hdd",
                 ])
-                .about("Shows volume stats")
+                .about("Show volume stats")
                 .display_order(7)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows volume stats and refreshes every N milliseconds")
+                        .short('m')
+                        .help("Show volume stats and refresh every N milliseconds")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .arg(
-                    Arg::with_name("UNIT")
+                    Arg::new("UNIT")
                         .long("unit")
-                        .short("u")
+                        .short('u')
                         .help("Forces to use a fixed unit")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("ONLY_INFORMATION")
+                    Arg::new("ONLY_INFORMATION")
                         .long("only-information")
-                        .short("i")
-                        .help("Shows only information about volumes without I/O rates"),
+                        .short('i')
+                        .help("Show only information about volumes without I/O rates"),
                 )
                 .arg(
-                    Arg::with_name("MOUNTS")
+                    Arg::new("MOUNTS")
                         .long("mounts")
                         .aliases(&["mount", "point", "points"])
                         .help("Also shows mount points"),
@@ -2963,117 +2963,117 @@ fn get_matches<'a>() -> ArgMatches<'a> {
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("process")
+            Command::new("process")
                 .aliases(&["p", "ps"])
-                .about("Shows process stats")
+                .about("Show process stats")
                 .display_order(8)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Shows volume stats and refreshes every N milliseconds")
+                        .short('m')
+                        .help("Show volume stats and refresh every N milliseconds")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS"),
                 )
-                .arg(Arg::with_name("PLAIN").long("plain").short("p").help("No colors"))
-                .arg(Arg::with_name("LIGHT").long("light").short("l").help("Darker colors"))
+                .arg(Arg::new("PLAIN").long("plain").short('p').help("No colors"))
+                .arg(Arg::new("LIGHT").long("light").short('l').help("Darker colors"))
                 .arg(
-                    Arg::with_name("UNIT")
+                    Arg::new("UNIT")
                         .long("unit")
-                        .short("u")
+                        .short('u')
                         .help("Forces to use a fixed unit")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("ONLY_INFORMATION")
+                    Arg::new("ONLY_INFORMATION")
                         .long("only-information")
-                        .short("i")
-                        .help("Shows only information about processes without CPU usage"),
+                        .short('i')
+                        .help("Show only information about processes without CPU usage"),
                 )
                 .arg(
-                    Arg::with_name("TOP")
+                    Arg::new("TOP")
                         .long("top")
                         .help("Sets the max number of processes shown on the screen")
                         .takes_value(true)
                         .value_name("MAX_NUMBER_OF_PROCESSES"),
                 )
                 .arg(
-                    Arg::with_name("TRUNCATE")
+                    Arg::new("TRUNCATE")
                         .long("truncate")
-                        .help("Truncates the user name, the group name and the program name of processes")
+                        .help("Truncate the user name, the group name and the program name of processes")
                         .takes_value(true)
                         .value_name("LENGTH")
                         .default_value("7"),
                 )
                 .arg(
-                    Arg::with_name("START_TIME")
+                    Arg::new("START_TIME")
                         .long("start-time")
-                        .short("t")
+                        .short('t')
                         .alias("time")
-                        .help("Shows when the progresses start")
+                        .help("Show when the progresses start")
                         .takes_value(false),
                 )
                 .arg(
-                    Arg::with_name("USER_FILTER")
+                    Arg::new("USER_FILTER")
                         .long("user-filter")
                         .alias("filter-user")
-                        .help("Shows only processes which are related to a specific user")
+                        .help("Show only processes which are related to a specific user")
                         .takes_value(true)
                         .value_name("USER_NAME"),
                 )
                 .arg(
-                    Arg::with_name("GROUP_FILTER")
+                    Arg::new("GROUP_FILTER")
                         .long("group-filter")
                         .alias("filter-group")
-                        .help("Shows only processes which are related to a specific group")
+                        .help("Show only processes which are related to a specific group")
                         .takes_value(true)
                         .value_name("GROUP_NAME"),
                 )
                 .arg(
-                    Arg::with_name("PROGRAM_FILTER")
+                    Arg::new("PROGRAM_FILTER")
                         .long("program-filter")
                         .alias("filter-program")
-                        .help("Shows only processes which are related to specific programs or commands matched by a regex")
+                        .help("Show only processes which are related to specific programs or commands matched by a regex")
                         .takes_value(true)
                         .value_name("REGEX"),
                 )
                 .arg(
-                    Arg::with_name("TTY_FILTER")
+                    Arg::new("TTY_FILTER")
                         .long("tty-filter")
                         .alias("filter-tty")
-                        .help("Shows only processes which are run on specific TTY/PTS matched by a regex")
+                        .help("Show only processes which are run on specific TTY/PTS matched by a regex")
                         .takes_value(true)
                         .value_name("REGEX"),
                 )
                 .arg(
-                    Arg::with_name("PID_FILTER")
+                    Arg::new("PID_FILTER")
                         .long("pid-filter")
                         .alias("filter-pid")
-                        .help("Shows only processes which are related to a specific PID")
+                        .help("Show only processes which are related to a specific PID")
                         .takes_value(true)
                         .value_name("PID"),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("web")
+            Command::new("web")
                 .aliases(&["w", "server", "http"])
-                .about("Starts a HTTP service to monitor this computer")
+                .about("Start a HTTP service to monitor this computer")
                 .display_order(9)
                 .arg(
-                    Arg::with_name("MONITOR")
+                    Arg::new("MONITOR")
                         .long("monitor")
-                        .short("m")
-                        .help("Automatically refreshes every N seconds")
+                        .short('m')
+                        .help("Automatically refresh every N seconds")
                         .takes_value(true)
                         .value_name("SECONDS")
                         .default_value("3"),
                 )
                 .arg(
-                    Arg::with_name("ADDRESS")
+                    Arg::new("ADDRESS")
                         .long("address")
                         .visible_alias("addr")
-                        .help("Assigns the address that M Prober binds.")
+                        .help("Assign the address that M Prober binds.")
                         .takes_value(true)
                         .default_value(if cfg!(debug_assertions) {
                             "127.0.0.1"
@@ -3082,100 +3082,100 @@ fn get_matches<'a>() -> ArgMatches<'a> {
                         }),
                 )
                 .arg(
-                    Arg::with_name("LISTEN_PORT")
+                    Arg::new("LISTEN_PORT")
                         .long("listen-port")
                         .visible_alias("port")
-                        .short("p")
-                        .help("Assigns a TCP port for the HTTP service")
+                        .short('p')
+                        .help("Assign a TCP port for the HTTP service")
                         .takes_value(true)
                         .default_value("8000"),
                 )
                 .arg(
-                    Arg::with_name("AUTH_KEY")
+                    Arg::new("AUTH_KEY")
                         .long("auth-key")
-                        .short("a")
-                        .help("Assigns an auth key")
+                        .short('a')
+                        .help("Assign an auth key")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("ONLY_API")
+                    Arg::new("ONLY_API")
                         .long("only-api")
                         .aliases(&["only-apis"])
-                        .help("Disables the web page"),
+                        .help("Disable the web page"),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )
         .subcommand(
-            SubCommand::with_name("benchmark")
+            Command::new("benchmark")
                 .aliases(&["b", "bench", "performance"])
-                .about("Runs benchmarks to measure the performance of this environment")
+                .about("Run benchmarks to measure the performance of this environment")
                 .display_order(10)
                 .arg(
-                    Arg::with_name("WARMING_UP_DURATION")
+                    Arg::new("WARMING_UP_DURATION")
                         .display_order(0)
                         .long("warming-up-duration")
-                        .help("Assigns a duration for warming up")
+                        .help("Assign a duration for warming up")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS")
                         .default_value("3000"),
                 )
                 .arg(
-                    Arg::with_name("BENCHMARK_DURATION")
+                    Arg::new("BENCHMARK_DURATION")
                         .display_order(1)
                         .long("benchmark-duration")
-                        .help("Assigns a duration for each benchmarking")
+                        .help("Assign a duration for each benchmarking")
                         .takes_value(true)
                         .value_name("MILLI_SECONDS")
                         .default_value("5000"),
                 )
                 .arg(
-                    Arg::with_name("VERBOSE")
+                    Arg::new("VERBOSE")
                         .display_order(2)
                         .long("verbose")
-                        .short("v")
-                        .help("Shows more information in stderr"),
+                        .short('v')
+                        .help("Show more information in stderr"),
                 )
                 .arg(
-                    Arg::with_name("DISABLE_CPU")
+                    Arg::new("DISABLE_CPU")
                         .display_order(10)
                         .long("disable-cpu")
                         .aliases(&["disabled-cpu", "disable-cpus", "disabled-cpus"])
                         .help("Not to benchmark CPUs"),
                 )
                 .arg(
-                    Arg::with_name("ENABLE_CPU")
+                    Arg::new("ENABLE_CPU")
                         .display_order(100)
                         .long("enable-cpu")
                         .aliases(&["enabled-cpu", "enable-cpus", "enabled-cpus"])
-                        .help("Allows to benchmark CPUs (disables others by default)"),
+                        .help("Allow to benchmark CPUs (disables others by default)"),
                 )
                 .arg(
-                    Arg::with_name("DISABLE_MEMORY")
+                    Arg::new("DISABLE_MEMORY")
                         .display_order(11)
                         .long("disable-memory")
                         .aliases(&["disabled-memory"])
                         .help("Not to benchmark memory"),
                 )
                 .arg(
-                    Arg::with_name("ENABLE_MEMORY")
+                    Arg::new("ENABLE_MEMORY")
                         .display_order(101)
                         .long("enable-memory")
                         .aliases(&["enabled-memory"])
-                        .help("Allows to benchmark memory (disables others by default)"),
+                        .help("Allow to benchmark memory (disables others by default)"),
                 )
                 .arg(
-                    Arg::with_name("DISABLE_VOLUME")
+                    Arg::new("DISABLE_VOLUME")
                         .display_order(13)
                         .long("disable-volume")
                         .aliases(&["disabled-volume", "disable-volumes", "disabled-volumes"])
                         .help("Not to benchmark volumes"),
                 )
                 .arg(
-                    Arg::with_name("ENABLE_VOLUME")
+                    Arg::new("ENABLE_VOLUME")
                         .display_order(103)
                         .long("enable-volume")
                         .aliases(&["enabled-volume", "enable-volumes", "enabled-volumes"])
-                        .help("Allows to benchmark volumes (disables others by default)"),
+                        .help("Allow to benchmark volumes (disables others by default)"),
                 )
                 .after_help("Enjoy it! https://magiclen.org"),
         )

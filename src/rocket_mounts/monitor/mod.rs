@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use crate::rocket::{Build, Rocket, State};
+use rocket::{Build, Rocket, State};
 
-use crate::rocket_cache_response::CacheResponse;
-use crate::rocket_include_handlebars::{
-    EtagIfNoneMatch, HandlebarsContextManager, HandlebarsResponse,
-};
-use crate::rocket_json_response::json_gettext::JSONGetTextValue;
+use rocket_cache_response::CacheResponse;
+use rocket_include_handlebars::{EtagIfNoneMatch, HandlebarsContextManager, HandlebarsResponse};
+use rocket_json_response::json_gettext::JSONGetTextValue;
 
 const HANDLEBARS_RESOURCES_CACHE_MAX_AGE: u32 = 259_200;
 

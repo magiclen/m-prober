@@ -70,23 +70,23 @@ mprober benchmark --enable-memory   # Benchmark the memory
 USAGE:
     mprober [SUBCOMMAND]
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+OPTIONS:
+    -h, --help       Print help information
+    -V, --version    Print version information
 
 SUBCOMMANDS:
-    hostname     Shows the hostname
-    kernel       Shows the kernel version
-    uptime       Shows the uptime
-    time         Shows the RTC (UTC) date and time
-    cpu          Shows CPU stats
-    memory       Shows memory stats
-    network      Shows network stats
-    volume       Shows volume stats
-    process      Shows process stats
-    web          Starts a HTTP service to monitor this computer
-    benchmark    Runs benchmarks to measure the performance of this environment
-    help         Prints this message or the help of the given subcommand(s)
+    hostname     Show the hostname
+    kernel       Show the kernel version
+    uptime       Show the uptime
+    time         Show the RTC (UTC) date and time
+    cpu          Show CPU stats
+    memory       Show memory stats
+    network      Show network stats
+    volume       Show volume stats
+    process      Show process stats
+    web          Start a HTTP service to monitor this computer
+    benchmark    Run benchmarks to measure the performance of this environment
+    help         Print this message or the help of the given subcommand(s)
 ```
 
 ## Requirements

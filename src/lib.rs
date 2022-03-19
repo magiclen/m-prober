@@ -1,30 +1,5 @@
-extern crate mprober_lib;
-
-extern crate byte_unit;
-
-#[macro_use]
-extern crate validators_derive;
-
-extern crate validators;
-
-extern crate once_cell;
-
-#[macro_use]
-extern crate serde_json;
-
-extern crate chrono;
-extern crate rand;
-extern crate regex;
-extern crate users;
-
 #[macro_use]
 extern crate rocket;
-
-#[macro_use]
-extern crate rocket_simple_authorization;
-
-extern crate rocket_cache_response;
-extern crate rocket_json_response;
 
 #[macro_use]
 extern crate rocket_include_static_resources;
