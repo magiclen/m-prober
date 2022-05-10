@@ -64,5 +64,7 @@ pub async fn launch(
         monitor::rocket_handler(rocket)
     };
 
-    rocket.launch().await
+    let _ = rocket.launch().await?;
+
+    Ok(())
 }
