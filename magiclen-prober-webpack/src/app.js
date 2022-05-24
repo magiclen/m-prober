@@ -3,7 +3,7 @@ import 'bootstrap/js/dist/collapse';
 import 'bootstrap/js/dist/modal';
 import Vue from 'vue';
 
-import {applyRobotoMono} from 'web-fonts/src/js/roboto-mono';
+import {applyRobotoMono} from 'web-fonts/lib/roboto-mono';
 
 import './app.scss';
 

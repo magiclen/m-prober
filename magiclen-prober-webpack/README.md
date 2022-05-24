@@ -1,9 +1,11 @@
 ### Getting Start
 
 ```bash
-sudo npm -g install git+ssh://git@github.com:magiclen/web-fonts.git
+mkdir -p ~/TypeScriptProjects
+cd ~/TypeScriptProjects
+git clone --depth git@github.com:magiclen/web-fonts.git
 ```
 
 ```bash
-npm link web-fonts
+npm i file:~/TypeScriptProjects/web-fonts
 ```

@@ -1,4 +1,3 @@
-const {CleanWebpackPlugin} = require('clean-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 const TerserPlugin = require('terser-webpack-plugin');
@@ -18,20 +17,26 @@ function collectWhitelist() {
 module.exports = {
     entry: {
         'bundle': './src/app.js',
-        'font-roboto-mono': './src/font-roboto-mono.js',
+        'font-roboto-mono': './src/font-roboto-mono.scss',
     },
     output: {
         filename: './js/[name].min.js',
         libraryTarget: "umd",
+        clean: true,
     },
     plugins: [
-        new CleanWebpackPlugin(),
         new MiniCssExtractPlugin({
             filename: './css/[name].min.css',
         }),
         new PurgecssPlugin({
-            whitelist: collectWhitelist,
             paths: glob.sync(`${PATHS.views}/**/*`, {nodir: true}),
+            safelist() {
+                return {
+                    standard: collectWhitelist(),
+                    deep: [],
+                    greedy: []
+                }
+            }
         })
     ],
     module: {
@@ -48,61 +53,39 @@ module.exports = {
             {
                 test: /\.(sa|sc|c)ss$/,
                 use: [
+                    { loader: MiniCssExtractPlugin.loader },
+                    "css-loader",
                     {
-                        loader: MiniCssExtractPlugin.loader,
-                    },
-                    'css-loader',
-                    {
-                        loader: 'postcss-loader',
+                        loader: "postcss-loader",
                         options: {
-                            plugins: function () {
-                                return [
-                                    require('autoprefixer'),
-                                    require('cssnano')({preset: ['default', {discardComments: {removeAll: true}}]})
-                                ];
-                            }
-                        }
+                            postcssOptions: {
+                                plugins: [
+                                    require("autoprefixer"),
+                                    require("cssnano")({ preset: ["default", { discardComments: { removeAll: true } }] }),
+                                ],
+                            },
+                        },
                     },
-                    'sass-loader',
+                    "sass-loader",
                 ],
             },
             {
                 test: /\.(eot|woff|woff2|[ot]tf)$/,
-                use: [{
-                    loader: 'file-loader',
-                    options: {
-                        name: '[name].[ext]',
-                        outputPath: './fonts/',
-                        publicPath: '../fonts/'
-                    }
-                }]
+                type: 'asset/resource',
+                generator: {
+                    filename: 'fonts/[name][ext]',
+                }
             },
             {
                 test: /.*font.*\.svg$/,
-                use: [{
-                    loader: 'file-loader',
-                    options: {
-                        name: '[name].[ext]',
-                        outputPath: './fonts/',
-                        publicPath: '../fonts/'
-                    }
-                }]
+                type: 'asset/resource',
+                generator: {
+                    filename: 'fonts/[name][ext]',
+                }
             }
         ]
     },
-    optimization: {
-        minimizer: [
-            new TerserPlugin({
-                cache: true,
-                parallel: true,
-                terserOptions: {
-                    output: {
-                        comments: false,
-                    }
-                }
-            })
-        ],
-    },
+    optimization: { minimizer: [new TerserPlugin({ extractComments: false, terserOptions: { format: { comments: false } } })] },
     resolve: {
         alias: {
             'vue$': 'vue/dist/vue.esm.js'
