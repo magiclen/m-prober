@@ -816,19 +816,19 @@ fn draw_process(
         .iter()
         .map(|user| user.name().len())
         .max()
-        .map(|s| s.min(truncate_inc).max(4))
+        .map(|s| s.clamp(4, truncate_inc))
         .unwrap_or(truncate_inc);
     let group_len = group
         .iter()
         .map(|group| group.name().len())
         .max()
-        .map(|s| s.min(truncate_inc).max(5))
+        .map(|s| s.clamp(5, truncate_inc))
         .unwrap_or(truncate_inc);
     let program_len = program
         .iter()
         .map(|s| s.len())
         .max()
-        .map(|s| s.min(truncate_inc).max(7))
+        .map(|s| s.clamp(7, truncate_inc))
         .unwrap_or(truncate_inc);
     let state_len = state.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
 
@@ -836,7 +836,7 @@ fn draw_process(
     loop {
         let mut width = 0;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
 
         if width + pid_len > terminal_width {
             break;
@@ -1016,7 +1016,7 @@ fn draw_process(
         break;
     }
 
-    stdout.set_color(&*COLOR_DEFAULT)?;
+    stdout.set_color(&COLOR_DEFAULT)?;
     writeln!(&mut stdout)?;
 
     let mut pid_iter = pid.into_iter();
@@ -1035,7 +1035,7 @@ fn draw_process(
         let mut width = 0;
 
         if width + pid_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1043,7 +1043,7 @@ fn draw_process(
 
         let pid = pid_iter.next().unwrap();
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
         write!(&mut stdout, "{1:>0$}", pid_len, pid)?;
         width += pid_len;
 
@@ -1051,7 +1051,7 @@ fn draw_process(
             continue;
         }
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
 
         let ppid = ppid_iter.next().unwrap();
 
@@ -1064,7 +1064,7 @@ fn draw_process(
         width += ppid.len();
 
         if width + 5 > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1078,7 +1078,7 @@ fn draw_process(
         width += 5;
 
         if width + 4 > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1089,7 +1089,7 @@ fn draw_process(
 
         if !only_information {
             if width + 5 > terminal_width {
-                stdout.set_color(&*COLOR_DEFAULT)?;
+                stdout.set_color(&COLOR_DEFAULT)?;
                 writeln!(&mut stdout)?;
 
                 continue;
@@ -1100,7 +1100,7 @@ fn draw_process(
         }
 
         if width + 1 + vsz_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1117,7 +1117,7 @@ fn draw_process(
         width += vsz.len();
 
         if width + 1 + rss_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1134,7 +1134,7 @@ fn draw_process(
         width += rss.len();
 
         if width + 1 + anon_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1151,7 +1151,7 @@ fn draw_process(
         width += anon.len();
 
         if width + 1 + thd_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1168,7 +1168,7 @@ fn draw_process(
         width += thd.len();
 
         if width + 1 + tty_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1188,7 +1188,7 @@ fn draw_process(
         }
 
         if width + 1 + user_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1223,7 +1223,7 @@ fn draw_process(
         }
 
         if width + 1 + group_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1258,7 +1258,7 @@ fn draw_process(
         }
 
         if width + 1 + program_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1289,7 +1289,7 @@ fn draw_process(
         }
 
         if width + 1 + state_len > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1310,7 +1310,7 @@ fn draw_process(
 
         if start_time {
             if width + 21 > terminal_width {
-                stdout.set_color(&*COLOR_DEFAULT)?;
+                stdout.set_color(&COLOR_DEFAULT)?;
                 writeln!(&mut stdout)?;
 
                 continue;
@@ -1326,7 +1326,7 @@ fn draw_process(
         }
 
         if width + 8 > terminal_width {
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             continue;
@@ -1347,7 +1347,7 @@ fn draw_process(
             stdout.write_all(process.cmdline.as_bytes())?;
         }
 
-        stdout.set_color(&*COLOR_DEFAULT)?;
+        stdout.set_color(&COLOR_DEFAULT)?;
         writeln!(&mut stdout)?;
     }
 
@@ -1468,13 +1468,13 @@ fn draw_volume(
             - volumes_used_percentage_len
             - 1;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", devices_len_inc + volumes_read_total_len, "Read Data")?;
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " | ")?;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", volumes_write_total_len, "Written Data")?;
 
         writeln!(&mut stdout)?;
@@ -1496,10 +1496,10 @@ fn draw_volume(
 
             let write_total = volumes_write_total_iter.next().unwrap();
 
-            stdout.set_color(&*COLOR_LABEL)?;
+            stdout.set_color(&COLOR_LABEL)?;
             write!(&mut stdout, "{1:<0$}", devices_len_inc, volume.device)?;
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
 
             for _ in 0..(volumes_read_total_len - read_total.len()) {
                 write!(&mut stdout, " ")?;
@@ -1517,7 +1517,7 @@ fn draw_volume(
 
             writeln!(&mut stdout)?;
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
 
             for _ in 0..devices_len {
                 write!(&mut stdout, " ")?;
@@ -1529,7 +1529,7 @@ fn draw_volume(
 
             let progress_used = (volume.used as f64 * f).floor() as usize;
 
-            stdout.set_color(&*COLOR_USED)?;
+            stdout.set_color(&COLOR_USED)?;
             for _ in 0..progress_used {
                 write!(&mut stdout, "|")?; // 1
             }
@@ -1538,24 +1538,24 @@ fn draw_volume(
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, "] ")?; // 2
 
             for _ in 0..(volumes_used_len - used.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
             stdout.write_all(used.as_bytes())?;
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, " / ")?; // 3
 
             for _ in 0..(volumes_size_len - size.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
             stdout.write_all(size.as_bytes())?;
 
             write!(&mut stdout, " (")?; // 2
@@ -1568,11 +1568,11 @@ fn draw_volume(
 
             write!(&mut stdout, ")")?; // 1
 
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             if mounts {
-                stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+                stdout.set_color(&COLOR_NORMAL_TEXT)?;
 
                 for point in volume.points {
                     for _ in 0..devices_len_inc {
@@ -1581,7 +1581,7 @@ fn draw_volume(
 
                     stdout.write_all(point.as_bytes())?;
 
-                    stdout.set_color(&*COLOR_DEFAULT)?;
+                    stdout.set_color(&COLOR_DEFAULT)?;
                     writeln!(&mut stdout)?;
                 }
             }
@@ -1688,25 +1688,25 @@ fn draw_volume(
             - volumes_used_percentage_len
             - 1;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", devices_len_inc + volumes_read_len, "Reading Rate")?;
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " | ")?;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", volumes_read_total_len, "Read Data")?;
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " | ")?;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", volumes_write_len, "Writing Rate")?;
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " | ")?;
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:>0$}", volumes_write_total_len, "Written Data")?;
 
         writeln!(&mut stdout)?;
@@ -1732,10 +1732,10 @@ fn draw_volume(
             let write = volumes_write_iter.next().unwrap();
             let write_total = volumes_write_total_iter.next().unwrap();
 
-            stdout.set_color(&*COLOR_LABEL)?;
+            stdout.set_color(&COLOR_LABEL)?;
             write!(&mut stdout, "{1:<0$}", devices_len_inc, volume.device)?;
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
 
             for _ in 0..(volumes_read_len - read.len()) {
                 write!(&mut stdout, " ")?;
@@ -1769,7 +1769,7 @@ fn draw_volume(
 
             writeln!(&mut stdout)?;
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
 
             for _ in 0..devices_len {
                 write!(&mut stdout, " ")?;
@@ -1781,7 +1781,7 @@ fn draw_volume(
 
             let progress_used = (volume.used as f64 * f).floor() as usize;
 
-            stdout.set_color(&*COLOR_USED)?;
+            stdout.set_color(&COLOR_USED)?;
             for _ in 0..progress_used {
                 write!(&mut stdout, "|")?; // 1
             }
@@ -1790,24 +1790,24 @@ fn draw_volume(
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, "] ")?; // 2
 
             for _ in 0..(volumes_used_len - used.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
             stdout.write_all(used.as_bytes())?;
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, " / ")?; // 3
 
             for _ in 0..(volumes_size_len - size.len()) {
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
             stdout.write_all(size.as_bytes())?;
 
             write!(&mut stdout, " (")?; // 2
@@ -1820,11 +1820,11 @@ fn draw_volume(
 
             write!(&mut stdout, ")")?; // 1
 
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
 
             if mounts {
-                stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+                stdout.set_color(&COLOR_NORMAL_TEXT)?;
 
                 for point in volume.points {
                     for _ in 0..devices_len_inc {
@@ -1833,7 +1833,7 @@ fn draw_volume(
 
                     stdout.write_all(point.as_bytes())?;
 
-                    stdout.set_color(&*COLOR_DEFAULT)?;
+                    stdout.set_color(&COLOR_DEFAULT)?;
                     writeln!(&mut stdout)?;
                 }
             }
@@ -1919,25 +1919,25 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
     let download_total_len =
         downloads_total.iter().map(|download_total| download_total.len()).max().unwrap().max(15);
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "{1:>0$}", interface_len_inc + upload_len, "Upload Rate")?;
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " | ")?;
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "{1:>0$}", upload_total_len, "Uploaded Data")?;
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " | ")?;
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "{1:>0$}", download_len, "Download Rate")?;
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " | ")?;
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "{1:>0$}", download_total_len, "Downloaded Data")?;
 
     writeln!(&mut stdout)?;
@@ -1954,10 +1954,10 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
         let download = downloads_iter.next().unwrap();
         let download_total = downloads_total_iter.next().unwrap();
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "{1:<0$}", interface_len_inc, network.interface)?;
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
 
         for _ in 0..(upload_len - upload.len()) {
             write!(&mut stdout, " ")?;
@@ -1989,7 +1989,7 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
 
         stdout.write_all(download_total.as_bytes())?;
 
-        stdout.set_color(&*COLOR_DEFAULT)?;
+        stdout.set_color(&COLOR_DEFAULT)?;
         writeln!(&mut stdout)?;
     }
 
@@ -2056,10 +2056,10 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
 
     // Memory
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "Memory")?; // 6
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " [")?; // 2
 
     let progress_max = terminal_width - 10 - used_len - 3 - total_len - 2 - percentage_len - 1;
@@ -2068,14 +2068,14 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
 
     let progress_used = (free.mem.used as f64 * f).floor() as usize;
 
-    stdout.set_color(&*COLOR_USED)?;
+    stdout.set_color(&COLOR_USED)?;
     for _ in 0..progress_used {
         write!(&mut stdout, "|")?; // 1
     }
 
     let progress_cache = (free.mem.cache as f64 * f).floor() as usize;
 
-    stdout.set_color(&*COLOR_CACHE)?;
+    stdout.set_color(&COLOR_CACHE)?;
     for _ in 0..progress_cache {
         if unsafe { FORCE_PLAIN_MODE } {
             write!(&mut stdout, "$")?; // 1
@@ -2086,7 +2086,7 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
 
     let progress_buffers = (free.mem.buffers as f64 * f).floor() as usize;
 
-    stdout.set_color(&*COLOR_BUFFERS)?;
+    stdout.set_color(&COLOR_BUFFERS)?;
     for _ in 0..progress_buffers {
         if unsafe { FORCE_PLAIN_MODE } {
             write!(&mut stdout, "#")?; // 1
@@ -2099,24 +2099,24 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
         write!(&mut stdout, " ")?; // 1
     }
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, "] ")?; // 2
 
     for _ in 0..(used_len - mem_used.len()) {
         write!(&mut stdout, " ")?; // 1
     }
 
-    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+    stdout.set_color(&COLOR_BOLD_TEXT)?;
     stdout.write_all(mem_used.as_bytes())?;
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " / ")?; // 3
 
     for _ in 0..(total_len - mem_total.len()) {
         write!(&mut stdout, " ")?; // 1
     }
 
-    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+    stdout.set_color(&COLOR_BOLD_TEXT)?;
     stdout.write_all(mem_total.as_bytes())?;
 
     write!(&mut stdout, " (")?; // 2
@@ -2133,24 +2133,24 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
 
     // Swap
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "Swap  ")?; // 6
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " [")?; // 2
 
     let f = progress_max as f64 / free.swap.total as f64;
 
     let progress_used = (free.swap.used as f64 * f).floor() as usize;
 
-    stdout.set_color(&*COLOR_USED)?;
+    stdout.set_color(&COLOR_USED)?;
     for _ in 0..progress_used {
         write!(&mut stdout, "|")?; // 1
     }
 
     let progress_cache = (free.swap.cache as f64 * f).floor() as usize;
 
-    stdout.set_color(&*COLOR_CACHE)?;
+    stdout.set_color(&COLOR_CACHE)?;
     for _ in 0..progress_cache {
         if unsafe { FORCE_PLAIN_MODE } {
             write!(&mut stdout, "$")?; // 1
@@ -2163,24 +2163,24 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
         write!(&mut stdout, " ")?; // 1
     }
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, "] ")?; // 2
 
     for _ in 0..(used_len - swap_used.len()) {
         write!(&mut stdout, " ")?; // 1
     }
 
-    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+    stdout.set_color(&COLOR_BOLD_TEXT)?;
     stdout.write_all(swap_used.as_bytes())?;
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, " / ")?; // 3
 
     for _ in 0..(total_len - swap_total.len()) {
         write!(&mut stdout, " ")?; // 1
     }
 
-    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+    stdout.set_color(&COLOR_BOLD_TEXT)?;
     stdout.write_all(swap_total.as_bytes())?;
 
     write!(&mut stdout, " (")?; // 2
@@ -2193,7 +2193,7 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
 
     write!(&mut stdout, ")")?; // 1
 
-    stdout.set_color(&*COLOR_DEFAULT)?;
+    stdout.set_color(&COLOR_DEFAULT)?;
     writeln!(&mut stdout)?;
 
     output.print(&stdout)?;
@@ -2257,14 +2257,14 @@ fn draw_cpu_info(
 
         // number of logical CPU cores
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         if logical_cores_number > 1 {
             write!(&mut stdout, "There are ")?;
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
             write!(&mut stdout, "{}", logical_cores_number)?;
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, " logical CPU cores.")?;
         } else {
             write!(&mut stdout, "There is only one logical CPU core.")?;
@@ -2273,17 +2273,17 @@ fn draw_cpu_info(
 
         // one
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "one    ")?; // 7
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " [")?; // 2
 
         let f = progress_max as f64 / logical_cores_number_f64;
 
         let progress_used = ((load_average.one * f).floor() as usize).min(progress_max);
 
-        stdout.set_color(&*COLOR_USED)?;
+        stdout.set_color(&COLOR_USED)?;
         for _ in 0..progress_used {
             write!(&mut stdout, "|")?; // 1
         }
@@ -2292,14 +2292,14 @@ fn draw_cpu_info(
             write!(&mut stdout, " ")?; // 1
         }
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, "] ")?; // 2
 
         for _ in 0..(load_average_len - one.len()) {
             write!(&mut stdout, " ")?; // 1
         }
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
         stdout.write_all(one.as_bytes())?;
 
         write!(&mut stdout, " (")?; // 2
@@ -2316,17 +2316,17 @@ fn draw_cpu_info(
 
         // five
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "five   ")?; // 7
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " [")?; // 2
 
         let f = progress_max as f64 / logical_cores_number_f64;
 
         let progress_used = ((load_average.five * f).floor() as usize).min(progress_max);
 
-        stdout.set_color(&*COLOR_USED)?;
+        stdout.set_color(&COLOR_USED)?;
         for _ in 0..progress_used {
             write!(&mut stdout, "|")?; // 1
         }
@@ -2335,14 +2335,14 @@ fn draw_cpu_info(
             write!(&mut stdout, " ")?; // 1
         }
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, "] ")?; // 2
 
         for _ in 0..(load_average_len - five.len()) {
             write!(&mut stdout, " ")?; // 1
         }
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
         stdout.write_all(five.as_bytes())?;
 
         write!(&mut stdout, " (")?; // 2
@@ -2359,17 +2359,17 @@ fn draw_cpu_info(
 
         // fifteen
 
-        stdout.set_color(&*COLOR_LABEL)?;
+        stdout.set_color(&COLOR_LABEL)?;
         write!(&mut stdout, "fifteen")?; // 7
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, " [")?; // 2
 
         let f = progress_max as f64 / logical_cores_number_f64;
 
         let progress_used = ((load_average.fifteen * f).floor() as usize).min(progress_max);
 
-        stdout.set_color(&*COLOR_USED)?;
+        stdout.set_color(&COLOR_USED)?;
         for _ in 0..progress_used {
             write!(&mut stdout, "|")?; // 1
         }
@@ -2378,14 +2378,14 @@ fn draw_cpu_info(
             write!(&mut stdout, " ")?; // 1
         }
 
-        stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+        stdout.set_color(&COLOR_NORMAL_TEXT)?;
         write!(&mut stdout, "] ")?; // 2
 
         for _ in 0..(load_average_len - fifteen.len()) {
             write!(&mut stdout, " ")?; // 1
         }
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
         stdout.write_all(fifteen.as_bytes())?;
 
         write!(&mut stdout, " (")?; // 2
@@ -2423,12 +2423,12 @@ fn draw_cpu_info(
         let cpus_len_dec = cpus.len() - 1;
 
         for (cpu_index, cpu) in cpus.into_iter().enumerate() {
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             stdout.write_all(cpu.model_name.as_bytes())?;
 
             write!(&mut stdout, " ")?;
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
 
             write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings)?;
 
@@ -2466,13 +2466,13 @@ fn draw_cpu_info(
 
             if only_information {
                 for (i, hz_string) in hz_string.into_iter().enumerate() {
-                    stdout.set_color(&*COLOR_LABEL)?;
-                    write!(&mut stdout, "{1:<0$}", d, format_args!("CPU{}", i))?;
+                    stdout.set_color(&COLOR_LABEL)?;
+                    write!(&mut stdout, "{1:<0$}", d, format!("CPU{}", i))?;
 
-                    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+                    stdout.set_color(&COLOR_BOLD_TEXT)?;
                     write!(&mut stdout, "{1:>0$}", hz_string_len, hz_string)?;
 
-                    stdout.set_color(&*COLOR_DEFAULT)?;
+                    stdout.set_color(&COLOR_DEFAULT)?;
                     writeln!(&mut stdout)?;
                 }
             } else {
@@ -2493,17 +2493,17 @@ fn draw_cpu_info(
                     let percentage_string = percentage_string_iter.next().unwrap();
                     let hz_string = hz_string_iter.next().unwrap();
 
-                    stdout.set_color(&*COLOR_LABEL)?;
-                    write!(&mut stdout, "{1:<0$}", d, format_args!("CPU{}", i))?;
+                    stdout.set_color(&COLOR_LABEL)?;
+                    write!(&mut stdout, "{1:<0$}", d, format!("CPU{}", i))?;
 
-                    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+                    stdout.set_color(&COLOR_NORMAL_TEXT)?;
                     write!(&mut stdout, "[")?; // 1
 
                     let f = progress_max as f64;
 
                     let progress_used = (p * f).floor() as usize;
 
-                    stdout.set_color(&*COLOR_USED)?;
+                    stdout.set_color(&COLOR_USED)?;
                     for _ in 0..progress_used {
                         write!(&mut stdout, "|")?; // 1
                     }
@@ -2512,14 +2512,14 @@ fn draw_cpu_info(
                         write!(&mut stdout, " ")?; // 1
                     }
 
-                    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+                    stdout.set_color(&COLOR_NORMAL_TEXT)?;
                     write!(&mut stdout, "] ")?; // 2
 
                     for _ in 0..(percentage_len - percentage_string.len()) {
                         write!(&mut stdout, " ")?; // 1
                     }
 
-                    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+                    stdout.set_color(&COLOR_BOLD_TEXT)?;
                     stdout.write_all(percentage_string.as_bytes())?;
 
                     write!(&mut stdout, " (")?; // 2
@@ -2532,7 +2532,7 @@ fn draw_cpu_info(
 
                     write!(&mut stdout, ")")?; // 1
 
-                    stdout.set_color(&*COLOR_DEFAULT)?;
+                    stdout.set_color(&COLOR_DEFAULT)?;
                     writeln!(&mut stdout)?;
                 }
 
@@ -2563,12 +2563,12 @@ fn draw_cpu_info(
         draw_load_average(&cpus)?;
 
         for cpu in cpus {
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             stdout.write_all(cpu.model_name.as_bytes())?;
 
             write!(&mut stdout, " ")?;
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
 
             write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings)?;
 
@@ -2581,24 +2581,24 @@ fn draw_cpu_info(
 
             write!(&mut stdout, "{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1])?;
 
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
         }
 
         if !only_information {
             let progress_max = terminal_width - 7 - average_percentage_string.len();
 
-            stdout.set_color(&*COLOR_LABEL)?;
+            stdout.set_color(&COLOR_LABEL)?;
             write!(&mut stdout, "CPU")?; // 3
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, " [")?; // 2
 
             let f = progress_max as f64;
 
             let progress_used = (average_percentage * f).floor() as usize;
 
-            stdout.set_color(&*COLOR_USED)?;
+            stdout.set_color(&COLOR_USED)?;
             for _ in 0..progress_used {
                 write!(&mut stdout, "|")?; // 1
             }
@@ -2607,13 +2607,13 @@ fn draw_cpu_info(
                 write!(&mut stdout, " ")?; // 1
             }
 
-            stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+            stdout.set_color(&COLOR_NORMAL_TEXT)?;
             write!(&mut stdout, "] ")?; // 2
 
-            stdout.set_color(&*COLOR_BOLD_TEXT)?;
+            stdout.set_color(&COLOR_BOLD_TEXT)?;
             stdout.write_all(average_percentage_string.as_bytes())?;
 
-            stdout.set_color(&*COLOR_DEFAULT)?;
+            stdout.set_color(&COLOR_DEFAULT)?;
             writeln!(&mut stdout)?;
         }
     }
@@ -2638,25 +2638,25 @@ fn draw_time() -> Result<(), ScannerError> {
 
     let mut stdout = output.buffer();
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "RTC Date")?;
 
     write!(&mut stdout, " ")?;
 
-    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+    stdout.set_color(&COLOR_BOLD_TEXT)?;
     write!(&mut stdout, "{}", rtc_date_time.date())?;
 
     writeln!(&mut stdout)?;
 
-    stdout.set_color(&*COLOR_LABEL)?;
+    stdout.set_color(&COLOR_LABEL)?;
     write!(&mut stdout, "RTC Time")?;
 
     write!(&mut stdout, " ")?;
 
-    stdout.set_color(&*COLOR_BOLD_TEXT)?;
+    stdout.set_color(&COLOR_BOLD_TEXT)?;
     write!(&mut stdout, "{}", rtc_date_time.time())?;
 
-    stdout.set_color(&*COLOR_DEFAULT)?;
+    stdout.set_color(&COLOR_DEFAULT)?;
     writeln!(&mut stdout)?;
 
     output.print(&stdout)?;
@@ -2679,13 +2679,13 @@ fn draw_uptime(second: bool) -> Result<(), ScannerError> {
 
     let mut stdout = output.buffer();
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, "This computer has been up for ")?;
 
     if second {
         let uptime_sec = uptime.as_secs();
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
         write!(&mut stdout, "{} second", uptime_sec)?;
 
         if uptime_sec > 1 {
@@ -2694,14 +2694,14 @@ fn draw_uptime(second: bool) -> Result<(), ScannerError> {
     } else {
         let s = format_duration(uptime);
 
-        stdout.set_color(&*COLOR_BOLD_TEXT)?;
+        stdout.set_color(&COLOR_BOLD_TEXT)?;
         stdout.write_all(s.as_bytes())?;
     }
 
-    stdout.set_color(&*COLOR_NORMAL_TEXT)?;
+    stdout.set_color(&COLOR_NORMAL_TEXT)?;
     write!(&mut stdout, ".")?;
 
-    stdout.set_color(&*COLOR_DEFAULT)?;
+    stdout.set_color(&COLOR_DEFAULT)?;
     writeln!(&mut stdout)?;
 
     output.print(&stdout)?;

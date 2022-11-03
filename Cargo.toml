@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.11.0-beta.12"
+version = "0.11.0-beta.13"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
 repository = "https://github.com/magiclen/m-prober"
@@ -19,9 +19,9 @@ codegen-units = 1
 [dependencies]
 mprober-lib = "0.1"
 
-clap = "3.1.6"
+clap = "3.2.23"
 concat-with = "0.2"
-terminal_size = "0.1"
+terminal_size = "0.2"
 
 byte-unit = "4"
 termcolor = "1"
