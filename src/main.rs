@@ -803,7 +803,7 @@ fn draw_process(
         state.push(process.state.as_str());
     }
 
-    let truncate_inc = truncate.map(|t| t + 1).unwrap_or(usize::max_value());
+    let truncate_inc = truncate.map(|t| t + 1).unwrap_or(usize::MAX);
 
     let pid_len = pid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
     let ppid_len = ppid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
