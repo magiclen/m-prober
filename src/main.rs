@@ -16,33 +16,30 @@ extern crate termcolor;
 
 extern crate once_cell;
 
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
-use std::env;
-use std::error::Error;
-use std::io::{self, ErrorKind, Write};
-use std::net::IpAddr;
-use std::process as std_process;
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
-
-use mprober::*;
-
-use clap::{Arg, ArgMatches, Command};
-use terminal_size::terminal_size;
-
-use validators::prelude::*;
+use std::{
+    cmp::Ordering,
+    collections::BTreeMap,
+    env,
+    error::Error,
+    io::{self, ErrorKind, Write},
+    net::IpAddr,
+    process as std_process,
+    sync::Arc,
+    thread,
+    time::Duration,
+};
 
 use byte_unit::{Byte, ByteUnit};
 use chrono::SecondsFormat;
-use regex::Regex;
-use users::{Group, Groups, User, Users, UsersCache};
-
+use clap::{Arg, ArgMatches, Command};
 use getch::Getch;
-use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
-
+use mprober::*;
 use once_cell::sync::Lazy;
+use regex::Regex;
+use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+use terminal_size::terminal_size;
+use users::{Group, Groups, User, Users, UsersCache};
+use validators::prelude::*;
 
 const APP_NAME: &str = "M Prober";
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -65,7 +62,7 @@ const ORANGE_COLOR: Color = Color::Rgb(215, 135, 0);
 const DARK_BLUE_COLOR: Color = Color::Rgb(0, 0, 95);
 
 const CLEAR_SCREEN_DATA: [u8; 11] =
-    [0x1b, 0x5b, 0x33, 0x4a, 0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a];
+    [0x1B, 0x5B, 0x33, 0x4A, 0x1B, 0x5B, 0x48, 0x1B, 0x5B, 0x32, 0x4A];
 
 const ENV_LIGHT_MODE: &str = "MPROBER_LIGHT";
 const ENV_FORCE_PLAIN: &str = "MPROBER_FORCE_PLAIN";
@@ -171,7 +168,7 @@ macro_rules! set_color_mode {
                                     env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
                             }
                         }
-                    }
+                    },
                     None => {
                         if $sub_matches.is_present("LIGHT") {
                             LIGHT_MODE = true;
@@ -179,7 +176,7 @@ macro_rules! set_color_mode {
                             LIGHT_MODE =
                                 env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
                         }
-                    }
+                    },
                 }
             }
         }
@@ -365,7 +362,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 } else {
                     None
                 }
-            }
+            },
             None => None,
         };
 
@@ -412,7 +409,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .map_err(|_| format!("`{}` is not a correct value for SECONDS", monitor))?;
 
                 Duration::from_secs(monitor.get_number())
-            }
+            },
             None => unreachable!(),
         };
 
@@ -425,7 +422,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .map_err(|_| format!("`{}` is not a correct value for LISTEN_PORT", port))?;
 
                 port
-            }
+            },
             None => unreachable!(),
         };
 
@@ -442,7 +439,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 })?;
 
                 Duration::from_millis(millisecond)
-            }
+            },
             None => unreachable!(),
         };
 
@@ -453,7 +450,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 })?;
 
                 Duration::from_millis(millisecond)
-            }
+            },
             None => unreachable!(),
         };
 
@@ -486,23 +483,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let default = !(enable_cpu || enable_memory || enable_volume);
 
-        let cpu = if disable_cpu {
-            false
-        } else {
-            default || enable_cpu
-        };
+        let cpu = if disable_cpu { false } else { default || enable_cpu };
 
-        let memory = if disable_memory {
-            false
-        } else {
-            default || enable_memory
-        };
+        let memory = if disable_memory { false } else { default || enable_memory };
 
-        let volume = if disable_volume {
-            false
-        } else {
-            default || enable_volume
-        };
+        let volume = if disable_volume { false } else { default || enable_volume };
 
         handle_benchmark(warming_up_duration, benchmark_duration, print_out, cpu, memory, volume)
     } else {
@@ -631,39 +616,35 @@ fn draw_process(
             }
 
             (width.0 as usize).max(MIN_TERMINAL_WIDTH)
-        }
+        },
         None => DEFAULT_TERMINAL_WIDTH,
     };
 
     let user_cache = UsersCache::new();
 
     let uid_filter = match user_filter {
-        Some(user_filter) => {
-            match user_cache.get_user_by_name(user_filter) {
-                Some(user) => Some(user.uid()),
-                None => {
-                    return Err(ScannerError::IOError(io::Error::new(
-                        ErrorKind::InvalidInput,
-                        format!("Cannot find the user `{}`.", user_filter),
-                    )));
-                }
-            }
-        }
+        Some(user_filter) => match user_cache.get_user_by_name(user_filter) {
+            Some(user) => Some(user.uid()),
+            None => {
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Cannot find the user `{}`.", user_filter),
+                )));
+            },
+        },
         None => None,
     };
 
     let gid_filter = match group_filter {
-        Some(group_filter) => {
-            match user_cache.get_group_by_name(group_filter) {
-                Some(group) => Some(group.gid()),
-                None => {
-                    return Err(ScannerError::IOError(io::Error::new(
-                        ErrorKind::InvalidInput,
-                        format!("Cannot find the group `{}`.", group_filter),
-                    )));
-                }
-            }
-        }
+        Some(group_filter) => match user_cache.get_group_by_name(group_filter) {
+            Some(group) => Some(group.gid()),
+            None => {
+                return Err(ScannerError::IOError(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Cannot find the group `{}`.", group_filter),
+                )));
+            },
+        },
         None => None,
     };
 
@@ -775,12 +756,12 @@ fn draw_process(
                 vsz.push(p_vsz.get_adjusted_unit(byte_unit).format(1));
                 rss.push(p_rss.get_adjusted_unit(byte_unit).format(1));
                 anon.push(p_anon.get_adjusted_unit(byte_unit).format(1));
-            }
+            },
             None => {
                 vsz.push(p_vsz.get_appropriate_unit(true).format(1));
                 rss.push(p_rss.get_appropriate_unit(true).format(1));
                 anon.push(p_anon.get_appropriate_unit(true).format(1));
-            }
+            },
         }
 
         tty.push(process.tty.as_deref().unwrap_or(""));
@@ -1418,22 +1399,18 @@ fn draw_volume(
             let write_total = Byte::from_bytes(u128::from(volume.stat.write_bytes));
 
             let (size, used, read_total, write_total) = match unit {
-                Some(unit) => {
-                    (
-                        size.get_adjusted_unit(unit).to_string(),
-                        used.get_adjusted_unit(unit).to_string(),
-                        read_total.get_adjusted_unit(unit).to_string(),
-                        write_total.get_adjusted_unit(unit).to_string(),
-                    )
-                }
-                None => {
-                    (
-                        size.get_appropriate_unit(false).to_string(),
-                        used.get_appropriate_unit(false).to_string(),
-                        read_total.get_appropriate_unit(false).to_string(),
-                        write_total.get_appropriate_unit(false).to_string(),
-                    )
-                }
+                Some(unit) => (
+                    size.get_adjusted_unit(unit).to_string(),
+                    used.get_adjusted_unit(unit).to_string(),
+                    read_total.get_adjusted_unit(unit).to_string(),
+                    write_total.get_adjusted_unit(unit).to_string(),
+                ),
+                None => (
+                    size.get_appropriate_unit(false).to_string(),
+                    used.get_appropriate_unit(false).to_string(),
+                    read_total.get_appropriate_unit(false).to_string(),
+                    write_total.get_appropriate_unit(false).to_string(),
+                ),
             };
 
             volumes_size.push(size);
@@ -1625,26 +1602,22 @@ fn draw_volume(
             let write_total = Byte::from_bytes(u128::from(volume.stat.write_bytes));
 
             let (size, used, mut read, read_total, mut write, write_total) = match unit {
-                Some(unit) => {
-                    (
-                        size.get_adjusted_unit(unit).to_string(),
-                        used.get_adjusted_unit(unit).to_string(),
-                        read.get_adjusted_unit(unit).to_string(),
-                        read_total.get_adjusted_unit(unit).to_string(),
-                        write.get_adjusted_unit(unit).to_string(),
-                        write_total.get_adjusted_unit(unit).to_string(),
-                    )
-                }
-                None => {
-                    (
-                        size.get_appropriate_unit(false).to_string(),
-                        used.get_appropriate_unit(false).to_string(),
-                        read.get_appropriate_unit(false).to_string(),
-                        read_total.get_appropriate_unit(false).to_string(),
-                        write.get_appropriate_unit(false).to_string(),
-                        write_total.get_appropriate_unit(false).to_string(),
-                    )
-                }
+                Some(unit) => (
+                    size.get_adjusted_unit(unit).to_string(),
+                    used.get_adjusted_unit(unit).to_string(),
+                    read.get_adjusted_unit(unit).to_string(),
+                    read_total.get_adjusted_unit(unit).to_string(),
+                    write.get_adjusted_unit(unit).to_string(),
+                    write_total.get_adjusted_unit(unit).to_string(),
+                ),
+                None => (
+                    size.get_appropriate_unit(false).to_string(),
+                    used.get_appropriate_unit(false).to_string(),
+                    read.get_appropriate_unit(false).to_string(),
+                    read_total.get_appropriate_unit(false).to_string(),
+                    write.get_appropriate_unit(false).to_string(),
+                    write_total.get_appropriate_unit(false).to_string(),
+                ),
             };
 
             read.push_str("/s");
@@ -1881,22 +1854,18 @@ fn draw_network(unit: Option<ByteUnit>, monitor: Option<Duration>) -> Result<(),
         let download_total = Byte::from_bytes(u128::from(network.stat.receive_bytes));
 
         let (mut upload, upload_total, mut download, download_total) = match unit {
-            Some(unit) => {
-                (
-                    upload.get_adjusted_unit(unit).to_string(),
-                    upload_total.get_adjusted_unit(unit).to_string(),
-                    download.get_adjusted_unit(unit).to_string(),
-                    download_total.get_adjusted_unit(unit).to_string(),
-                )
-            }
-            None => {
-                (
-                    upload.get_appropriate_unit(false).to_string(),
-                    upload_total.get_appropriate_unit(false).to_string(),
-                    download.get_appropriate_unit(false).to_string(),
-                    download_total.get_appropriate_unit(false).to_string(),
-                )
-            }
+            Some(unit) => (
+                upload.get_adjusted_unit(unit).to_string(),
+                upload_total.get_adjusted_unit(unit).to_string(),
+                download.get_adjusted_unit(unit).to_string(),
+                download_total.get_adjusted_unit(unit).to_string(),
+            ),
+            None => (
+                upload.get_appropriate_unit(false).to_string(),
+                upload_total.get_appropriate_unit(false).to_string(),
+                download.get_appropriate_unit(false).to_string(),
+                download_total.get_appropriate_unit(false).to_string(),
+            ),
         };
 
         upload.push_str("/s");
@@ -2022,22 +1991,18 @@ fn draw_memory(unit: Option<ByteUnit>) -> Result<(), ScannerError> {
         );
 
         match unit {
-            Some(unit) => {
-                (
-                    mem_used.get_adjusted_unit(unit).to_string(),
-                    mem_total.get_adjusted_unit(unit).to_string(),
-                    swap_used.get_adjusted_unit(unit).to_string(),
-                    swap_total.get_adjusted_unit(unit).to_string(),
-                )
-            }
-            None => {
-                (
-                    mem_used.get_appropriate_unit(true).to_string(),
-                    mem_total.get_appropriate_unit(true).to_string(),
-                    swap_used.get_appropriate_unit(true).to_string(),
-                    swap_total.get_appropriate_unit(true).to_string(),
-                )
-            }
+            Some(unit) => (
+                mem_used.get_adjusted_unit(unit).to_string(),
+                mem_total.get_adjusted_unit(unit).to_string(),
+                swap_used.get_adjusted_unit(unit).to_string(),
+                swap_total.get_adjusted_unit(unit).to_string(),
+            ),
+            None => (
+                mem_used.get_appropriate_unit(true).to_string(),
+                mem_total.get_appropriate_unit(true).to_string(),
+                swap_used.get_appropriate_unit(true).to_string(),
+                swap_total.get_appropriate_unit(true).to_string(),
+            ),
         }
     };
 
@@ -3192,7 +3157,7 @@ fn get_monitor_duration(matches: &ArgMatches) -> Result<Option<Duration>, Box<dy
                 .get_number();
 
             Ok(Some(Duration::from_secs_f64(monitor / 1000f64)))
-        }
+        },
         None => Ok(None),
     }
 }
@@ -3205,7 +3170,7 @@ fn get_byte_unit(matches: &ArgMatches) -> Result<Option<ByteUnit>, Box<dyn Error
                 .map_err(|_| format!("`{}` is not a correct value for UNIT", unit))?;
 
             Ok(Some(unit))
-        }
+        },
         None => Ok(None),
     }
 }

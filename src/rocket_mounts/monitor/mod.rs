@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use rocket::{Build, Rocket, State};
-
 use rocket_cache_response::CacheResponse;
 use rocket_include_handlebars::{EtagIfNoneMatch, HandlebarsContextManager, HandlebarsResponse};
 use rocket_json_response::json_gettext::JSONGetTextValue;

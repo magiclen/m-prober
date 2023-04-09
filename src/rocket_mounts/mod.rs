@@ -4,9 +4,7 @@ mod api;
 mod monitor;
 mod static_resources;
 
-use std::net::IpAddr;
-use std::ops::Deref;
-use std::time::Duration;
+use std::{net::IpAddr, ops::Deref, time::Duration};
 
 use crate::rocket::{Config as RocketConfig, Error as RocketError};
 

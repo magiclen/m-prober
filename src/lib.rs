@@ -10,9 +10,8 @@ extern crate rocket_include_handlebars;
 pub mod benchmark;
 pub mod rocket_mounts;
 
-use validators::prelude::*;
-
 pub use mprober_lib::*;
+use validators::prelude::*;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Validator)]
 #[validator(number(nan(NotAllow), range(Inside(min = 1))))]

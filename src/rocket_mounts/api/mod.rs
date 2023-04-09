@@ -1,24 +1,20 @@
-use std::collections::linked_list::LinkedList;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
+use std::{
+    collections::linked_list::LinkedList,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    thread,
+    time::{Duration, Instant},
 };
-use std::thread;
-use std::time::{Duration, Instant};
 
-use rocket::http::Status;
-use rocket::request::Request;
-use rocket::{Build, Rocket, State};
-
+use byte_unit::{Byte, ByteUnit};
+use once_cell::sync::Lazy;
+use rocket::{http::Status, request::Request, Build, Rocket, State};
 use rocket_cache_response::CacheResponse;
 use rocket_json_response::{json_gettext::JSONGetTextValue, JSONResponse};
 use rocket_simple_authorization::{authorizer, SimpleAuthorization};
-
-use byte_unit::{Byte, ByteUnit};
-
 use serde_json::json;
-
-use once_cell::sync::Lazy;
 
 static CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
 static NETWORK_STAT_DOING: AtomicBool = AtomicBool::new(false);
@@ -53,18 +49,16 @@ impl<'r> SimpleAuthorization<'r> for Auth {
         let auth_key = request.rocket().state::<super::AuthKey>().unwrap();
 
         match auth_key.get_value() {
-            Some(auth_key) => {
-                match authorization {
-                    Some(authorization) => {
-                        if authorization.eq(auth_key) {
-                            Some(Auth)
-                        } else {
-                            None
-                        }
+            Some(auth_key) => match authorization {
+                Some(authorization) => {
+                    if authorization.eq(auth_key) {
+                        Some(Auth)
+                    } else {
+                        None
                     }
-                    None => None,
-                }
-            }
+                },
+                None => None,
+            },
             None => Some(Auth),
         }
     }
@@ -969,12 +963,11 @@ pub fn mounts(rocket: Rocket<Build>) -> Rocket<Build> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     use std::time::Duration;
 
-    use rocket::http::Header;
-    use rocket::local::blocking::Client;
+    use rocket::{http::Header, local::blocking::Client};
+
+    use super::*;
 
     const TEST_DETECT_INTERVAL: u64 = 1000;
     const TEST_AUTH_KEY: &str = "magic";

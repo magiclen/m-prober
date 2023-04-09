@@ -1,18 +1,19 @@
 extern crate benchmarking;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::{self, Display, Formatter};
-use std::fs::{self, File};
-use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::path::Path;
-use std::rc::Rc;
-use std::time::{Duration, SystemTime};
-
-use mprober_lib::*;
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    error::Error,
+    fmt::{self, Display, Formatter},
+    fs::{self, File},
+    io::{self, Read, Seek, SeekFrom, Write},
+    path::Path,
+    rc::Rc,
+    time::{Duration, SystemTime},
+};
 
 use byte_unit::{Byte, ByteUnit};
+use mprober_lib::*;
 use rand::{self, Rng};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -75,13 +76,11 @@ impl Display for BenchmarkError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             BenchmarkError::ScannerError(error) => Display::fmt(error, f),
-            BenchmarkError::BenchmarkError(error) => {
-                match error {
-                    benchmarking::BenchmarkError::MeasurerNotMeasured => {
-                        f.write_str("The measurer is not measured.")
-                    }
-                }
-            }
+            BenchmarkError::BenchmarkError(error) => match error {
+                benchmarking::BenchmarkError::MeasurerNotMeasured => {
+                    f.write_str("The measurer is not measured.")
+                },
+            },
             BenchmarkError::IOError(error) => Display::fmt(error, f),
             BenchmarkError::NoNeedBenchmark => f.write_str("There is nothing to benchmark."),
         }
@@ -92,20 +91,20 @@ impl Error for BenchmarkError {}
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkResult {
-    pub cpu_multi_thread: Option<f64>,
+    pub cpu_multi_thread:  Option<f64>,
     pub cpu_single_thread: Option<f64>,
-    pub memory: Option<f64>,
-    pub volumes: Option<HashMap<String, (f64, f64)>>,
+    pub memory:            Option<f64>,
+    pub volumes:           Option<HashMap<String, (f64, f64)>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkConfig {
     pub warming_up_duration: Duration,
-    pub benchmark_duration: Duration,
-    pub print_out: BenchmarkLog,
-    pub cpu: bool,
-    pub memory: bool,
-    pub volume: bool,
+    pub benchmark_duration:  Duration,
+    pub print_out:           BenchmarkLog,
+    pub cpu:                 bool,
+    pub memory:              bool,
+    pub volume:              bool,
 }
 
 pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, BenchmarkError> {
@@ -438,7 +437,11 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                                                             if file.write_all(&buffer).is_err() {
                                                                 if config.print_out.has_stderr() {
-                                                                    eprintln!("{} cannot be written successfully!", volume.device);
+                                                                    eprintln!(
+                                                                        "{} cannot be written \
+                                                                         successfully!",
+                                                                        volume.device
+                                                                    );
                                                                 }
 
                                                                 false
@@ -455,11 +458,15 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                                                 Err(_) => {
                                                                     if config.print_out.has_stderr()
                                                                     {
-                                                                        eprintln!("{} cannot be read successfully!", volume.device);
+                                                                        eprintln!(
+                                                                            "{} cannot be read \
+                                                                             successfully!",
+                                                                            volume.device
+                                                                        );
                                                                     }
 
                                                                     false
-                                                                }
+                                                                },
                                                             }
                                                         } else {
                                                             false
@@ -553,21 +560,30 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                                                             .print_out
                                                                             .has_stderr()
                                                                         {
-                                                                            eprintln!("{} cannot be read successfully!", volume.device);
+                                                                            eprintln!(
+                                                                                "{} cannot be \
+                                                                                 read successfully!\
+                                                                                 ",
+                                                                                volume.device
+                                                                            );
                                                                         }
                                                                     } else {
                                                                         unreachable!();
                                                                     }
-                                                                }
+                                                                },
                                                                 Err(_) => {
                                                                     if config.print_out.has_stderr()
                                                                     {
-                                                                        eprintln!("{} cannot be read successfully!", volume.device);
+                                                                        eprintln!(
+                                                                            "{} cannot be read \
+                                                                             successfully!",
+                                                                            volume.device
+                                                                        );
                                                                     }
-                                                                }
+                                                                },
                                                             }
                                                         }
-                                                    }
+                                                    },
                                                     Err(_) => {
                                                         if config.print_out.has_stderr() {
                                                             eprintln!(
@@ -575,7 +591,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                                                 volume.device
                                                             );
                                                         }
-                                                    }
+                                                    },
                                                 }
                                             } else if config.print_out.has_stderr() {
                                                 eprintln!(
@@ -588,10 +604,10 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                         }
 
                                         try_delete(path);
-                                    }
+                                    },
                                     Err(_) => {
                                         continue;
-                                    }
+                                    },
                                 }
                             }
 
