@@ -1,5 +1,3 @@
-extern crate base64;
-
 mod api;
 mod monitor;
 mod static_resources;
