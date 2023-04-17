@@ -540,18 +540,11 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                                                                                 println!("{}: Read {}/s, Write {}/s", s, read_result_string, write_result_string);
 
-                                                                                let s = {
-                                                                                    let mut v = s
-                                                                                        .into_bytes(
-                                                                                        );
-
-                                                                                    unsafe {
-                                                                                        v.set_len(
+                                                                                unsafe {
+                                                                                    s.as_mut_vec()
+                                                                                        .set_len(
                                                                                             s_len,
-                                                                                        );
-
-                                                                                        String::from_utf8_unchecked(v)
-                                                                                    }
+                                                                                        )
                                                                                 };
 
                                                                                 volumes_result.insert(s, (read_result, write_result));
