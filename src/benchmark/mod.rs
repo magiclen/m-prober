@@ -18,6 +18,7 @@ use rand::{self, Rng};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BenchmarkLog {
+    #[allow(unused)]
     None,
     Normal,
     Verbose,
@@ -46,6 +47,7 @@ impl BenchmarkLog {
 #[derive(Debug)]
 pub enum BenchmarkError {
     ScannerError(ScannerError),
+    #[allow(clippy::enum_variant_names)]
     BenchmarkError(benchmarking::BenchmarkError),
     IOError(io::Error),
     NoNeedBenchmark,
@@ -195,7 +197,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                 cpu_multi_thread = Some(speed);
 
                 if config.print_out.has_stdout() {
-                    println!("CPU (multi-thread) : {:.2} iterations/s", speed);
+                    println!("CPU (multi-thread) : {speed:.2} iterations/s");
 
                     if config.print_out.has_stderr() {
                         eprintln!();
@@ -241,7 +243,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             cpu_single_thread = Some(speed);
 
             if config.print_out.has_stdout() {
-                println!("CPU (single thread): {:.2} iterations/s", speed);
+                println!("CPU (single thread): {speed:.2} iterations/s");
             }
         }
     }
@@ -298,7 +300,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                     .get_appropriate_unit(true)
                     .to_string();
 
-                println!("Memory             : {}/s", memory_result);
+                println!("Memory             : {memory_result}/s");
             }
         }
     }
@@ -538,7 +540,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                                                                     s.push(' ');
                                                                                 }
 
-                                                                                println!("{}: Read {}/s, Write {}/s", s, read_result_string, write_result_string);
+                                                                                println!("{s}: Read {read_result_string}/s, Write {write_result_string}/s");
 
                                                                                 unsafe {
                                                                                     s.as_mut_vec()

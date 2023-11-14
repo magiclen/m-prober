@@ -1,7 +1,7 @@
 mod bundles;
 mod favicons;
 
-use crate::rocket::{Build, Rocket};
+use rocket::{Build, Rocket};
 
 pub fn rocket_handler(rocket: Rocket<Build>) -> Rocket<Build> {
     let rocket = rocket.attach(static_resources_initializer!(

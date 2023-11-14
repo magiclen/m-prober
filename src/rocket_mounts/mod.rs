@@ -4,7 +4,7 @@ mod static_resources;
 
 use std::{net::IpAddr, ops::Deref, time::Duration};
 
-use crate::rocket::{Config as RocketConfig, Error as RocketError};
+use rocket::{Build, Config, Rocket};
 
 #[derive(Debug)]
 struct DetectInterval(Duration);
@@ -35,32 +35,24 @@ impl AuthKey {
     }
 }
 
-pub async fn launch(
+pub fn create(
     monitor: Duration,
     address: IpAddr,
     listen_port: u16,
     auth_key: Option<String>,
     only_api: bool,
-) -> Result<(), RocketError> {
-    let config = RocketConfig {
-        address,
-        port: listen_port,
-        ..RocketConfig::default()
-    };
+) -> Rocket<Build> {
+    let figment = Config::figment().merge(("address", address)).merge(("port", listen_port));
 
-    let rocket = rocket::custom(config).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
+    let rocket = rocket::custom(figment).manage(DetectInterval(monitor)).manage(AuthKey(auth_key));
 
     let rocket = api::mounts(rocket);
 
-    let rocket = if only_api {
+    if only_api {
         rocket
     } else {
         let rocket = static_resources::rocket_handler(rocket);
 
         monitor::rocket_handler(rocket)
-    };
-
-    let _ = rocket.launch().await?;
-
-    Ok(())
+    }
 }

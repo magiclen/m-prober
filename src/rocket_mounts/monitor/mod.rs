@@ -20,7 +20,7 @@ fn index(
 ) -> CacheResponse<HandlebarsResponse> {
     let mut map = HashMap::new();
 
-    map.insert("version", JSONGetTextValue::Str(crate::CARGO_PKG_VERSION));
+    map.insert("version", JSONGetTextValue::Str(env!("CARGO_PKG_VERSION")));
 
     map.insert("timeInterval", JSONGetTextValue::from_u64(detect_interval.as_secs()));
 

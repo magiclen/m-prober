@@ -1,4 +1,4 @@
-use crate::rocket::{Build, Rocket};
+use rocket::{Build, Rocket};
 
 cached_static_response_handler! {
     259_200;
