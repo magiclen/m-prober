@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use byte_unit::{ByteUnit, UnitIncorrectError};
+use byte_unit::{Unit, UnitParseError};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use concat_with::concat_line;
 use regex::Regex;
@@ -170,9 +170,9 @@ pub enum CLICommands {
         #[arg(help = "Show memory stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
-        #[arg(value_parser = parse_byte_unit)]
+        #[arg(value_parser = parse_unit)]
         #[arg(help = "Forces to use a fixed unit")]
-        unit:    Option<ByteUnit>,
+        unit:    Option<Unit>,
     },
     #[command(aliases = ["n", "net", "networks", "bandwidth", "traffic"])]
     #[command(about = "Show network stats")]
@@ -190,9 +190,9 @@ pub enum CLICommands {
         #[arg(help = "Show network stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
-        #[arg(value_parser = parse_byte_unit)]
+        #[arg(value_parser = parse_unit)]
         #[arg(help = "Forces to use a fixed unit")]
-        unit:    Option<ByteUnit>,
+        unit:    Option<Unit>,
     },
     #[command(aliases = ["v", "storage", "volumes", "d", "disk", "disks", "blk", "block", "blocks", "mount", "mounts", "ssd", "hdd"])]
     #[command(about = "Show volume stats")]
@@ -210,9 +210,9 @@ pub enum CLICommands {
         #[arg(help = "Show volume stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
-        #[arg(value_parser = parse_byte_unit)]
+        #[arg(value_parser = parse_unit)]
         #[arg(help = "Forces to use a fixed unit")]
-        unit:             Option<ByteUnit>,
+        unit:             Option<Unit>,
         #[arg(short = 'i', long)]
         #[arg(help = "Show only information about volumes without I/O rates")]
         only_information: bool,
@@ -236,9 +236,9 @@ pub enum CLICommands {
         #[arg(help = "Show process stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
-        #[arg(value_parser = parse_byte_unit)]
+        #[arg(value_parser = parse_unit)]
         #[arg(help = "Forces to use a fixed unit")]
-        unit:             Option<ByteUnit>,
+        unit:             Option<Unit>,
         #[arg(short = 'i', long)]
         #[arg(help = "Show only information about processes without CPU usage")]
         only_information: bool,
@@ -353,8 +353,8 @@ fn parse_duration_sec(arg: &str) -> Result<Duration, ParseIntError> {
 }
 
 #[inline]
-fn parse_byte_unit(arg: &str) -> Result<ByteUnit, UnitIncorrectError> {
-    ByteUnit::from_str(arg)
+fn parse_unit(arg: &str) -> Result<Unit, UnitParseError> {
+    Unit::from_str(arg)
 }
 
 #[inline]

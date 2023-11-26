@@ -1,4 +1,4 @@
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::memory;
 
 use crate::{terminal::*, CLIArgs, CLICommands};
@@ -20,7 +20,7 @@ pub fn handle_memory(args: CLIArgs) {
     }
 }
 
-fn draw_memory(unit: Option<ByteUnit>) {
+fn draw_memory(unit: Option<Unit>) {
     let free = memory::free().unwrap();
 
     let output = get_stdout_output();
@@ -28,24 +28,24 @@ fn draw_memory(unit: Option<ByteUnit>) {
 
     let (mem_used, mem_total, swap_used, swap_total) = {
         let (mem_used, mem_total, swap_used, swap_total) = (
-            Byte::from_bytes(free.mem.used as u128),
-            Byte::from_bytes(free.mem.total as u128),
-            Byte::from_bytes(free.swap.used as u128),
-            Byte::from_bytes(free.swap.total as u128),
+            Byte::from(free.mem.used),
+            Byte::from(free.mem.total),
+            Byte::from(free.swap.used),
+            Byte::from(free.swap.total),
         );
 
         match unit {
             Some(unit) => (
-                mem_used.get_adjusted_unit(unit).to_string(),
-                mem_total.get_adjusted_unit(unit).to_string(),
-                swap_used.get_adjusted_unit(unit).to_string(),
-                swap_total.get_adjusted_unit(unit).to_string(),
+                format!("{:.2}", mem_used.get_adjusted_unit(unit)),
+                format!("{:.2}", mem_total.get_adjusted_unit(unit)),
+                format!("{:.2}", swap_used.get_adjusted_unit(unit)),
+                format!("{:.2}", swap_total.get_adjusted_unit(unit)),
             ),
             None => (
-                mem_used.get_appropriate_unit(true).to_string(),
-                mem_total.get_appropriate_unit(true).to_string(),
-                swap_used.get_appropriate_unit(true).to_string(),
-                swap_total.get_appropriate_unit(true).to_string(),
+                format!("{:.2}", mem_used.get_appropriate_unit(UnitType::Binary)),
+                format!("{:.2}", mem_total.get_appropriate_unit(UnitType::Binary)),
+                format!("{:.2}", swap_used.get_appropriate_unit(UnitType::Binary)),
+                format!("{:.2}", swap_total.get_appropriate_unit(UnitType::Binary)),
             ),
         }
     };

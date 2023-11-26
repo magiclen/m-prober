@@ -12,7 +12,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::*;
 use rand::{self, Rng};
 
@@ -295,10 +295,10 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             memory = Some(speed);
 
             if config.print_out.has_stdout() {
-                let memory_result = Byte::from_unit(speed, ByteUnit::B)
-                    .unwrap()
-                    .get_appropriate_unit(true)
-                    .to_string();
+                let memory_result = format!(
+                    "{:.2}",
+                    Byte::from_f64(speed).unwrap().get_appropriate_unit(UnitType::Binary)
+                );
 
                 println!("Memory             : {memory_result}/s");
             }
@@ -523,8 +523,8 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                                                                                     * BUFFER_SIZE
                                                                                         as f64;
 
-                                                                            let read_result_string = Byte::from_unit(read_result, ByteUnit::B).unwrap().get_appropriate_unit(true).to_string();
-                                                                            let write_result_string = Byte::from_unit(write_result, ByteUnit::B).unwrap().get_appropriate_unit(true).to_string();
+                                                                            let read_result_string = format!("{:.2}", Byte::from_f64_with_unit(read_result, Unit::B).unwrap().get_appropriate_unit(UnitType::Binary));
+                                                                            let write_result_string = format!("{:.2}", Byte::from_f64_with_unit(write_result, Unit::B).unwrap().get_appropriate_unit(UnitType::Binary));
 
                                                                             if config
                                                                                 .print_out

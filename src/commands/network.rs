@@ -1,4 +1,4 @@
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::network;
 
 use crate::{terminal::*, CLIArgs, CLICommands};
@@ -20,7 +20,7 @@ pub fn handle_network(args: CLIArgs) {
     }
 }
 
-fn draw_network(monitor: Option<Duration>, unit: Option<ByteUnit>) {
+fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
     let networks_with_speed = network::get_networks_with_speed(match monitor {
         Some(monitor) => monitor,
         None => DEFAULT_INTERVAL,
@@ -41,24 +41,24 @@ fn draw_network(monitor: Option<Duration>, unit: Option<ByteUnit>) {
     let mut downloads_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
 
     for (network, network_speed) in networks_with_speed.iter() {
-        let upload = Byte::from_unit(network_speed.transmit, ByteUnit::B).unwrap();
-        let upload_total = Byte::from_bytes(u128::from(network.stat.transmit_bytes));
+        let upload = Byte::from_f64_with_unit(network_speed.transmit, Unit::B).unwrap();
+        let upload_total = Byte::from_u64(network.stat.transmit_bytes);
 
-        let download = Byte::from_unit(network_speed.receive, ByteUnit::B).unwrap();
-        let download_total = Byte::from_bytes(u128::from(network.stat.receive_bytes));
+        let download = Byte::from_f64_with_unit(network_speed.receive, Unit::B).unwrap();
+        let download_total = Byte::from_u64(network.stat.receive_bytes);
 
         let (mut upload, upload_total, mut download, download_total) = match unit {
             Some(unit) => (
-                upload.get_adjusted_unit(unit).to_string(),
-                upload_total.get_adjusted_unit(unit).to_string(),
-                download.get_adjusted_unit(unit).to_string(),
-                download_total.get_adjusted_unit(unit).to_string(),
+                format!("{:.2}", upload.get_adjusted_unit(unit)),
+                format!("{:.2}", upload_total.get_adjusted_unit(unit)),
+                format!("{:.2}", download.get_adjusted_unit(unit)),
+                format!("{:.2}", download_total.get_adjusted_unit(unit)),
             ),
             None => (
-                upload.get_appropriate_unit(false).to_string(),
-                upload_total.get_appropriate_unit(false).to_string(),
-                download.get_appropriate_unit(false).to_string(),
-                download_total.get_appropriate_unit(false).to_string(),
+                format!("{:.2}", upload.get_appropriate_unit(UnitType::Decimal)),
+                format!("{:.2}", upload_total.get_appropriate_unit(UnitType::Decimal)),
+                format!("{:.2}", download.get_appropriate_unit(UnitType::Decimal)),
+                format!("{:.2}", download_total.get_appropriate_unit(UnitType::Decimal)),
             ),
         };
 

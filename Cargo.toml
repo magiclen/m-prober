@@ -29,7 +29,7 @@ mprober-lib = "0.1"
 termcolor = "1"
 getch = "0.3"
 
-byte-unit = "4"
+byte-unit = "5"
 once_cell = "1"
 
 rand = "0.8"

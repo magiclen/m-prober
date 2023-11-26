@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use once_cell::sync::Lazy;
 use rocket::{http::Status, request::Request, Build, Rocket, State};
 use rocket_cache_response::CacheResponse;
@@ -697,8 +697,9 @@ fn monitor(
             for mhz in cpu.cpus_mhz {
                 mhz_sum += mhz;
 
-                let adjusted_byte =
-                    Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+                let adjusted_byte = Byte::from_f64_with_unit(mhz, Unit::MB)
+                    .unwrap()
+                    .get_appropriate_unit(UnitType::Decimal);
 
                 let mhz_string = format!(
                     "{:.2} {}Hz",
@@ -714,8 +715,9 @@ fn monitor(
 
             let mhz = mhz_sum / cpus_mhz_len as f64;
             let mhz_string = {
-                let adjusted_byte =
-                    Byte::from_unit(mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+                let adjusted_byte = Byte::from_f64_with_unit(mhz, Unit::MB)
+                    .unwrap()
+                    .get_appropriate_unit(UnitType::Decimal);
 
                 format!(
                     "{:.2} {}Hz",
@@ -743,18 +745,18 @@ fn monitor(
     let memory_buff_and_cache = memory.mem.buffers + memory.mem.cache;
 
     let memory_total_string =
-        Byte::from_bytes(memory.mem.total as u128).get_appropriate_unit(true).to_string();
+        format!("{:.2}", Byte::from(memory.mem.total).get_appropriate_unit(UnitType::Binary));
     let memory_used_string =
-        Byte::from_bytes(memory.mem.used as u128).get_appropriate_unit(true).to_string();
+        format!("{:.2}", Byte::from(memory.mem.used).get_appropriate_unit(UnitType::Binary));
     let memory_buff_and_cache_string =
-        Byte::from_bytes(memory_buff_and_cache as u128).get_appropriate_unit(true).to_string();
+        format!("{:.2}", Byte::from(memory_buff_and_cache).get_appropriate_unit(UnitType::Binary));
 
     let swap_total_string =
-        Byte::from_bytes(memory.swap.total as u128).get_appropriate_unit(true).to_string();
+        format!("{:.2}", Byte::from(memory.swap.total).get_appropriate_unit(UnitType::Binary));
     let swap_used_string =
-        Byte::from_bytes(memory.swap.used as u128).get_appropriate_unit(true).to_string();
+        format!("{:.2}", Byte::from(memory.swap.used).get_appropriate_unit(UnitType::Binary));
     let swap_cache_string =
-        Byte::from_bytes(memory.swap.cache as u128).get_appropriate_unit(true).to_string();
+        format!("{:.2}", Byte::from(memory.swap.cache).get_appropriate_unit(UnitType::Binary));
 
     let json_network = {
         let network_stat = NETWORK_STAT.lock().unwrap();
@@ -765,18 +767,22 @@ fn monitor(
         let mut json_network = Vec::with_capacity(network_stat.len());
 
         for (network, network_speed) in network_stat {
-            let upload_total_string = Byte::from_bytes(u128::from(network.stat.transmit_bytes))
-                .get_appropriate_unit(false)
-                .to_string();
-            let download_total_string = Byte::from_bytes(u128::from(network.stat.receive_bytes))
-                .get_appropriate_unit(false)
-                .to_string();
+            let upload_total_string = format!(
+                "{:.2}",
+                Byte::from(network.stat.transmit_bytes).get_appropriate_unit(UnitType::Decimal)
+            );
+            let download_total_string = format!(
+                "{:.2}",
+                Byte::from(network.stat.receive_bytes).get_appropriate_unit(UnitType::Decimal)
+            );
 
             let upload_rate_string = {
-                let mut s = Byte::from_unit(network_speed.transmit, ByteUnit::B)
-                    .unwrap()
-                    .get_appropriate_unit(false)
-                    .to_string();
+                let mut s = format!(
+                    "{:.2}",
+                    Byte::from_f64(network_speed.transmit)
+                        .unwrap()
+                        .get_appropriate_unit(UnitType::Decimal)
+                );
 
                 s.push_str("/s");
 
@@ -784,10 +790,12 @@ fn monitor(
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_unit(network_speed.receive, ByteUnit::B)
-                    .unwrap()
-                    .get_appropriate_unit(false)
-                    .to_string();
+                let mut s = format!(
+                    "{:.2}",
+                    Byte::from_f64(network_speed.receive)
+                        .unwrap()
+                        .get_appropriate_unit(UnitType::Decimal)
+                );
 
                 s.push_str("/s");
 
@@ -828,21 +836,26 @@ fn monitor(
 
         for (volume, volume_speed) in volumes_stat {
             let size_string =
-                Byte::from_bytes(u128::from(volume.size)).get_appropriate_unit(false).to_string();
+                format!("{:.2}", Byte::from(volume.size).get_appropriate_unit(UnitType::Decimal));
             let used_string =
-                Byte::from_bytes(u128::from(volume.used)).get_appropriate_unit(false).to_string();
+                format!("{:.2}", Byte::from(volume.used).get_appropriate_unit(UnitType::Decimal));
 
-            let read_total_string = Byte::from_bytes(u128::from(volume.stat.read_bytes))
-                .get_appropriate_unit(false)
-                .to_string();
-            let write_total_string = Byte::from_bytes(u128::from(volume.stat.write_bytes))
-                .get_appropriate_unit(false)
-                .to_string();
+            let read_total_string = format!(
+                "{:.2}",
+                Byte::from(volume.stat.read_bytes).get_appropriate_unit(UnitType::Decimal)
+            );
+            let write_total_string = format!(
+                "{:.2}",
+                Byte::from(volume.stat.write_bytes).get_appropriate_unit(UnitType::Decimal)
+            );
 
             let read_rate_string = {
-                let mut s = Byte::from_bytes(volume_speed.read as u128)
-                    .get_appropriate_unit(false)
-                    .to_string();
+                let mut s = format!(
+                    "{:.2}",
+                    Byte::from_f64(volume_speed.read)
+                        .unwrap()
+                        .get_appropriate_unit(UnitType::Decimal)
+                );
 
                 s.push_str("/s");
 
@@ -850,9 +863,12 @@ fn monitor(
             };
 
             let download_rate_string = {
-                let mut s = Byte::from_bytes(volume_speed.write as u128)
-                    .get_appropriate_unit(false)
-                    .to_string();
+                let mut s = format!(
+                    "{:.2}",
+                    Byte::from_f64(volume_speed.read)
+                        .unwrap()
+                        .get_appropriate_unit(UnitType::Decimal)
+                );
 
                 s.push_str("/s");
 

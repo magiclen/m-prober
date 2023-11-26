@@ -1,4 +1,4 @@
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::{cpu, load_average};
 
 use crate::{terminal::*, CLIArgs, CLICommands};
@@ -237,8 +237,9 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
             let mut hz_string: Vec<String> = Vec::with_capacity(cpu.siblings);
 
             for cpu_mhz in cpu.cpus_mhz.iter().copied() {
-                let cpu_hz =
-                    Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+                let cpu_hz = Byte::from_f64_with_unit(cpu_mhz, Unit::MB)
+                    .unwrap()
+                    .get_appropriate_unit(UnitType::Decimal);
 
                 hz_string.push(format!(
                     "{:.2} {}Hz",
@@ -377,8 +378,9 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
             let cpu_mhz: f64 = cpu.cpus_mhz.iter().sum::<f64>() / cpu.cpus_mhz.len() as f64;
 
-            let cpu_hz =
-                Byte::from_unit(cpu_mhz, ByteUnit::MB).unwrap().get_appropriate_unit(false);
+            let cpu_hz = Byte::from_f64_with_unit(cpu_mhz, Unit::MB)
+                .unwrap()
+                .get_appropriate_unit(UnitType::Decimal);
 
             write!(&mut stdout, "{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1])
                 .unwrap();

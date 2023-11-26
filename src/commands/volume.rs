@@ -1,4 +1,4 @@
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::volume;
 
 use crate::{terminal::*, CLIArgs, CLICommands};
@@ -29,7 +29,7 @@ pub fn handle_volume(args: CLIArgs) {
 
 fn draw_volume(
     monitor: Option<Duration>,
-    unit: Option<ByteUnit>,
+    unit: Option<Unit>,
     only_information: bool,
     mounts: bool,
 ) {
@@ -56,29 +56,29 @@ fn draw_volume(
         let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_len);
 
         for volume in volumes.iter() {
-            let size = Byte::from_bytes(u128::from(volume.size));
+            let size = Byte::from_u64(volume.size);
 
-            let used = Byte::from_bytes(u128::from(volume.used));
+            let used = Byte::from_u64(volume.used);
 
             let used_percentage =
                 format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
 
-            let read_total = Byte::from_bytes(u128::from(volume.stat.read_bytes));
+            let read_total = Byte::from_u64(volume.stat.read_bytes);
 
-            let write_total = Byte::from_bytes(u128::from(volume.stat.write_bytes));
+            let write_total = Byte::from_u64(volume.stat.write_bytes);
 
             let (size, used, read_total, write_total) = match unit {
                 Some(unit) => (
-                    size.get_adjusted_unit(unit).to_string(),
-                    used.get_adjusted_unit(unit).to_string(),
-                    read_total.get_adjusted_unit(unit).to_string(),
-                    write_total.get_adjusted_unit(unit).to_string(),
+                    format!("{:.2}", size.get_adjusted_unit(unit)),
+                    format!("{:.2}", used.get_adjusted_unit(unit)),
+                    format!("{:.2}", read_total.get_adjusted_unit(unit)),
+                    format!("{:.2}", write_total.get_adjusted_unit(unit)),
                 ),
                 None => (
-                    size.get_appropriate_unit(false).to_string(),
-                    used.get_appropriate_unit(false).to_string(),
-                    read_total.get_appropriate_unit(false).to_string(),
-                    write_total.get_appropriate_unit(false).to_string(),
+                    format!("{:.2}", size.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", used.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", read_total.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", write_total.get_appropriate_unit(UnitType::Decimal)),
                 ),
             };
 
@@ -259,35 +259,35 @@ fn draw_volume(
         let mut volumes_write_total: Vec<String> = Vec::with_capacity(volumes_with_speed_len);
 
         for (volume, volume_speed) in volumes_with_speed.iter() {
-            let size = Byte::from_bytes(u128::from(volume.size));
+            let size = Byte::from_u64(volume.size);
 
-            let used = Byte::from_bytes(u128::from(volume.used));
+            let used = Byte::from_u64(volume.used);
 
             let used_percentage =
                 format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
 
-            let read = Byte::from_unit(volume_speed.read, ByteUnit::B).unwrap();
-            let read_total = Byte::from_bytes(u128::from(volume.stat.read_bytes));
+            let read = Byte::from_f64_with_unit(volume_speed.read, Unit::B).unwrap();
+            let read_total = Byte::from_u64(volume.stat.read_bytes);
 
-            let write = Byte::from_unit(volume_speed.write, ByteUnit::B).unwrap();
-            let write_total = Byte::from_bytes(u128::from(volume.stat.write_bytes));
+            let write = Byte::from_f64_with_unit(volume_speed.write, Unit::B).unwrap();
+            let write_total = Byte::from_u64(volume.stat.read_bytes);
 
             let (size, used, mut read, read_total, mut write, write_total) = match unit {
                 Some(unit) => (
-                    size.get_adjusted_unit(unit).to_string(),
-                    used.get_adjusted_unit(unit).to_string(),
-                    read.get_adjusted_unit(unit).to_string(),
-                    read_total.get_adjusted_unit(unit).to_string(),
-                    write.get_adjusted_unit(unit).to_string(),
-                    write_total.get_adjusted_unit(unit).to_string(),
+                    format!("{:.2}", size.get_adjusted_unit(unit)),
+                    format!("{:.2}", used.get_adjusted_unit(unit)),
+                    format!("{:.2}", read.get_adjusted_unit(unit)),
+                    format!("{:.2}", read_total.get_adjusted_unit(unit)),
+                    format!("{:.2}", write.get_adjusted_unit(unit)),
+                    format!("{:.2}", write_total.get_adjusted_unit(unit)),
                 ),
                 None => (
-                    size.get_appropriate_unit(false).to_string(),
-                    used.get_appropriate_unit(false).to_string(),
-                    read.get_appropriate_unit(false).to_string(),
-                    read_total.get_appropriate_unit(false).to_string(),
-                    write.get_appropriate_unit(false).to_string(),
-                    write_total.get_appropriate_unit(false).to_string(),
+                    format!("{:.2}", size.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", used.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", read.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", read_total.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", write.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", write_total.get_appropriate_unit(UnitType::Decimal)),
                 ),
             };
 

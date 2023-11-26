@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use anyhow::anyhow;
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::{Byte, Unit, UnitType};
 use chrono::SecondsFormat;
 use mprober_lib::process;
 use regex::Regex;
@@ -79,7 +79,7 @@ fn draw_process(
     monitor: Option<Duration>,
     mut top: Option<usize>,
     truncate: usize,
-    unit: Option<ByteUnit>,
+    unit: Option<Unit>,
     only_information: bool,
     start_time: bool,
     user_filter: Option<&str>,
@@ -227,22 +227,19 @@ fn draw_process(
         pid.push(process.pid.to_string());
         ppid.push(process.ppid.to_string());
 
-        let (p_vsz, p_rss, p_anon) = (
-            Byte::from_bytes(process.vsz as u128),
-            Byte::from_bytes(process.rss as u128),
-            Byte::from_bytes(process.rss_anon as u128),
-        );
+        let (p_vsz, p_rss, p_anon) =
+            (Byte::from(process.vsz), Byte::from(process.rss), Byte::from(process.rss_anon));
 
         match unit {
             Some(byte_unit) => {
-                vsz.push(p_vsz.get_adjusted_unit(byte_unit).format(1));
-                rss.push(p_rss.get_adjusted_unit(byte_unit).format(1));
-                anon.push(p_anon.get_adjusted_unit(byte_unit).format(1));
+                vsz.push(format!("{:.1}", p_vsz.get_adjusted_unit(byte_unit)));
+                rss.push(format!("{:.1}", p_rss.get_adjusted_unit(byte_unit)));
+                anon.push(format!("{:.1}", p_anon.get_adjusted_unit(byte_unit)));
             },
             None => {
-                vsz.push(p_vsz.get_appropriate_unit(true).format(1));
-                rss.push(p_rss.get_appropriate_unit(true).format(1));
-                anon.push(p_anon.get_appropriate_unit(true).format(1));
+                vsz.push(format!("{:.1}", p_vsz.get_appropriate_unit(UnitType::Binary)));
+                rss.push(format!("{:.1}", p_rss.get_appropriate_unit(UnitType::Binary)));
+                anon.push(format!("{:.1}", p_anon.get_appropriate_unit(UnitType::Binary)));
             },
         }
 
