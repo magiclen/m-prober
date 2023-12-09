@@ -1,35 +1,43 @@
-import $ from 'jquery';
-import 'bootstrap/js/dist/collapse';
-import 'bootstrap/js/dist/modal';
-import Vue from 'vue';
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-floating-promises */
+/* eslint-disable func-style */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
-import {applyRobotoMono} from 'web-fonts/lib/roboto-mono';
+// eslint-disable-next-line import/order
+import $ from "jquery";
 
-import './app.scss';
+import "bootstrap/js/dist/collapse.js";
+import "bootstrap/js/dist/modal.js";
+import Vue from "vue/dist/vue.esm.js";
+
+import { applyRobotoMono } from "web-fonts/lib/roboto-mono.js";
+
+import "./index.scss";
 
 $.fn.pressEnter = function (fnc) {
     return this.each(function () {
         $(this).keypress(function (ev) {
-            let keyCode = (ev.keyCode ? ev.keyCode : ev.which);
+            let keyCode = ev.keyCode ? ev.keyCode : ev.which;
             if (keyCode === 13) {
                 fnc.call(this, ev);
                 ev.preventDefault();
             }
-        })
+        });
     });
 };
 
 function api(type, url, data, success, error, key) {
-    if (type === 'DELETE') {
-        url = url + '?' + $.param(data);
+    if (type === "DELETE") {
+        url = url + "?" + $.param(data);
         data = {};
     }
 
     let headers;
-    if (typeof key === 'string') {
-        headers = {
-            "Authorization": key
-        };
+    if (typeof key === "string") {
+        headers = { Authorization: key };
     }
 
     $.ajax({
@@ -37,17 +45,17 @@ function api(type, url, data, success, error, key) {
         url: url,
         data: data,
         headers: headers,
-        dataType: 'json',
+        dataType: "json",
         success: function (response) {
-            if (typeof success === 'function') {
+            if (typeof success === "function") {
                 success(response);
             }
         },
         error: function () {
-            if (typeof success === 'function') {
+            if (typeof success === "function") {
                 error();
             }
-        }
+        },
     });
 }
 
@@ -56,23 +64,21 @@ function setElementDisplayNone(element, none = true) {
         element = $(element);
     }
     if (none) {
-        if (!element.hasClass('d-none')) {
-            element.addClass('d-none');
+        if (!element.hasClass("d-none")) {
+            element.addClass("d-none");
         }
-    } else {
-        if (element.hasClass('d-none')) {
-            element.removeClass('d-none');
-        }
+    } else if (element.hasClass("d-none")) {
+        element.removeClass("d-none");
     }
 }
 
-function alertModal(body = '', title = undefined, close = 'OK', afterClose = undefined, pressEnterToClose = true) {
-    let m = $('#alertModal');
-    let h = $('.modal-header', m);
-    let t = $('.modal-title', h);
-    let b = $('.modal-body', m);
-    let cb = $('.modal-footer button', m);
-    if (typeof title === 'string') {
+function alertModal(body = "", title = undefined, close = "OK", afterClose = undefined, pressEnterToClose = true) {
+    let m = $("#alertModal");
+    let h = $(".modal-header", m);
+    let t = $(".modal-title", h);
+    let b = $(".modal-body", m);
+    let cb = $(".modal-footer button", m);
+    if (typeof title === "string") {
         t.text(title);
         setElementDisplayNone(h, false);
     } else {
@@ -80,20 +86,20 @@ function alertModal(body = '', title = undefined, close = 'OK', afterClose = und
     }
     b.html(body);
     cb.text(close);
-    m.off('hidden.bs.modal');
-    if (typeof afterClose === 'function') {
-        m.on('hidden.bs.modal', afterClose);
+    m.off("hidden.bs.modal");
+    if (typeof afterClose === "function") {
+        m.on("hidden.bs.modal", afterClose);
     }
     if (pressEnterToClose) {
         m.pressEnter(function () {
-            m.modal('hide');
+            m.modal("hide");
         });
     } else {
         m.pressEnter(function () {
-
+            //
         });
     }
-    m.modal('show');
+    m.modal("show");
 }
 
 function to(url) {
@@ -123,30 +129,28 @@ function smoothScroll(el, offset = 0, duration = 500) {
         el = $(el);
     }
 
-    let body = $('html, body');
+    let body = $("html, body");
 
-    let top = el.offset().top - parseFloat(body.css('margin-top')) - parseFloat(body.css('padding-top')) - parseFloat(el.css('margin-top')) - parseFloat(el.css('padding-top')) - offset;
-    body.animate({
-        scrollTop: top
-    }, duration, 'swing');
+    let top = el.offset().top - parseFloat(body.css("margin-top")) - parseFloat(body.css("padding-top")) - parseFloat(el.css("margin-top")) - parseFloat(el.css("padding-top")) - offset;
+    body.animate({ scrollTop: top }, duration, "swing");
 }
 
 function removeCardsBorderDark(el) {
-    $('> .card', el).removeClass('border-dark');
+    $("> .card", el).removeClass("border-dark");
 }
 
 function addBorderDark(el) {
-    if (!el.hasClass('border-dark')) {
-        el.addClass('border-dark');
+    if (!el.hasClass("border-dark")) {
+        el.addClass("border-dark");
     }
 }
 
 function toTag(el) {
-    let wrapper = $('#wrapper');
+    let wrapper = $("#wrapper");
 
-    let paddingTop = parseFloat(wrapper.css('padding-top'));
+    let paddingTop = parseFloat(wrapper.css("padding-top"));
 
-    let marginTop = parseFloat(wrapper.css('margin-top'));
+    let marginTop = parseFloat(wrapper.css("margin-top"));
 
     smoothScroll(el, paddingTop + marginTop);
 }
@@ -154,7 +158,7 @@ function toTag(el) {
 function callMonitorAPI(vueData, authKey = undefined, interval, retryCount = 0) {
     let t = new Date().getTime();
 
-    api('GET', 'api/monitor', {}, function (data) {
+    api("GET", "api/monitor", {}, function (data) {
         let code = data.code;
 
         if (code !== 0) {
@@ -177,31 +181,31 @@ function callMonitorAPI(vueData, authKey = undefined, interval, retryCount = 0) 
         vueData.load_average = data.load_average;
 
         for (let field in vueData.load_average_scale) {
-            if (vueData.load_average_scale.hasOwnProperty(field)) {
+            if (Object.prototype.hasOwnProperty.call(vueData.load_average_scale, field)) {
                 vueData.load_average_scale[field] = data.load_average[field] * 100 / vueData.logical_cores;
             }
         }
 
         vueData.cpu = data.cpus_stat[0] * 100;
 
-        let cpu_thread_offset = 1;
+        let cpuThreadOffset = 1;
 
         data.cpus.forEach(function (cpu) {
             let threads = cpu.threads;
 
             cpu.cpus_stat = [];
 
-            let e = cpu_thread_offset + threads;
+            let e = cpuThreadOffset + threads;
 
             if (e > data.length) {
                 e = data.length;
             }
 
-            for (let i = cpu_thread_offset; i < e; ++i) {
+            for (let i = cpuThreadOffset;i < e;++i) {
                 cpu.cpus_stat.push(data.cpus_stat[i] * 100);
             }
 
-            cpu_thread_offset += threads;
+            cpuThreadOffset += threads;
         });
 
         vueData.cpus = data.cpus;
@@ -210,13 +214,13 @@ function callMonitorAPI(vueData, authKey = undefined, interval, retryCount = 0) 
         vueData.swap = data.swap;
 
         for (let field in vueData.memory_scale) {
-            if (vueData.memory_scale.hasOwnProperty(field)) {
+            if (Object.prototype.hasOwnProperty.call(vueData.memory_scale, field)) {
                 vueData.memory_scale[field] = data.memory[field].value * 100 / data.memory.total.value;
             }
         }
 
         for (let field in vueData.swap_scale) {
-            if (vueData.swap_scale.hasOwnProperty(field)) {
+            if (Object.prototype.hasOwnProperty.call(vueData.swap_scale, field)) {
                 vueData.swap_scale[field] = data.swap[field].value * 100 / data.swap.total.value;
             }
         }
@@ -248,11 +252,11 @@ function callMonitorAPI(vueData, authKey = undefined, interval, retryCount = 0) 
         }, timeout);
     }, function () {
         if (retryCount >= 10) {
-            alertModal('The monitor API can not be invoked successfully. Please refresh this page to try again.', 'Error', 'OK', function () {
-                to('');
+            alertModal("The monitor API can not be invoked successfully. Please refresh this page to try again.", "Error", "OK", function () {
+                to("");
             }, false);
         } else {
-            console.warn('Retry to call the monitor API in 1 second.');
+            console.warn("Retry to call the monitor API in 1 second.");
 
             setTimeout(function () {
                 callMonitorAPI(vueData, authKey, interval, retryCount + 1);
@@ -261,93 +265,93 @@ function callMonitorAPI(vueData, authKey = undefined, interval, retryCount = 0) 
     }, authKey);
 }
 
-export function monitor_init() {
-    applyRobotoMono('html body, code');
+export function monitorInit() {
+    applyRobotoMono("html body, code");
 
     $("#menu-github").click(function (e) {
         e.preventDefault();
-        go('https://github.com/magiclen/m-prober');
+        go("https://github.com/magiclen/m-prober");
     });
 
-    let monitor_data = {
-        last_update_time: 'Never',
-        kernel: '',
-        hostname: '',
-        rtc_time: '',
+    let monitorData = {
+        last_update_time: "Never",
+        kernel: "",
+        hostname: "",
+        rtc_time: "",
         uptime: {
             value: 0,
-            text: ''
+            text: "",
         },
         logical_cores: 0,
         load_average: {
             one: 0,
             five: 0,
-            fifteen: 0
+            fifteen: 0,
         },
         load_average_scale: {
             one: 0,
             five: 0,
-            fifteen: 0
+            fifteen: 0,
         },
         cpu: 0,
         cpus: [],
         memory: {
             total: {
                 value: 0,
-                text: '0 B'
+                text: "0 B",
             },
             used: {
                 value: 0,
-                text: '0 B'
+                text: "0 B",
             },
             buffer_cache: {
                 value: 0,
-                text: '0 B'
-            }
+                text: "0 B",
+            },
         },
         memory_scale: {
             used: 0,
-            buffer_cache: 0
+            buffer_cache: 0,
         },
         swap: {
             total: {
                 value: 0,
-                text: '0 B'
+                text: "0 B",
             },
             used: {
                 value: 0,
-                text: '0 B'
+                text: "0 B",
             },
             cache: {
                 value: 0,
-                text: '0 B'
-            }
+                text: "0 B",
+            },
         },
         swap_scale: {
             used: 0,
-            cache: 0
+            cache: 0,
         },
         network: [],
-        volumes: []
+        volumes: [],
     };
 
     new Vue({
-        el: '#monitor',
-        data: monitor_data,
+        el: "#monitor",
+        data: monitorData,
         mounted: function () {
-            let monitor_el = this.$el;
+            let monitorEL = this.$el;
 
             $("#menu-toggle").click(function (e) {
                 e.preventDefault();
                 $("#wrapper").toggleClass("toggled");
-                removeCardsBorderDark(monitor_el);
+                removeCardsBorderDark(monitorEL);
             });
 
             new Vue({
-                el: '#sidebar-wrapper',
+                el: "#sidebar-wrapper",
                 data: {},
                 mounted: function () {
-                    let authKey = $('#auth-key');
+                    let authKey = $("#auth-key");
 
                     if (authKey.length > 0) {
                         authKey = authKey.val();
@@ -355,61 +359,61 @@ export function monitor_init() {
                         authKey = undefined;
                     }
 
-                    let timeInterval = parseInt($('#time-interval').val());
+                    let timeInterval = parseInt($("#time-interval").val());
 
-                    callMonitorAPI(monitor_data, authKey, timeInterval);
+                    callMonitorAPI(monitorData, authKey, timeInterval);
                 },
                 methods: {
                     toLinuxInformation: function () {
-                        removeCardsBorderDark(monitor_el);
+                        removeCardsBorderDark(monitorEL);
 
-                        let el = $('> #linux-information', monitor_el);
+                        let el = $("> #linux-information", monitorEL);
 
                         toTag(el);
                         addBorderDark(el);
                     },
                     toLoadAverage: function () {
-                        removeCardsBorderDark(monitor_el);
+                        removeCardsBorderDark(monitorEL);
 
-                        let el = $('> #load-average', monitor_el);
+                        let el = $("> #load-average", monitorEL);
 
                         toTag(el);
                         addBorderDark(el);
                     },
                     toCPUs: function () {
-                        removeCardsBorderDark(monitor_el);
+                        removeCardsBorderDark(monitorEL);
 
-                        let el = $('> #cpus', monitor_el);
+                        let el = $("> #cpus", monitorEL);
 
                         toTag(el);
                         addBorderDark(el);
                     },
                     toMemory: function () {
-                        removeCardsBorderDark(monitor_el);
+                        removeCardsBorderDark(monitorEL);
 
-                        let el = $('> #memory', monitor_el);
+                        let el = $("> #memory", monitorEL);
 
                         toTag(el);
                         addBorderDark(el);
                     },
                     toNetworks: function () {
-                        removeCardsBorderDark(monitor_el);
+                        removeCardsBorderDark(monitorEL);
 
-                        let el = $('> #networks', monitor_el);
+                        let el = $("> #networks", monitorEL);
 
                         toTag(el);
                         addBorderDark(el);
                     },
                     toVolumes: function () {
-                        removeCardsBorderDark(monitor_el);
+                        removeCardsBorderDark(monitorEL);
 
-                        let el = $('> #volumes', monitor_el);
+                        let el = $("> #volumes", monitorEL);
 
                         toTag(el);
                         addBorderDark(el);
-                    }
-                }
+                    },
+                },
             });
-        }
+        },
     });
 }
