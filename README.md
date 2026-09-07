@@ -131,111 +131,211 @@ From [GitHub](https://github.com/magiclen/m-prober) (x86 and x86_64),
 
 ### CLI
 
-##### Get Hostname
+Every subcommand accepts a few shared flags:
+
+| Flag | Effect |
+| --- | --- |
+| `-m`, `--monitor` | Redraw on an interval instead of printing once. Press `q` to leave. |
+| `-p`, `--plain` | No colors, and the bars are drawn with `\|`, `$` and `#` so they stay readable. |
+| `-l`, `--light` | Darker colors, which fit a light terminal theme. |
+| `-u`, `--unit` | Force a fixed unit, e.g. `-u kb`, instead of picking one per value. |
+
+`MPROBER_FORCE_PLAIN` and `MPROBER_LIGHT` set `--plain` and `--light` for every run, which is useful when the output is piped or when the terminal has a light theme. Set either to anything other than `0` to enable it.
+
+The samples below are the plain output, so they are what you get when the color escapes are stripped.
+
+#### Get Hostname
 
 ```bash
 mprober hostname
 ```
 
+```
+magiclen-linux
+```
+
 In addition to `hostname`, `h`, `host`, `name`, and `servername` are also acceptable.
 
-![hostname.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/hostname.png)
-
-##### Get Kernel Version
+#### Get Kernel Version
 
 ```bash
 mprober kernel
 ```
 
+```
+6.17.0-40-generic
+```
+
 In addition to `kernel`, `k`, `l`, and `linux` are also acceptable.
 
-![kernel.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/kernel.png)
-
-##### Get System Uptime
+#### Get System Uptime
 
 ```bash
 mprober uptime
 ```
 
+```
+This computer has been up for 2 hours, 54 minutes, and 41 seconds.
+```
+
+Add `-s` to get the number of seconds instead.
+
 In addition to `uptime`, `u`, `up`, `utime`, and `ut` are also acceptable.
 
-![uptime.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/uptime.png)
-
-##### Get RTC Time
+#### Get RTC Time
 
 ```bash
 mprober time
 ```
 
+```
+RTC Date 2026-09-07
+RTC Time 13:43:28
+```
+
 In addition to `time`, `t`, `systime`, `stime`, `st`, `utc`, `utctime`, `rtc`, `rtctime`, and `date` are also acceptable.
 
-![time.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/time.png)
-
-##### Show CPU Stats
+#### Show CPU Stats
 
 ```bash
 mprober cpu
 ```
 
+```
+There are 24 logical CPU cores.
+one     [|||                                                      ] 1.42 (5.92%)
+five    [||                                                       ] 0.86 (3.58%)
+fifteen [|                                                        ] 0.48 (2.00%)
+
+Intel(R) Core(TM) Ultra 9 285K 24C/24T 1.67GHz
+CPU [||||||                                                              ] 9.51%
+```
+
+Add `-s` to get a bar and a frequency per core instead of the average, one row per core:
+
+```
+Intel(R) Core(TM) Ultra 9 285K 24C/24T
+CPU0  [|||||||||||||||||||||||||||||||||||||||||||||||||||] 100.00% (  5.50 GHz)
+CPU1  [                                                   ]   0.00% (  4.96 GHz)
+CPU2  [                                                   ]   0.00% (800.00 MHz)
+...
+```
+
+Add `-i` to skip the utilization, which then needs no sampling interval and returns at once.
+
 In addition to `cpu`, `c`, `cpus`, `core`, `cores`, `load`, `processor`, and `processors` are also acceptable.
 
-![cpu.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/cpu.png)
-
-##### Show Memory Stats
+#### Show Memory Stats
 
 ```bash
 mprober memory
 ```
 
+```
+Memory [|||||||||||||$$$$$$$$$$$$$$$$$$$$$$$$$$ ] 21.36 GiB / 62.07 GiB (34.41%)
+Swap   [                                        ] 12.40 MiB /  7.63 GiB ( 0.16%)
+```
+
+In the plain output `|` is the used memory, `$` the page cache and `#` the buffers. With colors they are three shades instead.
+
 In addition to `memory`, `m`, `mem`, `f`,`free`, `memories`, `swap`, `ram`, `dram`, `ddr`, `cache`, `buffer`, `buffers`, `buf`, and `buff` are also acceptable.
 
-![memory.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/memory.png)
-
-##### Show Network Stats
+#### Show Network Stats
 
 ```bash
 mprober network
 ```
 
+```
+        Upload Rate | Uploaded Data | Download Rate | Downloaded Data
+lo            0 B/s         7.94 MB           0 B/s           7.94 MB
+enp1s0    1.30 KB/s       193.34 MB       4.18 KB/s           1.80 GB
+docker0       0 B/s         6.27 KB           0 B/s              84 B
+```
+
 In addition to `network`, `n`, `net`, `networks`,`bandwidth`, and `traffic` are also acceptable.
 
-![network.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/network.png)
-
-##### Show Volume Stats
+#### Show Volume Stats
 
 ```bash
 mprober volume
 ```
 
+```
+          Reading Rate | Read Data | Writing Rate | Written Data
+nvme0n1p2        0 B/s     7.25 MB          0 B/s        7.25 MB
+          [||||||||||||||||||                     ] 975.23 MB / 2.01 GB (48.46%)
+nvme0n1p4        0 B/s    12.39 GB          0 B/s       12.39 GB
+          [|||||||||                              ] 473.00 GB / 1.99 TB (23.77%)
+```
+
+Add `--mounts` to also list the mount points of each volume, and `-i` to skip the I/O rates.
+
 In addition to `volume`, `v`, `storage`, `volumes`, `d`, `disk`, `disks`, `blk`, `block`, `blocks`, `mount`, `mounts`, `ssd`, and `hdd` are also acceptable.
 
-![volume.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/volume.png)
-
-##### Show Pressure (PSI)
+#### Show Pressure (PSI)
 
 ```bash
 mprober pressure
 ```
 
+```
+                                                           avg10   avg60  avg300
+CPU    some [                                         ]    0.00%   0.00%   0.00%
+CPU    full [                                         ]    0.00%   0.00%   0.00%
+Memory some [                                         ]    0.00%   0.00%   0.00%
+Memory full [                                         ]    0.00%   0.00%   0.00%
+IO     some [|||                                      ]    6.31%   2.04%   0.88%
+IO     full [||                                       ]    4.10%   1.22%   0.51%
+```
+
+PSI is the share of time tasks spent stalled waiting for a resource. Unlike the load average it tells a system which is merely busy apart from one which is actually short of CPU, memory or I/O. `some` is the time at least one task was stalled, `full` the time every non-idle task was. The bar follows `avg10`, which is the most immediate of the three.
+
 In addition to `pressure`, `psi`, `stall`, and `pressures` are also acceptable.
 
-PSI is the share of time tasks spent stalled waiting for a resource. Unlike the load average it tells a system which is merely busy apart from one which is actually short of CPU, memory or I/O. `some` is the time at least one task was stalled, `full` the time every non-idle task was.
-
-##### Show cgroup Limits
+#### Show cgroup Limits
 
 ```bash
 mprober cgroup
 ```
 
+```
+cgroup /sys/fs/cgroup/system.slice/mprober.service
+
+CPU
+  limit     2.00 CPUs
+  usage     24 minutes, and 36 seconds
+  user      16 minutes, and 18 seconds
+  system    8 minutes, and 17 seconds
+  throttled 41 of 1500 periods, for 3 seconds
+
+Memory [|||||||||||||||||                         ] 1.68 GiB / 4.00 GiB (42.06%)
+Swap   0 B, not limited
+PIDs   [                                                  ] 1251 / 75971 (1.65%)
+```
+
+This shows the CPU quota, the memory limit and the PID limit that the container or the cloud instance actually caps this machine at, which is often lower than what `cpu` and `memory` report for the host. A limit which is not set reads `not limited` and gets no bar, and the throttled counters tell whether the CPU quota is really in the way.
+
 In addition to `cgroup`, `g`, `container`, `limit`, `limits`, and `cgroups` are also acceptable.
 
-This shows the CPU quota, the memory limit and the PID limit that the container or the cloud instance actually caps this machine at, which is often lower than what `cpu` and `memory` report for the host.
+#### Show Processes
 
-#### Color Mode
+```bash
+mprober process --top 5
+```
 
-Environment variables, `MPROBER_LIGHT` and `MPROBER_FORCE_PLAIN` can be used to control the output colors.
+```
+   PID  PPID   PR  NI %CPU       VSZ       RSS       ANON THD TTY  USER
+348084     1   25   5  4.2  75.2 MiB   5.7 MiB 1012.0 KiB   2      magiclen
+105294  4025   20   0  0.0   1.4 TiB 478.3 MiB  315.6 MiB  34      magiclen
+ 18313 16498   20   0  0.0   1.4 TiB 423.5 MiB  278.6 MiB  32      magiclen
+ 16569 16498   20   0  0.0   1.4 TiB 381.2 MiB  242.5 MiB  31      magiclen
+ 51467 16498   20   0  0.0   1.4 TiB 439.6 MiB  302.5 MiB  31      magiclen
+```
 
-![colors.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/colors.png)
+The rows are ordered by CPU and then by memory usage. `--pid-filter`, `--user-filter`, `--group-filter`, `--program-filter` and `--tty-filter` narrow the list, the last two by a regex. `-t` adds the start time of each process, and `--truncate` shortens the names.
+
+In addition to `process`, `p`, and `ps` are also acceptable.
 
 #### Benchmark
 
@@ -245,11 +345,20 @@ To benchmark the performance of CPU, memory and volumes,
 mprober benchmark
 ```
 
+```
+Intel(R) Core(TM) Ultra 9 285K 24C/24T
+5300 5106 5300 5300 5300 5300 5300 5300 4602 4602 4602 4602 4601 4602 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601
+
+CPU (multi-thread) : 1928195943.51 iterations/s
+CPU (single thread): 104721455.14 iterations/s
+Memory             : 126.11 GiB/s
+```
+
+The second line is the frequency of each core in MHz while the CPU was loaded, which is where a machine that cannot hold its boost clock shows up.
+
 In addition to `benchmark`, `b`, `bench`, and `performance` are also acceptable.
 
-Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run.
-
-![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/benchmark.png)
+Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run. The volume benchmark writes to each volume, so `--disable-volume` is worth knowing about.
 
 ### Web (HTTP)
 
@@ -263,7 +372,7 @@ In addition to `web`, `w`, `server`, and `http` are also acceptable.
 
 Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8000) via a web browser such as Firefox or Chrome.
 
-![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/web.png)
+The page is one dashboard which follows the machine live, with a panel per subsystem: system identity, load average and per-core CPU, memory and swap, PSI, cgroup limits, network interfaces and volumes. A panel whose data the kernel does not provide says so rather than showing an error. It follows the light or dark theme of the browser, and can be toggled either way.
 
 To change the listening port, use the `-p <PORT>` option. To change the detecting time interval, use the `-m <SECONDS>` option. To bind somewhere other than `0.0.0.0`, use `--addr <ADDRESS>`.
 
