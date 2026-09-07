@@ -15,6 +15,9 @@ use super::probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithS
 /// How long sampling keeps running after the last one-shot request, expressed in detect intervals.
 const IDLE_INTERVALS: u32 = 3;
 
+/// How old a sample may be before it is treated as left over from before a pause, in detect intervals.
+const STALE_INTERVALS: u32 = 2;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     pub hostname:     String,
@@ -33,6 +36,21 @@ pub struct Snapshot {
     pub cgroup:       Option<CgroupSummary>,
 }
 
+/// A snapshot together with when it was taken, so that a reader can tell a current one from one left over from before a pause.
+#[derive(Debug, Clone)]
+pub struct Sample {
+    taken_at:     Instant,
+    pub snapshot: Arc<Snapshot>,
+}
+
+impl Sample {
+    /// A running sampler publishes once per detect interval, so anything older than a couple of those was taken before sampling paused and says nothing about the machine now.
+    #[inline]
+    pub fn is_fresh(&self, detect_interval: Duration) -> bool {
+        self.taken_at.elapsed() < detect_interval * STALE_INTERVALS
+    }
+}
+
 #[derive(Debug)]
 struct Shared {
     wake:         Notify,
@@ -40,15 +58,20 @@ struct Shared {
 }
 
 /// A single background task samples for every client, so that N open pages still cost one sampling round.
+///
+/// Only the sender is kept here, and every receiver is created on demand, so that the receiver count
+/// is exactly the number of readers waiting. Holding a receiver in this struct would count the
+/// long-lived clones of the application state as readers, and sampling would never stop.
 #[derive(Debug, Clone)]
 pub struct Sampler {
-    receiver: watch::Receiver<Option<Arc<Snapshot>>>,
-    shared:   Arc<Shared>,
+    sender:          Arc<watch::Sender<Option<Sample>>>,
+    shared:          Arc<Shared>,
+    detect_interval: Duration,
 }
 
 impl Sampler {
     pub fn spawn(detect_interval: Duration) -> Self {
-        let (sender, receiver) = watch::channel(None);
+        let sender = Arc::new(watch::Sender::new(None));
 
         let shared = Arc::new(Shared {
             wake:         Notify::new(),
@@ -56,35 +79,40 @@ impl Sampler {
             last_request: Mutex::new(Instant::now()),
         });
 
-        let sampler = Sampler {
-            receiver,
-            shared: shared.clone(),
-        };
+        tokio::spawn(run(sender.clone(), shared.clone(), detect_interval));
 
-        tokio::spawn(run(sender, shared, detect_interval));
-
-        sampler
+        Sampler {
+            sender,
+            shared,
+            detect_interval,
+        }
     }
 
-    /// Subscribe to every future snapshot. Sampling runs as long as at least one subscriber is alive.
-    pub fn subscribe(&self) -> watch::Receiver<Option<Arc<Snapshot>>> {
-        let receiver = self.receiver.clone();
+    /// Subscribe to every future sample. Sampling runs as long as at least one subscriber is alive.
+    pub fn subscribe(&self) -> watch::Receiver<Option<Sample>> {
+        let receiver = self.sender.subscribe();
 
         self.shared.wake.notify_one();
 
         receiver
     }
 
-    /// Get the latest snapshot, waiting for the first one when sampling has just started.
+    /// Get the latest snapshot, waiting for a fresh one when sampling has just started or has just resumed.
     pub async fn latest(&self) -> Option<Arc<Snapshot>> {
         *self.shared.last_request.lock().unwrap() = Instant::now();
+
+        // This receiver keeps the sampler awake for as long as the wait lasts.
+        let mut receiver = self.sender.subscribe();
+
         self.shared.wake.notify_one();
 
-        let mut receiver = self.receiver.clone();
-
         loop {
-            if let Some(snapshot) = receiver.borrow_and_update().clone() {
-                return Some(snapshot);
+            // The age is checked here rather than cleared by the sampler, because the sampler cannot
+            // clear it before this reader looks: it is woken by the same notification that follows.
+            if let Some(sample) = receiver.borrow_and_update().clone()
+                && sample.is_fresh(self.detect_interval)
+            {
+                return Some(sample.snapshot);
             }
 
             if receiver.changed().await.is_err() {
@@ -95,7 +123,7 @@ impl Sampler {
 }
 
 async fn run(
-    sender: watch::Sender<Option<Arc<Snapshot>>>,
+    sender: Arc<watch::Sender<Option<Sample>>>,
     shared: Arc<Shared>,
     detect_interval: Duration,
 ) {
@@ -103,7 +131,7 @@ async fn run(
 
     loop {
         // Park while nobody is watching, so that an idle machine is not probed for nothing.
-        while sender.receiver_count() <= 1
+        while sender.receiver_count() == 0
             && shared.last_request.lock().unwrap().elapsed() >= idle_timeout
         {
             shared.wake.notified().await;
@@ -111,7 +139,10 @@ async fn run(
 
         match tokio::task::spawn_blocking(move || sample(detect_interval)).await {
             Ok(Ok(snapshot)) => {
-                sender.send_replace(Some(Arc::new(snapshot)));
+                sender.send_replace(Some(Sample {
+                    taken_at: Instant::now(),
+                    snapshot: Arc::new(snapshot),
+                }));
             },
             Ok(Err(error)) => {
                 // Keep the previous snapshot and try again, since a probe can fail while a device is being removed.
