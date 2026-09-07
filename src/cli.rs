@@ -149,7 +149,7 @@ pub enum CLICommands {
         light:            bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show CPU stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
@@ -171,7 +171,7 @@ pub enum CLICommands {
         light:   bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show memory stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
@@ -191,7 +191,7 @@ pub enum CLICommands {
         light:   bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show network stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
@@ -211,7 +211,7 @@ pub enum CLICommands {
         light:            bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show volume stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
@@ -237,7 +237,7 @@ pub enum CLICommands {
         light:   bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show PSI and refresh every N milliseconds")]
         monitor: Option<Duration>,
     },
@@ -253,7 +253,7 @@ pub enum CLICommands {
         light:   bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show the cgroup stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
@@ -273,7 +273,7 @@ pub enum CLICommands {
         light:            bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show process stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
@@ -319,7 +319,7 @@ pub enum CLICommands {
     Web {
         #[arg(short, long, value_name = "SECONDS")]
         #[arg(default_value = "3")]
-        #[arg(value_parser = parse_duration_sec)]
+        #[arg(value_parser = parse_monitor_interval_sec)]
         #[arg(help = "Automatically refresh every N seconds")]
         monitor:     Duration,
         #[arg(long, visible_alias = "addr")]
@@ -388,9 +388,27 @@ fn parse_duration(arg: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(arg.parse()?))
 }
 
+/// A refresh interval of zero would redraw or sample in a tight loop, which pegs a core and measures nothing, so it is refused rather than accepted and then worked around.
 #[inline]
-fn parse_duration_sec(arg: &str) -> Result<Duration, ParseIntError> {
-    Ok(Duration::from_secs(arg.parse()?))
+fn parse_monitor_interval(arg: &str) -> Result<Duration, String> {
+    let milliseconds: u64 = arg.parse().map_err(|error: ParseIntError| error.to_string())?;
+
+    if milliseconds == 0 {
+        return Err(String::from("the interval has to be at least 1 millisecond"));
+    }
+
+    Ok(Duration::from_millis(milliseconds))
+}
+
+#[inline]
+fn parse_monitor_interval_sec(arg: &str) -> Result<Duration, String> {
+    let seconds: u64 = arg.parse().map_err(|error: ParseIntError| error.to_string())?;
+
+    if seconds == 0 {
+        return Err(String::from("the interval has to be at least 1 second"));
+    }
+
+    Ok(Duration::from_secs(seconds))
 }
 
 #[inline]

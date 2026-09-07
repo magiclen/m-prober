@@ -55,6 +55,14 @@ export function App(): React.JSX.Element {
     const authenticated = auth?.authenticated ?? false;
     const { snapshot, connection } = useSnapshot(authenticated);
 
+    // A browser retries a dropped stream on its own and never gives up, so an expired session would
+    // otherwise leave the page saying "reconnecting" for good instead of asking to sign in again.
+    useEffect(() => {
+        if (connection === "lost") {
+            refreshAuth();
+        }
+    }, [connection, refreshAuth]);
+
     if (config === null || auth === null) {
         return (
             <Group justify="center" mih="100vh">

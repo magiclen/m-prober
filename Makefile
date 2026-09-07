@@ -40,8 +40,8 @@ test:
 	cargo test --verbose
 	pnpm --dir web-ui test
 
+# The built web UI is committed and the executable embeds it, so it is not cleaned away here.
 clean:
 	cargo clean
-	pnpm --dir web-ui run clean
 
 .PHONY: all x86_64 i686 web-ui install uninstall test clean
