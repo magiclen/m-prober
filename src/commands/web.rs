@@ -1,4 +1,4 @@
-use crate::{rocket_mounts, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, rocket_mounts};
 
 #[inline]
 pub fn handle_web(args: CLIArgs) -> anyhow::Result<()> {

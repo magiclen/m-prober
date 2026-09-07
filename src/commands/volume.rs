@@ -1,7 +1,7 @@
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::volume;
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
 pub fn handle_volume(args: CLIArgs) {

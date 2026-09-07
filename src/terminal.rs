@@ -1,7 +1,12 @@
-use std::env;
+use std::{
+    env,
+    sync::{
+        LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 pub use std::{io::Write, time::Duration};
 
-use once_cell::sync::Lazy;
 pub use termcolor::WriteColor;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec};
 use terminal_size::terminal_size;
@@ -31,16 +36,27 @@ pub const MIN_TERMINAL_WIDTH: usize = 60;
 
 pub const DEFAULT_INTERVAL: Duration = Duration::from_millis(333); // should be smaller than 1000 milliseconds
 
-pub static mut FORCE_PLAIN_MODE: bool = false;
-static mut LIGHT_MODE: bool = false;
+// `set_color_mode` runs before any of the color specs below is initialized, but a `LazyLock` may be initialized on any thread, so these have to be synchronized.
+static FORCE_PLAIN_MODE: AtomicBool = AtomicBool::new(false);
+static LIGHT_MODE: AtomicBool = AtomicBool::new(false);
 
-pub static COLOR_DEFAULT: Lazy<ColorSpec> = Lazy::new(ColorSpec::new);
+#[inline]
+pub fn is_plain_mode() -> bool {
+    FORCE_PLAIN_MODE.load(Ordering::Relaxed)
+}
 
-pub static COLOR_LABEL: Lazy<ColorSpec> = Lazy::new(|| {
+#[inline]
+fn is_light_mode() -> bool {
+    LIGHT_MODE.load(Ordering::Relaxed)
+}
+
+pub static COLOR_DEFAULT: LazyLock<ColorSpec> = LazyLock::new(ColorSpec::new);
+
+pub static COLOR_LABEL: LazyLock<ColorSpec> = LazyLock::new(|| {
     let mut color_spec = ColorSpec::new();
 
-    if !unsafe { FORCE_PLAIN_MODE } {
-        if unsafe { LIGHT_MODE } {
+    if !is_plain_mode() {
+        if is_light_mode() {
             color_spec.set_fg(Some(DARK_CYAN_COLOR));
         } else {
             color_spec.set_fg(Some(CYAN_COLOR));
@@ -50,11 +66,11 @@ pub static COLOR_LABEL: Lazy<ColorSpec> = Lazy::new(|| {
     color_spec
 });
 
-pub static COLOR_NORMAL_TEXT: Lazy<ColorSpec> = Lazy::new(|| {
+pub static COLOR_NORMAL_TEXT: LazyLock<ColorSpec> = LazyLock::new(|| {
     let mut color_spec = ColorSpec::new();
 
-    if !unsafe { FORCE_PLAIN_MODE } {
-        if unsafe { LIGHT_MODE } {
+    if !is_plain_mode() {
+        if is_light_mode() {
             color_spec.set_fg(Some(BLACK_COLOR));
         } else {
             color_spec.set_fg(Some(WHITE_COLOR));
@@ -64,11 +80,11 @@ pub static COLOR_NORMAL_TEXT: Lazy<ColorSpec> = Lazy::new(|| {
     color_spec
 });
 
-pub static COLOR_BOLD_TEXT: Lazy<ColorSpec> = Lazy::new(|| {
+pub static COLOR_BOLD_TEXT: LazyLock<ColorSpec> = LazyLock::new(|| {
     let mut color_spec = ColorSpec::new();
 
-    if !unsafe { FORCE_PLAIN_MODE } {
-        if unsafe { LIGHT_MODE } {
+    if !is_plain_mode() {
+        if is_light_mode() {
             color_spec.set_fg(Some(BLACK_COLOR)).set_bold(true);
         } else {
             color_spec.set_fg(Some(WHITE_COLOR)).set_bold(true);
@@ -78,11 +94,11 @@ pub static COLOR_BOLD_TEXT: Lazy<ColorSpec> = Lazy::new(|| {
     color_spec
 });
 
-pub static COLOR_USED: Lazy<ColorSpec> = Lazy::new(|| {
+pub static COLOR_USED: LazyLock<ColorSpec> = LazyLock::new(|| {
     let mut color_spec = ColorSpec::new();
 
-    if !unsafe { FORCE_PLAIN_MODE } {
-        if unsafe { LIGHT_MODE } {
+    if !is_plain_mode() {
+        if is_light_mode() {
             color_spec.set_fg(Some(WINE_COLOR));
         } else {
             color_spec.set_fg(Some(RED_COLOR));
@@ -92,11 +108,11 @@ pub static COLOR_USED: Lazy<ColorSpec> = Lazy::new(|| {
     color_spec
 });
 
-pub static COLOR_CACHE: Lazy<ColorSpec> = Lazy::new(|| {
+pub static COLOR_CACHE: LazyLock<ColorSpec> = LazyLock::new(|| {
     let mut color_spec = ColorSpec::new();
 
-    if !unsafe { FORCE_PLAIN_MODE } {
-        if unsafe { LIGHT_MODE } {
+    if !is_plain_mode() {
+        if is_light_mode() {
             color_spec.set_fg(Some(ORANGE_COLOR));
         } else {
             color_spec.set_fg(Some(YELLOW_COLOR));
@@ -106,11 +122,11 @@ pub static COLOR_CACHE: Lazy<ColorSpec> = Lazy::new(|| {
     color_spec
 });
 
-pub static COLOR_BUFFERS: Lazy<ColorSpec> = Lazy::new(|| {
+pub static COLOR_BUFFERS: LazyLock<ColorSpec> = LazyLock::new(|| {
     let mut color_spec = ColorSpec::new();
 
-    if !unsafe { FORCE_PLAIN_MODE } {
-        if unsafe { LIGHT_MODE } {
+    if !is_plain_mode() {
+        if is_light_mode() {
             color_spec.set_fg(Some(DARK_BLUE_COLOR));
         } else {
             color_spec.set_fg(Some(SKY_CYAN_COLOR));
@@ -121,29 +137,25 @@ pub static COLOR_BUFFERS: Lazy<ColorSpec> = Lazy::new(|| {
 });
 
 pub fn set_color_mode(plain: bool, light: bool) {
-    unsafe {
-        if plain {
-            FORCE_PLAIN_MODE = true;
-        } else {
-            match env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")) {
-                Some(true) => {
-                    FORCE_PLAIN_MODE = true;
-                },
-                _ => {
-                    if light {
-                        LIGHT_MODE = true;
-                    } else {
-                        LIGHT_MODE =
-                            env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
-                    }
-                },
-            }
+    if plain {
+        FORCE_PLAIN_MODE.store(true, Ordering::Relaxed);
+    } else {
+        match env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")) {
+            Some(true) => {
+                FORCE_PLAIN_MODE.store(true, Ordering::Relaxed);
+            },
+            _ => {
+                let light =
+                    light || env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+
+                LIGHT_MODE.store(light, Ordering::Relaxed);
+            },
         }
     }
 }
 
 pub fn get_stdout_output() -> BufferWriter {
-    if unsafe { FORCE_PLAIN_MODE } {
+    if is_plain_mode() {
         BufferWriter::stdout(ColorChoice::Never)
     } else {
         BufferWriter::stdout(ColorChoice::Always)

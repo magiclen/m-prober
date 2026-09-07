@@ -1,19 +1,18 @@
 use std::{
     collections::linked_list::LinkedList,
     sync::{
+        LazyLock, Mutex,
         atomic::{AtomicBool, Ordering},
-        Mutex,
     },
     thread,
     time::{Duration, Instant},
 };
 
 use byte_unit::{Byte, Unit, UnitType};
-use once_cell::sync::Lazy;
-use rocket::{http::Status, request::Request, Build, Rocket, State};
+use rocket::{Build, Rocket, State, http::Status, request::Request};
 use rocket_cache_response::CacheResponse;
-use rocket_json_response::{json_gettext::JSONGetTextValue, JSONResponse};
-use rocket_simple_authorization::{authorizer, SimpleAuthorization};
+use rocket_json_response::{JSONResponse, json_gettext::JSONGetTextValue};
+use rocket_simple_authorization::{SimpleAuthorization, authorizer};
 use serde_json::json;
 
 static CPUS_STAT_DOING: AtomicBool = AtomicBool::new(false);
@@ -22,24 +21,24 @@ static VOLUMES_STAT_DOING: AtomicBool = AtomicBool::new(false);
 
 static DELAY_DURATION: Duration = Duration::from_millis(33);
 
-static CPUS_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
-    Lazy::new(|| Mutex::new(Some(Instant::now())));
-static NETWORK_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
-    Lazy::new(|| Mutex::new(Some(Instant::now())));
-static VOLUMES_STAT_LATEST_DETECT: Lazy<Mutex<Option<Instant>>> =
-    Lazy::new(|| Mutex::new(Some(Instant::now())));
+static CPUS_STAT_LATEST_DETECT: LazyLock<Mutex<Option<Instant>>> =
+    LazyLock::new(|| Mutex::new(Some(Instant::now())));
+static NETWORK_STAT_LATEST_DETECT: LazyLock<Mutex<Option<Instant>>> =
+    LazyLock::new(|| Mutex::new(Some(Instant::now())));
+static VOLUMES_STAT_LATEST_DETECT: LazyLock<Mutex<Option<Instant>>> =
+    LazyLock::new(|| Mutex::new(Some(Instant::now())));
 
-static CPUS_STAT: Lazy<Mutex<Option<Vec<f64>>>> = Lazy::new(|| Mutex::new(None));
+static CPUS_STAT: LazyLock<Mutex<Option<Vec<f64>>>> = LazyLock::new(|| Mutex::new(None));
 
 #[allow(clippy::type_complexity)]
-static NETWORK_STAT: Lazy<
+static NETWORK_STAT: LazyLock<
     Mutex<Option<Vec<(mprober_lib::network::Network, mprober_lib::network::NetworkSpeed)>>>,
-> = Lazy::new(|| Mutex::new(None));
+> = LazyLock::new(|| Mutex::new(None));
 
 #[allow(clippy::type_complexity)]
-static VOLUMES_STAT: Lazy<
+static VOLUMES_STAT: LazyLock<
     Mutex<Option<Vec<(mprober_lib::volume::Volume, mprober_lib::volume::VolumeSpeed)>>>,
-> = Lazy::new(|| Mutex::new(None));
+> = LazyLock::new(|| Mutex::new(None));
 
 pub struct Auth;
 

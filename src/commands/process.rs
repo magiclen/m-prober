@@ -6,9 +6,9 @@ use chrono::SecondsFormat;
 use mprober_lib::process;
 use regex::Regex;
 use terminal_size::terminal_size;
-use users::{Group, Groups, User, Users, UsersCache};
+use uzers::{Group, Groups, User, Users, UsersCache};
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
 pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
@@ -72,8 +72,6 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(unused_variables)]
-#[allow(unused_mut)]
 #[allow(clippy::too_many_arguments)]
 fn draw_process(
     monitor: Option<Duration>,
@@ -143,11 +141,7 @@ fn draw_process(
         processes_with_stats.sort_unstable_by_key(|(a, _)| std::cmp::Reverse(a.vsz));
 
         if let Some(top) = top {
-            if top < processes_with_stats.len() {
-                unsafe {
-                    processes_with_stats.set_len(top);
-                }
-            }
+            processes_with_stats.truncate(top);
         }
 
         (processes_with_stats.into_iter().map(|(process, _)| process).collect(), BTreeMap::new())
@@ -190,11 +184,7 @@ fn draw_process(
         );
 
         if let Some(top) = top {
-            if top < processes_with_percentage.len() {
-                unsafe {
-                    processes_with_percentage.set_len(top);
-                }
-            }
+            processes_with_percentage.truncate(top);
         }
 
         let mut processes = Vec::with_capacity(processes_with_percentage.len());

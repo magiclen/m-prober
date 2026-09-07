@@ -1,7 +1,7 @@
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::network;
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
 pub fn handle_network(args: CLIArgs) {

@@ -1,7 +1,7 @@
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::memory;
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
 pub fn handle_memory(args: CLIArgs) {
@@ -84,7 +84,7 @@ fn draw_memory(unit: Option<Unit>) {
 
     stdout.set_color(&COLOR_CACHE).unwrap();
     for _ in 0..progress_cache {
-        if unsafe { FORCE_PLAIN_MODE } {
+        if is_plain_mode() {
             write!(&mut stdout, "$").unwrap(); // 1
         } else {
             write!(&mut stdout, "|").unwrap(); // 1
@@ -95,7 +95,7 @@ fn draw_memory(unit: Option<Unit>) {
 
     stdout.set_color(&COLOR_BUFFERS).unwrap();
     for _ in 0..progress_buffers {
-        if unsafe { FORCE_PLAIN_MODE } {
+        if is_plain_mode() {
             write!(&mut stdout, "#").unwrap(); // 1
         } else {
             write!(&mut stdout, "|").unwrap(); // 1
@@ -159,7 +159,7 @@ fn draw_memory(unit: Option<Unit>) {
 
     stdout.set_color(&COLOR_CACHE).unwrap();
     for _ in 0..progress_cache {
-        if unsafe { FORCE_PLAIN_MODE } {
+        if is_plain_mode() {
             write!(&mut stdout, "$").unwrap(); // 1
         } else {
             write!(&mut stdout, "|").unwrap(); // 1

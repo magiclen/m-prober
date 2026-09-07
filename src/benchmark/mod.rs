@@ -14,7 +14,7 @@ use std::{
 
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::*;
-use rand::{self, Rng};
+use rand::RngExt;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BenchmarkLog {
@@ -271,10 +271,10 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                 |measurer| {
                     let mut random = [0u8; BUFFER_SIZE];
 
-                    let mut rng = rand::thread_rng();
+                    let mut rng = rand::rng();
 
                     for e in random.iter_mut().take(BUFFER_SIZE) {
-                        *e = rng.gen();
+                        *e = rng.random();
                     }
 
                     let mut mem = [0u8; MEM_SIZE];
@@ -543,12 +543,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                                                                                 println!("{s}: Read {read_result_string}/s, Write {write_result_string}/s");
 
-                                                                                unsafe {
-                                                                                    s.as_mut_vec()
-                                                                                        .set_len(
-                                                                                            s_len,
-                                                                                        )
-                                                                                };
+                                                                                s.truncate(s_len);
 
                                                                                 volumes_result.insert(s, (read_result, write_result));
                                                                             }

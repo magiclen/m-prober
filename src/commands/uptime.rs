@@ -1,6 +1,6 @@
 use mprober_lib::{format_duration, uptime};
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
 pub fn handle_uptime(args: CLIArgs) {

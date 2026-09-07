@@ -1,4 +1,4 @@
-use crate::{benchmark, benchmark::BenchmarkLog, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, benchmark, benchmark::BenchmarkLog};
 
 #[inline]
 pub fn handle_benchmark(args: CLIArgs) -> anyhow::Result<()> {

@@ -1,6 +1,6 @@
 use mprober_lib::rtc_time;
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
 pub fn handle_time(args: CLIArgs) {
