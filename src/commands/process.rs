@@ -127,12 +127,16 @@ fn draw_process(
         None => None,
     };
 
+    // The filters are predicates now, so the regexes have to be wrapped before they are borrowed.
+    let program_matcher = program_filter.map(|regex| move |program: &str| regex.is_match(program));
+    let tty_matcher = tty_filter.map(|regex| move |tty: &str| regex.is_match(tty));
+
     let process_filter = process::ProcessFilter {
         pid_filter,
         uid_filter,
         gid_filter,
-        program_filter,
-        tty_filter,
+        program_filter: program_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
+        tty_filter: tty_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
     };
 
     let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {

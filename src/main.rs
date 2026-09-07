@@ -1,17 +1,8 @@
-#[macro_use]
-extern crate rocket;
-
-#[macro_use]
-extern crate rocket_include_static_resources;
-
-#[macro_use]
-extern crate rocket_include_handlebars;
-
 mod benchmark;
 mod cli;
 mod commands;
-mod rocket_mounts;
 mod terminal;
+mod web;
 
 use cli::*;
 use commands::*;

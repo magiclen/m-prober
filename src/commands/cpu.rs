@@ -3,6 +3,9 @@ use mprober_lib::{cpu, load_average};
 
 use crate::{CLIArgs, CLICommands, terminal::*};
 
+/// `/proc/cpuinfo` has no `model name` field on some architectures, e.g. on arm64.
+pub const UNKNOWN_CPU_MODEL_NAME: &str = "Unknown CPU";
+
 #[inline]
 pub fn handle_cpu(args: CLIArgs) {
     debug_assert!(matches!(args.command, CLICommands::Cpu { .. }));
@@ -224,7 +227,9 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
         for (cpu_index, cpu) in cpus.into_iter().enumerate() {
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-            stdout.write_all(cpu.model_name.as_bytes()).unwrap();
+            stdout
+                .write_all(cpu.model_name.as_deref().unwrap_or(UNKNOWN_CPU_MODEL_NAME).as_bytes())
+                .unwrap();
 
             write!(&mut stdout, " ").unwrap();
 
@@ -366,7 +371,9 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
         for cpu in cpus {
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-            stdout.write_all(cpu.model_name.as_bytes()).unwrap();
+            stdout
+                .write_all(cpu.model_name.as_deref().unwrap_or(UNKNOWN_CPU_MODEL_NAME).as_bytes())
+                .unwrap();
 
             write!(&mut stdout, " ").unwrap();
 

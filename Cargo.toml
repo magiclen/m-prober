@@ -10,7 +10,7 @@ keywords = ["probe", "mprober", "m-prober", "linux", "monitor"]
 categories = ["command-line-utilities"]
 description = "This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs."
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "front-end/**/*", "views/**/*"]
+include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "front-end/**/*"]
 
 [profile.release]
 lto = true
@@ -24,7 +24,7 @@ terminal_size = "0.4"
 
 anyhow = "1"
 
-mprober-lib = "0.1"
+mprober-lib = { version = "0.2", features = ["serde"] }
 
 termcolor = "1"
 getch = "0.3"
@@ -32,6 +32,7 @@ getch = "0.3"
 byte-unit = "5"
 
 rand = "0.10"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = "0.4"
 regex = "1"
@@ -39,9 +40,11 @@ uzers = "0.12"
 
 benchmarking = "0.4"
 
-rocket = "0.5"
-rocket-simple-authorization = "0.10"
-rocket-cache-response = "0.6"
-rocket-json-response = "0.6"
-rocket-include-static-resources = { version = "0.10", features = ["cache"] }
-rocket-include-handlebars = "0.13"
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+lazy-static-include = "4"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

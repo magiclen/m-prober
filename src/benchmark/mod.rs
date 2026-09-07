@@ -46,17 +46,17 @@ impl BenchmarkLog {
 
 #[derive(Debug)]
 pub enum BenchmarkError {
-    ScannerError(ScannerError),
+    ProbeError(mprober_lib::Error),
     #[allow(clippy::enum_variant_names)]
     BenchmarkError(benchmarking::BenchmarkError),
     IOError(io::Error),
     NoNeedBenchmark,
 }
 
-impl From<ScannerError> for BenchmarkError {
+impl From<mprober_lib::Error> for BenchmarkError {
     #[inline]
-    fn from(error: ScannerError) -> BenchmarkError {
-        BenchmarkError::ScannerError(error)
+    fn from(error: mprober_lib::Error) -> BenchmarkError {
+        BenchmarkError::ProbeError(error)
     }
 }
 
@@ -77,7 +77,7 @@ impl From<io::Error> for BenchmarkError {
 impl Display for BenchmarkError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            BenchmarkError::ScannerError(error) => Display::fmt(error, f),
+            BenchmarkError::ProbeError(error) => Display::fmt(error, f),
             BenchmarkError::BenchmarkError(error) => match error {
                 benchmarking::BenchmarkError::MeasurerNotMeasured => {
                     f.write_str("The measurer is not measured.")
@@ -135,7 +135,10 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             let cpus = cpu::get_cpus()?;
 
             for cpu in cpus {
-                println!("{} {}C/{}T", cpu.model_name, cpu.cpu_cores, cpu.siblings);
+                let model_name =
+                    cpu.model_name.as_deref().unwrap_or(crate::commands::UNKNOWN_CPU_MODEL_NAME);
+
+                println!("{model_name} {}C/{}T", cpu.cpu_cores, cpu.siblings);
 
                 let mut cpu_mhz_iter = cpu.cpus_mhz.into_iter();
 
