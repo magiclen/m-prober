@@ -30,6 +30,12 @@ fn main() -> anyhow::Result<()> {
         CLICommands::Volume {
             ..
         } => handle_volume(args),
+        CLICommands::Pressure {
+            ..
+        } => handle_pressure(args)?,
+        CLICommands::Cgroup {
+            ..
+        } => handle_cgroup(args)?,
         CLICommands::Process {
             ..
         } => handle_process(args)?,

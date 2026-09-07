@@ -54,6 +54,11 @@ const APP_ABOUT: &str = concat!(
         "volume -u kb                  # Show current volume stats in KB",
         "volume -i                     # Only show volume information without I/O rates",
         "volume --mounts               # Show current volume stats including mount points",
+        "pressure                      # Show PSI, which tells resource shortage apart from a busy but healthy system",
+        "pressure -m 1000              # Show PSI and refresh every 1000 milliseconds",
+        "cgroup                        # Show the CPU, memory and PID limits of the container or VM this runs in",
+        "cgroup -m 1000                # Show the cgroup stats and refresh every 1000 milliseconds",
+        "cgroup -u kb                  # Show the cgroup stats in KB",
         "process                       # Show a snapshot of the current processes",
         "process -m 1000               # Show a snapshot of the current processes and refresh every 1000 milliseconds",
         "process -p                    # Show a snapshot of the current processes without colors",
@@ -219,6 +224,42 @@ pub enum CLICommands {
         #[arg(long, aliases = ["mount", "point", "points"])]
         #[arg(help = "Also shows mount points")]
         mounts:           bool,
+    },
+    #[command(aliases = ["psi", "stall", "pressures"])]
+    #[command(about = "Show PSI (Pressure Stall Information)")]
+    #[command(after_help = AFTER_HELP)]
+    Pressure {
+        #[arg(short, long)]
+        #[arg(help = "No colors")]
+        plain:   bool,
+        #[arg(short, long)]
+        #[arg(help = "Darker colors")]
+        light:   bool,
+        #[arg(short, long, value_name = "MILLI_SECONDS")]
+        #[arg(num_args = 0..=1, default_missing_value = "1000")]
+        #[arg(value_parser = parse_duration)]
+        #[arg(help = "Show PSI and refresh every N milliseconds")]
+        monitor: Option<Duration>,
+    },
+    #[command(aliases = ["g", "container", "limit", "limits", "cgroups"])]
+    #[command(about = "Show the limits and usage of the cgroup this program runs in")]
+    #[command(after_help = AFTER_HELP)]
+    Cgroup {
+        #[arg(short, long)]
+        #[arg(help = "No colors")]
+        plain:   bool,
+        #[arg(short, long)]
+        #[arg(help = "Darker colors")]
+        light:   bool,
+        #[arg(short, long, value_name = "MILLI_SECONDS")]
+        #[arg(num_args = 0..=1, default_missing_value = "1000")]
+        #[arg(value_parser = parse_duration)]
+        #[arg(help = "Show the cgroup stats and refresh every N milliseconds")]
+        monitor: Option<Duration>,
+        #[arg(short, long)]
+        #[arg(value_parser = parse_unit)]
+        #[arg(help = "Forces to use a fixed unit")]
+        unit:    Option<Unit>,
     },
     #[command(aliases = ["p", "ps"])]
     #[command(about = "Show process stats")]

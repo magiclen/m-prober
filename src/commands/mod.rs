@@ -1,9 +1,11 @@
 mod benchmark;
+mod cgroup;
 mod cpu;
 mod hostname;
 mod kernel;
 mod memory;
 mod network;
+mod pressure;
 mod process;
 mod time;
 mod uptime;
@@ -11,11 +13,13 @@ mod volume;
 mod web;
 
 pub use benchmark::*;
+pub use cgroup::*;
 pub use cpu::*;
 pub use hostname::*;
 pub use kernel::*;
 pub use memory::*;
 pub use network::*;
+pub use pressure::*;
 pub use process::*;
 pub use time::*;
 pub use uptime::*;
