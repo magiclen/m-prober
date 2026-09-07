@@ -91,6 +91,7 @@ impl Display for BenchmarkError {
 
 impl Error for BenchmarkError {}
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct BenchmarkResult {
     pub cpu_multi_thread:  Option<f64>,

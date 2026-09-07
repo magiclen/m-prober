@@ -140,7 +140,7 @@ fn draw_process(
     let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {
         let mut processes_with_stats = process::get_processes_with_stat(&process_filter).unwrap();
 
-        processes_with_stats.sort_unstable_by(|(a, _), (b, _)| b.vsz.cmp(&a.vsz));
+        processes_with_stats.sort_unstable_by_key(|(a, _)| std::cmp::Reverse(a.vsz));
 
         if let Some(top) = top {
             if top < processes_with_stats.len() {
@@ -663,7 +663,7 @@ fn draw_process(
             let s = user.name().to_str().unwrap();
 
             if s.len() > truncate_inc {
-                stdout.write_all(s[..(truncate_inc - 1)].as_bytes()).unwrap();
+                stdout.write_all(&s.as_bytes()[..(truncate_inc - 1)]).unwrap();
                 write!(&mut stdout, "+").unwrap(); // 1
                 width += truncate_inc;
 
@@ -698,7 +698,7 @@ fn draw_process(
             let s = group.name().to_str().unwrap();
 
             if s.len() > truncate_inc {
-                stdout.write_all(s[..(truncate_inc - 1)].as_bytes()).unwrap();
+                stdout.write_all(&s.as_bytes()[..(truncate_inc - 1)]).unwrap();
                 write!(&mut stdout, "+").unwrap(); // 1
                 width += truncate_inc;
 
@@ -730,7 +730,7 @@ fn draw_process(
         width += 1;
 
         if program.len() > truncate_inc {
-            stdout.write_all(program[..(truncate_inc - 1)].as_bytes()).unwrap();
+            stdout.write_all(&program.as_bytes()[..(truncate_inc - 1)]).unwrap();
             write!(&mut stdout, "+").unwrap(); // 1
             width += truncate_inc;
 
