@@ -9,6 +9,15 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "type": "npm",
+            "script": "test",
+            "label": "Test",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
         }
     ]
 }

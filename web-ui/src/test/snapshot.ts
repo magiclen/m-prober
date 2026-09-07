@@ -1,0 +1,110 @@
+import type { Snapshot } from "@/types.ts";
+
+/** A snapshot which exercises every panel, for the render tests. */
+export const testSnapshot: Snapshot = {
+    hostname: "probe-1",
+    kernel: "6.17.0-40-generic",
+    uptime: { total_uptime: { secs: 183_845, nanos: 0 }, all_cpu_idle_time: { secs: 0, nanos: 0 } },
+    rtc_time: "2026-09-07T13:01:46",
+    load_average: { one: 0.5, five: 0.25, fifteen: 0.1 },
+    cpus: [
+        {
+            physical_id: 0,
+            model_name: "Test CPU",
+            cpus_mhz: [3600, 3600],
+            siblings: 2,
+            cpu_cores: 2,
+        },
+    ],
+    cpus_stat: [0.25, 0.3, 0.2],
+    memory: {
+        mem: {
+            total: 1024 ** 3 * 4,
+            used: 1024 ** 3,
+            free: 1024 ** 3 * 2,
+            shared: 0,
+            buffers: 0,
+            cache: 1024 ** 3,
+            available: 1024 ** 3 * 3,
+        },
+        swap: { total: 1024 ** 3, used: 0, free: 1024 ** 3, cache: 0 },
+    },
+    network: [
+        {
+            interface: "eth0",
+            stat: {
+                receive_bytes: 2_000_000,
+                receive_packets: 10,
+                receive_errors: 0,
+                receive_dropped: 0,
+                transmit_bytes: 1_000_000,
+                transmit_packets: 5,
+                transmit_errors: 0,
+                transmit_dropped: 0,
+            },
+            speed: {
+                receive: 1_000_000,
+                transmit: 500_000,
+                receive_packets: 0,
+                transmit_packets: 0,
+            },
+        },
+    ],
+    volumes: [
+        {
+            device: "vda1",
+            size: 100_000_000_000,
+            used: 25_000_000_000,
+            available: 75_000_000_000,
+            free: 75_000_000_000,
+            inodes: 0,
+            inodes_free: 0,
+            fs_type: "ext4",
+            points: ["/"],
+            speed: {
+                read: 1_000_000,
+                write: 2_000_000,
+                read_iops: 0,
+                write_iops: 0,
+                utilization: 0,
+                average_queue_length: 0,
+            },
+        },
+    ],
+    pressure: {
+        cpu: {
+            some: { avg10: 1.5, avg60: 1, avg300: 0.5, total: { secs: 10, nanos: 0 } },
+            full: null,
+        },
+        memory: {
+            some: { avg10: 0, avg60: 0, avg300: 0, total: { secs: 0, nanos: 0 } },
+            full: { avg10: 0, avg60: 0, avg300: 0, total: { secs: 0, nanos: 0 } },
+        },
+        io: {
+            some: { avg10: 0, avg60: 0, avg300: 0, total: { secs: 0, nanos: 0 } },
+            full: { avg10: 0, avg60: 0, avg300: 0, total: { secs: 0, nanos: 0 } },
+        },
+    },
+    cgroup: {
+        path: "/sys/fs/cgroup/probe.scope",
+        cpu: {
+            quota: { secs: 0, nanos: 200_000_000 },
+            period: { secs: 0, nanos: 100_000_000 },
+            usage: { secs: 60, nanos: 0 },
+            user: { secs: 40, nanos: 0 },
+            system: { secs: 20, nanos: 0 },
+            nr_periods: 100,
+            nr_throttled: 3,
+            throttled: { secs: 1, nanos: 0 },
+        },
+        memory: {
+            current: 1024 ** 3,
+            peak: 1024 ** 3,
+            max: 1024 ** 3 * 2,
+            high: null,
+            swap_current: 0,
+            swap_max: null,
+        },
+        pids: { current: 42, max: 4096 },
+    },
+};

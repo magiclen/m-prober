@@ -1,0 +1,7 @@
+{
+    "recommendations": [
+        "typescriptteam.native-preview",
+        "oxc.oxc-vscode",
+        "vunguyentuan.vscode-postcss"
+    ]
+}
