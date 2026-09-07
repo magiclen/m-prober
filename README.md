@@ -3,11 +3,15 @@ M Prober
 
 [![CI](https://github.com/magiclen/m-prober/actions/workflows/ci.yml/badge.svg)](https://github.com/magiclen/m-prober/actions/workflows/ci.yml)
 
-This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs.
+This program collects Linux system information: hostname, kernel version, uptime, RTC time, load average, CPU, memory, PSI pressure, cgroup limits, network interfaces, block devices and processes. It is meant as a probe for a VPS, a cloud instance or a remote virtual machine, and works both as a CLI tool and as a web application with a front-end page and HTTP APIs.
 
 ## Help
 
 ```
+M Prober 0.12.0
+Magic Len <len@magiclen.org>
+M Prober is a free and simple probe utility for Linux.
+
 EXAMPLES:
 mprober hostname                      # Show the hostname
 mprober kernel                        # Show the kernel version
@@ -43,6 +47,11 @@ mprober volume -l                     # Show current volume stats without colors
 mprober volume -u kb                  # Show current volume stats in KB
 mprober volume -i                     # Only show volume information without I/O rates
 mprober volume --mounts               # Show current volume stats including mount points
+mprober pressure                      # Show PSI, which tells resource shortage apart from a busy but healthy system
+mprober pressure -m 1000              # Show PSI and refresh every 1000 milliseconds
+mprober cgroup                        # Show the CPU, memory and PID limits of the container or VM this runs in
+mprober cgroup -m 1000                # Show the cgroup stats and refresh every 1000 milliseconds
+mprober cgroup -u kb                  # Show the cgroup stats in KB
 mprober process                       # Show a snapshot of the current processes
 mprober process -m 1000               # Show a snapshot of the current processes and refresh every 1000 milliseconds
 mprober process -p                    # Show a snapshot of the current processes without colors
@@ -78,6 +87,8 @@ Commands:
   memory     Show memory stats
   network    Show network stats
   volume     Show volume stats
+  pressure   Show PSI (Pressure Stall Information)
+  cgroup     Show the limits and usage of the cgroup this program runs in
   process    Show process stats
   web        Start a HTTP service to monitor this computer
   benchmark  Run benchmarks to measure the performance of this environment
@@ -86,11 +97,17 @@ Commands:
 Options:
   -h, --help     Print help
   -V, --version  Print version
+
+Enjoy it! https://magiclen.org
 ```
 
 ## Requirements
 
-* Linux Kernel Version: 3.10+
+* Linux kernel 5.10 or later.
+* `pressure` needs a kernel built with `CONFIG_PSI` which was not booted with `psi=0`.
+* `cgroup` needs cgroup v2, which is what every current distribution mounts.
+
+Both subcommands say so and exit instead of failing when the machine does not provide the data, and their HTTP APIs answer `404` there.
 
 ## Usage
 
@@ -194,6 +211,26 @@ In addition to `volume`, `v`, `storage`, `volumes`, `d`, `disk`, `disks`, `blk`,
 
 ![volume.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/volume.png)
 
+##### Show Pressure (PSI)
+
+```bash
+mprober pressure
+```
+
+In addition to `pressure`, `psi`, `stall`, and `pressures` are also acceptable.
+
+PSI is the share of time tasks spent stalled waiting for a resource. Unlike the load average it tells a system which is merely busy apart from one which is actually short of CPU, memory or I/O. `some` is the time at least one task was stalled, `full` the time every non-idle task was.
+
+##### Show cgroup Limits
+
+```bash
+mprober cgroup
+```
+
+In addition to `cgroup`, `g`, `container`, `limit`, `limits`, and `cgroups` are also acceptable.
+
+This shows the CPU quota, the memory limit and the PID limit that the container or the cloud instance actually caps this machine at, which is often lower than what `cpu` and `memory` report for the host.
+
 #### Color Mode
 
 Environment variables, `MPROBER_LIGHT` and `MPROBER_FORCE_PLAIN` can be used to control the output colors.
@@ -228,406 +265,133 @@ Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8
 
 ![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/web.png)
 
-To change the listening port, use the `-p <port>` option. To change the detecting time interval, use the `-m <SECONDS>` option, where the `<SECONDS>` is ranged from `1` to `15`.
+To change the listening port, use the `-p <PORT>` option. To change the detecting time interval, use the `-m <SECONDS>` option. To bind somewhere other than `0.0.0.0`, use `--addr <ADDRESS>`.
+
+One background sampler serves every client, so opening the page in several tabs still costs one sampling round per interval, and the sampler stops entirely while nobody is watching.
 
 #### HTTP APIs
 
-##### *GET* `/api/hostname`
+Every response is the JSON that [`mprober-lib`](https://crates.io/crates/mprober-lib) serializes, so the field names are those of its types. A `std::time::Duration` is an object rather than a number:
 
 ```json
-{
-    "code": 0,
-    "data": "magiclen-linux"
-}
+{ "secs": 7942, "nanos": 390000000 }
 ```
 
-##### *GET* `/api/kernel`
+An endpoint answers `404` with `{"error": "..."}` when the kernel does not provide the data at all, e.g. `/api/pressure` on a kernel without `CONFIG_PSI`. It answers `500` with the same shape when a probe fails.
+
+##### Instant readings
+
+These read `/proc` and `/sys` once and answer right away.
+
+| Endpoint | Content |
+| --- | --- |
+| *GET* `/api/hostname` | The hostname, as a JSON string. |
+| *GET* `/api/kernel` | The kernel version, as a JSON string. |
+| *GET* `/api/uptime` | `total_uptime` and `all_cpu_idle_time`. |
+| *GET* `/api/time` | The RTC (UTC) date and time, as an ISO 8601 string. |
+| *GET* `/api/cpu` | `load_average` and `cpus`. |
+| *GET* `/api/memory` | `mem` and `swap`, in bytes. |
+| *GET* `/api/network` | Every interface with its counters. |
+| *GET* `/api/volume` | Every mounted volume with its size, usage and I/O counters. |
+| *GET* `/api/pressure` | The PSI of `cpu`, `memory` and `io`. |
+| *GET* `/api/cgroup` | The full cgroup report: `cpu`, `cpuset`, `memory`, `memory_stat`, `memory_events`, `pids` and `io`. |
+| *GET* `/api/config` | The version and the detect interval. Reachable without an auth key. |
+
+For example, *GET* `/api/memory`:
 
 ```json
 {
-    "code": 0,
-    "data": "4.15.0-48-generic"
-}
-```
-
-##### *GET* `/api/uptime`
-
-```json
-{
-    "code": 0,
-    "data": 31694
-}
-```
-
-The unit of data is **seconds**.
-
-##### *GET* `/api/time`
-
-```json
-{
-    "code": 0,
-    "data": {
-        "date": "2019-05-03",
-        "time": "12:43:14"
+    "mem": {
+        "total": 66645028864,
+        "used": 21888958464,
+        "free": 2135752704,
+        "shared": 689647616,
+        "buffers": 6873088,
+        "cache": 44048076800,
+        "available": 44756070400
+    },
+    "swap": {
+        "total": 8192520192,
+        "used": 0,
+        "free": 8192520192,
+        "cache": 0
     }
 }
 ```
 
-It's RTC time.
+##### Sampled readings
 
-##### *GET* `/api/cpu`
+A rate can only be measured over a period, so these serve the latest snapshot of the shared sampler. The first request after an idle period waits for one detect interval; the rest are answered immediately.
+
+| Endpoint | Content |
+| --- | --- |
+| *GET* `/api/cpu-detect` | `load_average`, `cpus` and `cpus_stat`. |
+| *GET* `/api/network-detect` | Every interface with its counters and its `speed`. |
+| *GET* `/api/volume-detect` | Every volume with its counters and its `speed`. |
+| *GET* `/api/all` | One full snapshot, which is everything above in a single response. |
+
+`cpus_stat` is the CPU utilization as a fraction from `0` to `1`. Its first entry is the average over every CPU and the rest are the individual ones.
+
+*GET* `/api/all` answers with:
 
 ```json
 {
-    "code": 0,
-    "data": {
-        "cpus": [
-            {
-                "cores": 4,
-                "mhz": [
-                    2571.96,
-                    2688.208,
-                    2604.095,
-                    2700.238,
-                    2700.034,
-                    2699.908,
-                    2700.329,
-                    2699.986
-                ],
-                "model_name": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
-                "threads": 8
-            }
-        ],
-        "load_average": {
-            "fifteen": 1.02,
-            "five": 0.83,
-            "one": 0.61
-        }
-    }
+    "hostname": "magiclen-linux",
+    "kernel": "6.17.0-40-generic",
+    "uptime": { "total_uptime": { "secs": 7942, "nanos": 390000000 }, "all_cpu_idle_time": { "secs": 187517, "nanos": 980000000 } },
+    "rtc_time": "2026-09-07T13:01:46",
+    "load_average": { "one": 0.55, "five": 0.62, "fifteen": 0.7 },
+    "cpus": [ { "physical_id": 0, "model_name": "Intel(R) Core(TM) Ultra 9 285K", "cpus_mhz": [800.0], "siblings": 24, "cpu_cores": 24 } ],
+    "cpus_stat": [0.0375, 0.14, 0.01],
+    "memory": { "mem": {}, "swap": {} },
+    "network": [ { "interface": "lo", "stat": {}, "speed": { "receive": 0.0, "transmit": 0.0, "receive_packets": 0.0, "transmit_packets": 0.0 } } ],
+    "volumes": [ { "device": "nvme0n1p1", "stat": {}, "size": 97033216, "used": 6399488, "fs_type": "vfat", "points": ["/boot/efi"], "speed": {} } ],
+    "pressure": { "cpu": {}, "memory": {}, "io": {} },
+    "cgroup": { "path": "/sys/fs/cgroup/...", "cpu": {}, "memory": {}, "pids": {} }
 }
 ```
 
-##### *GET* `/api/cpu-detect`
+`pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2.
 
-```json
-{
-    "code": 0,
-    "data": {
-        "cpus": [
-            {
-                "cores": 4,
-                "mhz": [
-                    1808.254,
-                    1787.732,
-                    1430.044,
-                    1845.768,
-                    1751.993,
-                    1751.121,
-                    1769.048,
-                    1663.091
-                ],
-                "model_name": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
-                "threads": 8
-            }
-        ],
-        "cpus_stat": [
-            0.08386009270965024,
-            0.09152542372881356,
-            0.10472972972972971,
-            0.11295681063122924,
-            0.06418918918918919,
-            0.09364548494983276,
-            0.06397306397306397,
-            0.053691275167785234,
-            0.0821917808219178
-        ],
-        "load_average": {
-            "fifteen": 1.02,
-            "five": 0.84,
-            "one": 0.74
-        }
-    }
-}
-```
+##### *GET* `/api/all/stream`
 
-The first value in the `cpus_stat` field is the average usage of each cores. The remaining values are the usage for each logical CPU core.
+The same snapshot, pushed over [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) once per detect interval. This is what the web page uses, so that a browser does not have to poll.
 
-##### *GET* `/api/memory`
-
-```json
-{
-    "code": 0,
-    "data": {
-        "memory": {
-            "available": 22659469312,
-            "buffers": 10412032,
-            "cache": 19094446080,
-            "free": 4154060800,
-            "shared": 119246848,
-            "total": 33633140736,
-            "used": 10374221824
-        },
-        "swap": {
-            "cache": 385024,
-            "free": 4082888704,
-            "total": 4094685184,
-            "used": 11411456
-        }
-    }
-}
-```
-
-The unit of numbers is **bytes**.
-
-##### *GET* `/api/network-detect`
-
-```json
-{
-    "code": 0,
-    "data": [
-        {
-            "download_rate": 0.0,
-            "download_total": 55713769,
-            "interface": "lo",
-            "upload_rate": 0.0,
-            "upload_total": 55713769
-        },
-        {
-            "download_rate": 702.0,
-            "download_total": 7461474545,
-            "interface": "enp0s20f0u4",
-            "upload_rate": 1280.6666666666667,
-            "upload_total": 331829069
-        }
-    ]
-}
-```
-
-The unit of totals is **bytes**. The unit of rates is **bytes/second**.
-
-##### *GET* `/api/volume`
-
-```json
-{
-    "code": 0,
-    "data": [
-        {
-            "device": "sda2",
-            "mount_points": [
-                "/",
-                "/var/lib/docker/btrfs"
-            ],
-            "read_total": 7612149760,
-            "size": 249809600512,
-            "used": 70506823680,
-            "write_total": 12919939072
-        },
-        {
-            "device": "sdb1",
-            "mount_points": [
-                "/storage"
-            ],
-            "read_total": 7080878080,
-            "size": 239938535424,
-            "used": 218200993792,
-            "write_total": 21799934464
-        },
-        {
-            "device": "sdc2",
-            "mount_points": [
-                "/home"
-            ],
-            "read_total": 27511930880,
-            "size": 496011051008,
-            "used": 370128474112,
-            "write_total": 56615944192
-        }
-    ]
-}
-```
-
-The unit of totals is **bytes**.
-
-##### *GET* `/api/volume-detect`
-
-```json
-{
-    "code": 0,
-    "data": [
-        {
-            "device": "sda2",
-            "mount_points": [
-                "/",
-                "/var/lib/docker/btrfs"
-            ],
-            "read_rate": 0.0,
-            "read_total": 7612149760,
-            "size": 249809600512,
-            "used": 70506823680,
-            "write_rate": 0.0,
-            "write_total": 12928978944
-        },
-        {
-            "device": "sdb1",
-            "mount_points": [
-                "/storage"
-            ],
-            "read_rate": 0.0,
-            "read_total": 7080878080,
-            "size": 239938535424,
-            "used": 218200993792,
-            "write_rate": 0.0,
-            "write_total": 21799934464
-        },
-        {
-            "device": "sdc2",
-            "mount_points": [
-                "/home"
-            ],
-            "read_rate": 0.0,
-            "read_total": 27511934976,
-            "size": 496011051008,
-            "used": 370131861504,
-            "write_rate": 4965717.333333333,
-            "write_total": 56771334144
-        }
-    ]
-}
-```
-
-The unit of totals is **bytes**. The unit of rates is **bytes/second**.
-
-##### *GET* `/api/all`
-
-```json
-{
-    "code": 0,
-    "data": {
-        "cpus": [
-            {
-                "cores": 4,
-                "mhz": [
-                    1200.121,
-                    1200.272,
-                    1200.12,
-                    1200.055,
-                    1200.098,
-                    1200.034,
-                    1200.014,
-                    1200.124
-                ],
-                "model_name": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
-                "threads": 8
-            }
-        ],
-        "cpus_stat": [
-            0.04951741502308015,
-            0.043333333333333335,
-            0.030405405405405407,
-            0.05743243243243243,
-            0.056666666666666664,
-            0.04983388704318937,
-            0.05387205387205387,
-            0.05405405405405406,
-            0.05067567567567568
-        ],
-        "hostname": "magiclen-linux",
-        "kernel": "4.15.0-48-generic",
-        "load_average": {
-            "fifteen": 0.8,
-            "five": 0.53,
-            "one": 0.28
-        },
-        "memory": {
-            "available": 22578839552,
-            "buffers": 10412032,
-            "cache": 19104878592,
-            "free": 4062957568,
-            "shared": 119230464,
-            "total": 33633140736,
-            "used": 10454892544
-        },
-        "network": [
-            {
-                "download_rate": 0.0,
-                "download_total": 55798721,
-                "interface": "lo",
-                "upload_rate": 0.0,
-                "upload_total": 55798721
-            },
-            {
-                "download_rate": 9.333333333333334,
-                "download_total": 7463048290,
-                "interface": "enp0s20f0u4",
-                "upload_rate": 28.666666666666668,
-                "upload_total": 333465932
-            }
-        ],
-        "rtc_time": {
-            "date": "2019-05-03",
-            "time": "12:54:34"
-        },
-        "swap": {
-            "cache": 385024,
-            "free": 4082888704,
-            "total": 4094685184,
-            "used": 11411456
-        },
-        "uptime": 32437,
-        "volumes": [
-            {
-                "device": "sda2",
-                "mount_points": [
-                    "/",
-                    "/var/lib/docker/btrfs"
-                ],
-                "read_rate": 0.0,
-                "read_total": 7612149760,
-                "size": 249809600512,
-                "used": 70506831872,
-                "write_rate": 0.0,
-                "write_total": 12939075584
-            },
-            {
-                "device": "sdb1",
-                "mount_points": [
-                    "/storage"
-                ],
-                "read_rate": 0.0,
-                "read_total": 7080878080,
-                "size": 239938535424,
-                "used": 218200993792,
-                "write_rate": 0.0,
-                "write_total": 21799934464
-            },
-            {
-                "device": "sdc2",
-                "mount_points": [
-                    "/home"
-                ],
-                "read_rate": 0.0,
-                "read_total": 27521441792,
-                "size": 496011051008,
-                "used": 370118373376,
-                "write_rate": 744106.6666666666,
-                "write_total": 56883159040
-            }
-        ]
-    }
-}
+```bash
+curl -N http://127.0.0.1:8000/api/all/stream
 ```
 
 ##### Authorization
 
-If you need to expose above HTTP APIs to the Internet. In order to prevent these APIs from being invoked by anyone, you can enable a simple authorization mechanism that is built in this program.
- 
-When starting the HTTP server from CLI, you can add a `-a <AUTH_KEY>` option. Then, every API needs to be invoked by a request which contains a `Authorization` header to send the `AUTH_KEY`.
+If you expose these APIs to the Internet, add the `-a <AUTH_KEY>` option so that not just anyone can invoke them.
+
+A request may then carry the key in an `Authorization` header:
+
+```bash
+curl -H 'Authorization: <AUTH_KEY>' http://127.0.0.1:8000/api/all
+```
+
+`EventSource` cannot set headers, so the web page signs in instead and gets a session cookie:
+
+| Endpoint | Content |
+| --- | --- |
+| *GET* `/api/auth` | `{"required": bool, "authenticated": bool}`. Reachable without an auth key. |
+| *POST* `/api/auth` | Takes `{"auth_key": "..."}`. Answers `204` and sets an `HttpOnly` cookie, or `401`. |
+| *POST* `/api/logout` | Clears the cookie. |
+
+The cookie holds a random token this process generates at startup, so the key itself never leaves the server. The `Secure` attribute is set when a reverse proxy reports `X-Forwarded-Proto: https`.
 
 Also, you may want to disable the web page. Just add a `--only-api` flag.
 
+#### Developing the Web UI
+
+The page lives in [`web-ui`](web-ui) and is built with Vite, React and Mantine. Its build output is committed under [`front-end`](front-end) and embedded into the executable, so `cargo install mprober` needs no Node. See [`web-ui/README.md`](web-ui/README.md).
+
 ## TODO
 
-1. Process snapshot (HTTP, documentation)
+1. Process snapshot (HTTP API, web page)
+1. Sensors and batteries (`hwmon`, `power_supply`)
+1. Sockets and routes
 1. Database Detection
 1. Benchmark (networks)
 
