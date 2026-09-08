@@ -333,6 +333,7 @@ pub enum CLICommands {
         #[arg(help = "Assign a TCP port for the HTTP service")]
         listen_port: u16,
         #[arg(short, long)]
+        #[arg(value_parser = parse_auth_key)]
         #[arg(help = "Assign an auth key")]
         auth_key:    Option<String>,
         #[arg(long, aliases = ["only-apis"])]
@@ -409,6 +410,16 @@ fn parse_monitor_interval_sec(arg: &str) -> Result<Duration, String> {
     }
 
     Ok(Duration::from_secs(seconds))
+}
+
+/// An empty key would accept an empty `Authorization` header while the service still reports that it is protected, so `-a "$UNSET_VARIABLE"` is refused rather than silently letting everyone in.
+#[inline]
+fn parse_auth_key(arg: &str) -> Result<String, String> {
+    if arg.is_empty() {
+        return Err(String::from("the auth key must not be empty"));
+    }
+
+    Ok(String::from(arg))
 }
 
 #[inline]

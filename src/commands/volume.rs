@@ -60,8 +60,7 @@ fn draw_volume(
 
             let used = Byte::from_u64(volume.used);
 
-            let used_percentage =
-                format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
+            let used_percentage = format!("{:.2}%", percentage_of(volume.used, volume.size));
 
             let read_total = Byte::from_u64(volume.stat.read_bytes);
 
@@ -172,16 +171,16 @@ fn draw_volume(
 
             write!(&mut stdout, " [").unwrap(); // 2
 
-            let f = progress_max as f64 / volume.size as f64;
+            let mut remaining = progress_max;
 
-            let progress_used = (volume.used as f64 * f).floor() as usize;
+            let progress_used = bar_cells(volume.used, volume.size, progress_max, &mut remaining);
 
             stdout.set_color(&COLOR_USED).unwrap();
             for _ in 0..progress_used {
                 write!(&mut stdout, "|").unwrap(); // 1
             }
 
-            for _ in 0..(progress_max - progress_used) {
+            for _ in 0..remaining {
                 write!(&mut stdout, " ").unwrap(); // 1
             }
 
@@ -263,8 +262,7 @@ fn draw_volume(
 
             let used = Byte::from_u64(volume.used);
 
-            let used_percentage =
-                format!("{:.2}%", (volume.used * 100) as f64 / volume.size as f64);
+            let used_percentage = format!("{:.2}%", percentage_of(volume.used, volume.size));
 
             let read = Byte::from_f64_with_unit(volume_speed.read, Unit::B).unwrap();
             let read_total = Byte::from_u64(volume.stat.read_bytes);
@@ -421,16 +419,16 @@ fn draw_volume(
 
             write!(&mut stdout, " [").unwrap(); // 2
 
-            let f = progress_max as f64 / volume.size as f64;
+            let mut remaining = progress_max;
 
-            let progress_used = (volume.used as f64 * f).floor() as usize;
+            let progress_used = bar_cells(volume.used, volume.size, progress_max, &mut remaining);
 
             stdout.set_color(&COLOR_USED).unwrap();
             for _ in 0..progress_used {
                 write!(&mut stdout, "|").unwrap(); // 1
             }
 
-            for _ in 0..(progress_max - progress_used) {
+            for _ in 0..remaining {
                 write!(&mut stdout, " ").unwrap(); // 1
             }
 

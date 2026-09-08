@@ -162,6 +162,32 @@ pub fn get_stdout_output() -> BufferWriter {
     }
 }
 
+/// A total of zero means the resource is absent, e.g. a machine with no swap or a file system which reports no size, so it reads as empty rather than as `NaN`.
+#[inline]
+pub fn percentage_of(used: u64, total: u64) -> f64 {
+    if total == 0 { 0f64 } else { used as f64 * 100f64 / total as f64 }
+}
+
+/// How many cells of a bar `value` fills, taken out of what the earlier segments left.
+///
+/// The memory `used` is `total - available`, and `available` counts part of the cache as free, so
+/// the segments can add up to more than `total` on a machine under memory pressure. Drawing them out
+/// of a shared remainder keeps the bar from running past its end, which would otherwise underflow
+/// the count of the blank cells that follow.
+#[inline]
+pub fn bar_cells(value: u64, total: u64, progress_max: usize, remaining: &mut usize) -> usize {
+    if total == 0 {
+        return 0;
+    }
+
+    let cells =
+        ((value as f64 * progress_max as f64 / total as f64).floor() as usize).min(*remaining);
+
+    *remaining -= cells;
+
+    cells
+}
+
 pub fn get_term_width() -> usize {
     terminal_size()
         .map(|(width, _)| (width.0 as usize).max(MIN_TERMINAL_WIDTH))
@@ -265,3 +291,33 @@ macro_rules! monitor_handler {
 }
 
 pub(crate) use monitor_handler;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_percentage_of_an_absent_resource() {
+        assert_eq!(0f64, percentage_of(0, 0));
+        assert_eq!(50f64, percentage_of(1, 2));
+    }
+
+    #[test]
+    fn test_bar_cells_of_an_absent_resource() {
+        let mut remaining = 40;
+
+        assert_eq!(0, bar_cells(0, 0, 40, &mut remaining));
+        assert_eq!(40, remaining);
+    }
+
+    #[test]
+    fn test_bar_cells_never_run_past_the_bar() {
+        let mut remaining = 40;
+
+        // `used + cache` can exceed the total on a machine under memory pressure.
+        assert_eq!(32, bar_cells(80, 100, 40, &mut remaining));
+        assert_eq!(8, bar_cells(60, 100, 40, &mut remaining));
+        assert_eq!(0, bar_cells(60, 100, 40, &mut remaining));
+        assert_eq!(0, remaining);
+    }
+}
