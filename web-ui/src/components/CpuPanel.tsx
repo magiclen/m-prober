@@ -1,10 +1,12 @@
-import { SimpleGrid, Stack, Text } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
 
 import { formatFrequency, formatPercentage } from "@/format.ts";
 import type { Snapshot } from "@/types.ts";
 
 import { Panel } from "./Panel.tsx";
 import { UsageBar } from "./UsageBar.tsx";
+
+import classes from "./CpuPanel.module.css";
 
 const UNKNOWN_MODEL_NAME = "Unknown CPU";
 
@@ -50,23 +52,27 @@ export function CpuPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Elemen
     return (
         <Panel title="CPU" aside={models.join(" / ")}>
             <Stack gap="sm">
-                <UsageBar
-                    label="Total"
-                    total={1}
-                    value={formatPercentage(average)}
-                    segments={[{ value: average, color: usageColor(average), label: "" }]}
-                />
+                {/* The total is one value, so its bar is kept to a width the eye can cross rather
+                    than stretched across a wide screen with the label and the value at either end. */}
+                <div className={classes.summary}>
+                    <UsageBar
+                        label="Total"
+                        total={1}
+                        value={formatPercentage(average)}
+                        segments={[{ value: average, color: usageColor(average), label: "" }]}
+                    />
 
-                <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} spacing="xs" verticalSpacing="xs">
+                    <Text size="sm" c="dimmed">
+                        Load average {load.one.toFixed(2)} / {load.five.toFixed(2)} /{" "}
+                        {load.fifteen.toFixed(2)} over {logicalCores} logical cores
+                    </Text>
+                </div>
+
+                <div className={classes.cores}>
                     {cores.map(({ core, ratio }) => (
                         <CoreBar key={core} index={core} ratio={ratio} />
                     ))}
-                </SimpleGrid>
-
-                <Text size="sm" c="dimmed">
-                    Load average {load.one.toFixed(2)} / {load.five.toFixed(2)} /{" "}
-                    {load.fifteen.toFixed(2)} over {logicalCores} logical cores
-                </Text>
+                </div>
             </Stack>
         </Panel>
     );

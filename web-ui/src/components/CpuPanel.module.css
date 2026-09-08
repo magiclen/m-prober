@@ -1,0 +1,22 @@
+/* The total bar and the load average sit side by side, so neither is stretched across a wide screen. */
+.summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--mantine-spacing-md) var(--mantine-spacing-xl);
+}
+
+.summary > *:first-child {
+    flex: 0 1 rem(420px);
+    min-width: rem(260px);
+}
+
+/*
+ * One cell per logical core. A 4-core laptop gets a couple of columns and a 64-core server on a wide
+ * screen gets a dozen, instead of a fixed count that leaves either gaps or a very tall list.
+ */
+.cores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(rem(220px), 1fr));
+    gap: var(--mantine-spacing-xs);
+}

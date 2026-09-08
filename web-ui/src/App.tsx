@@ -76,7 +76,7 @@ export function App(): React.JSX.Element {
     }
 
     return (
-        <Container size="lg" py="md">
+        <Container fluid py="md">
             <Stack gap="md">
                 <Group justify="space-between" wrap="nowrap">
                     <Group gap="sm" align="baseline">

@@ -1,4 +1,4 @@
-import { SimpleGrid, Text } from "@mantine/core";
+import { Group, Text } from "@mantine/core";
 
 import { formatDateTime, formatDuration } from "@/format.ts";
 import type { Snapshot } from "@/types.ts";
@@ -21,12 +21,13 @@ function Field({ name, value }: { name: string; value: string }): React.JSX.Elem
 export function SystemPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
     return (
         <Panel title="System">
-            <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="sm">
+            {/* The fields take the width they need and wrap, rather than being spread evenly across a wide screen. */}
+            <Group gap="xl" align="flex-start">
                 <Field name="Hostname" value={snapshot.hostname} />
                 <Field name="Kernel" value={snapshot.kernel} />
                 <Field name="Uptime" value={formatDuration(snapshot.uptime.total_uptime)} />
                 <Field name="RTC time (UTC)" value={formatDateTime(snapshot.rtc_time)} />
-            </SimpleGrid>
+            </Group>
         </Panel>
     );
 }
