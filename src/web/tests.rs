@@ -7,13 +7,18 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use super::{router, state::AppState};
+use super::{
+    router,
+    state::{AppState, Shutdown},
+};
 
 const TEST_DETECT_INTERVAL: Duration = Duration::from_millis(1000);
 const TEST_AUTH_KEY: &str = "magic";
 
 fn create_router(auth_key: Option<&str>) -> Router {
-    router(AppState::new(TEST_DETECT_INTERVAL, auth_key.map(String::from)), true)
+    let (_sender, shutdown) = Shutdown::channel();
+
+    router(AppState::new(TEST_DETECT_INTERVAL, auth_key.map(String::from), shutdown), true)
 }
 
 async fn status_of(router: Router, request: Request<Body>) -> StatusCode {

@@ -700,6 +700,7 @@ dependencies = [
  "chrono",
  "clap",
  "concat-with",
+ "futures-util",
  "getch",
  "http-body-util",
  "lazy-static-include",
