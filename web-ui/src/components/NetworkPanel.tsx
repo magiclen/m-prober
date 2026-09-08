@@ -5,6 +5,8 @@ import type { Snapshot } from "@/types.ts";
 
 import { Panel, Unsupported } from "./Panel.tsx";
 
+import classes from "./DataTable.module.css";
+
 export function NetworkPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
     if (snapshot.network.length === 0) {
         return (
@@ -17,7 +19,7 @@ export function NetworkPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.El
     return (
         <Panel title="Network">
             <Table.ScrollContainer minWidth={480}>
-                <Table striped highlightOnHover>
+                <Table striped highlightOnHover className={classes.table}>
                     <Table.Thead>
                         <Table.Tr>
                             <Table.Th>Interface</Table.Th>

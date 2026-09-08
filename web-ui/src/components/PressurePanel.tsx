@@ -5,6 +5,8 @@ import type { Pressure, PressureStat, Snapshot } from "@/types.ts";
 
 import { Panel, Unsupported } from "./Panel.tsx";
 
+import classes from "./DataTable.module.css";
+
 interface Row {
     resource: string;
     kind: string;
@@ -46,7 +48,7 @@ export function PressurePanel({ snapshot }: { snapshot: Snapshot }): React.JSX.E
     return (
         <Panel title="Pressure (PSI)" aside="Share of time stalled waiting for the resource">
             <Table.ScrollContainer minWidth={420}>
-                <Table striped>
+                <Table striped className={classes.table}>
                     <Table.Thead>
                         <Table.Tr>
                             <Table.Th>Resource</Table.Th>

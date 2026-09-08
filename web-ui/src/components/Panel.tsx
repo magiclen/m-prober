@@ -12,7 +12,8 @@ export function Panel({ title, aside, children }: PanelProps): React.JSX.Element
     return (
         <Card withBorder padding="md" radius="md">
             <Group justify="space-between" align="baseline" mb="sm" wrap="nowrap">
-                <Title order={2} size="h5">
+                {/* The name of a panel is short, so it keeps its line and the aside gives way. */}
+                <Title order={2} size="h5" style={{ whiteSpace: "nowrap" }}>
                     {title}
                 </Title>
                 {aside !== undefined && (
