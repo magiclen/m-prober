@@ -1,0 +1,37 @@
+/*
+ * Grow the whole interface on a screen with room for it.
+ *
+ * Mantine writes every size as `calc(<n>rem * var(--mantine-scale))`, and so does the `rem()` of
+ * postcss-preset-mantine and the one Mantine uses for its style props, so this single variable
+ * carries the font sizes, the spacing, the radii, the component heights, the minimum column width
+ * of the dashboard grid and the per-core cells with it. Nothing else has to be adjusted.
+ *
+ * The measure is the CSS width rather than the pixel density on purpose. A 4K screen at 200% system
+ * scaling reports a 1920px viewport and the browser already draws the text with twice the device
+ * pixels, so it needs no help; what makes an interface look small is having many CSS pixels to
+ * spread over, which is exactly what these queries detect.
+ */
+
+@media (min-width: 1920px) {
+    :root {
+        --mantine-scale: 1.1;
+    }
+}
+
+@media (min-width: 2560px) {
+    :root {
+        --mantine-scale: 1.25;
+    }
+}
+
+@media (min-width: 3200px) {
+    :root {
+        --mantine-scale: 1.45;
+    }
+}
+
+@media (min-width: 3840px) {
+    :root {
+        --mantine-scale: 1.6;
+    }
+}
