@@ -10,7 +10,15 @@ keywords = ["probe", "mprober", "m-prober", "linux", "monitor"]
 categories = ["command-line-utilities"]
 description = "This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs."
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "front-end/**/*"]
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    # The Open Font License asks to travel with the fonts embedded in `front-end`.
+    "LICENSE-RobotoMono.txt",
+    "front-end/**/*",
+]
 
 [profile.release]
 lto = true

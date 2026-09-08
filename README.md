@@ -507,3 +507,5 @@ The page lives in [`web-ui`](web-ui) and is built with Vite, React and Mantine. 
 ## License
 
 [MIT](LICENSE)
+
+The web page is set in Roboto Mono, which is bundled with it under the [SIL Open Font License](LICENSE-RobotoMono.txt).

@@ -8,7 +8,7 @@
     "scripts": {
         "test": "vitest run",
         "dev": "vite",
-        "clean": "rimraf ../front-end/index.html ../front-end/js ../front-end/css",
+        "clean": "rimraf ../front-end/index.html ../front-end/js ../front-end/css ../front-end/fonts",
         "build": "npm run clean && tsc --noEmit && vite build",
         "preview": "vite preview",
         "lint": "oxlint",
@@ -20,6 +20,7 @@
         "prepare": "node setup-git-hooks.mjs"
     },
     "dependencies": {
+        "@fontsource-variable/roboto-mono": "^5.3.0",
         "@mantine/core": "^9.5.2",
         "@mantine/hooks": "^9.5.2",
         "react": "^19.2.8",

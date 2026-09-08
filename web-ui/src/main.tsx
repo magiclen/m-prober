@@ -1,6 +1,9 @@
 import { MantineProvider } from "@mantine/core";
 
 import "@mantine/core/styles.css";
+// Self-hosted, so that a probe with no route to the internet still renders with its own font. The
+// variable build covers every weight in one file per subset.
+import "@fontsource-variable/roboto-mono/index.css";
 // Overrides `--mantine-scale`, so it has to come after the styles which define it.
 import "@/scale.css";
 import { StrictMode } from "react";

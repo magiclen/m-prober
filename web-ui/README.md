@@ -15,6 +15,22 @@ Rust side embeds into the executable. The file names carry no content hash on pu
 `src/web/static_files.rs` lists every asset by name. **The build output is committed**, so that
 `cargo install mprober` works on a machine without Node.
 
+## Font
+
+The page is set in Roboto Mono, self-hosted so that a probe with no route to the internet still
+renders with it. It comes from [Fontsource](https://fontsource.org) as an ordinary dependency, and
+`vite build` copies the files it references into `../front-end/fonts` under their own names.
+
+Two things to know when changing it:
+
+- Fontsource registers its variable builds under a family name ending in `Variable`, which is what
+  `src/theme.ts` has to ask for. Asking for `Roboto Mono` silently falls back to a system font.
+- Each subset is a separate file, and `src/web/static_files.rs` lists them all by name, so adding or
+  dropping a subset means updating that list too.
+
+Roboto Mono is under the SIL Open Font License, which asks to travel with the font, so its text is
+kept at `LICENSE-RobotoMono.txt` in the root of the repository and packaged with the crate.
+
 ## Icons
 
 `favicon.png` is the source image. The icons `../front-end` holds are made from it with

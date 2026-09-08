@@ -14,7 +14,12 @@ export default defineConfig(({ mode }) => ({
             output: {
                 codeSplitting: false,
                 entryFileNames: "js/bundle.js",
-                assetFileNames: "css/bundle[extname]",
+                // The stylesheet is the only asset that gets a name of its own; the fonts keep
+                // theirs, so that `src/web/static_files.rs` can list them.
+                assetFileNames: (asset): string =>
+                    (asset.names?.[0]?.endsWith(".css") ?? false)
+                        ? "css/bundle[extname]"
+                        : "fonts/[name][extname]",
             },
         },
     },

@@ -16,6 +16,7 @@ const CSS: &str = "text/css; charset=utf-8";
 const PNG: &str = "image/png";
 const ICON: &str = "image/x-icon";
 const MANIFEST_TYPE: &str = "application/manifest+json";
+const WOFF2: &str = "font/woff2";
 
 // The web UI is built with fixed file names (see `web-ui/vite.config.ts`), and the icons come from
 // favicon-generator (see `web-ui/README.md`), so every asset can be listed here.
@@ -29,6 +30,12 @@ lazy_static_include_bytes! {
     ICON_192 => "front-end/icon-192.png",
     ICON_512 => "front-end/icon-512.png",
     ICON_MASK => "front-end/icon-mask.png",
+    FONT_LATIN => "front-end/fonts/roboto-mono-latin-wght-normal.woff2",
+    FONT_LATIN_EXT => "front-end/fonts/roboto-mono-latin-ext-wght-normal.woff2",
+    FONT_CYRILLIC => "front-end/fonts/roboto-mono-cyrillic-wght-normal.woff2",
+    FONT_CYRILLIC_EXT => "front-end/fonts/roboto-mono-cyrillic-ext-wght-normal.woff2",
+    FONT_GREEK => "front-end/fonts/roboto-mono-greek-wght-normal.woff2",
+    FONT_VIETNAMESE => "front-end/fonts/roboto-mono-vietnamese-wght-normal.woff2",
 }
 
 const INDEX_PATH: &str = "/index.html";
@@ -87,6 +94,12 @@ static FILES: LazyLock<HashMap<&'static str, StaticFile>> = LazyLock::new(|| {
         ("/icon-192.png", *ICON_192, PNG),
         ("/icon-512.png", *ICON_512, PNG),
         ("/icon-mask.png", *ICON_MASK, PNG),
+        ("/fonts/roboto-mono-latin-wght-normal.woff2", *FONT_LATIN, WOFF2),
+        ("/fonts/roboto-mono-latin-ext-wght-normal.woff2", *FONT_LATIN_EXT, WOFF2),
+        ("/fonts/roboto-mono-cyrillic-wght-normal.woff2", *FONT_CYRILLIC, WOFF2),
+        ("/fonts/roboto-mono-cyrillic-ext-wght-normal.woff2", *FONT_CYRILLIC_EXT, WOFF2),
+        ("/fonts/roboto-mono-greek-wght-normal.woff2", *FONT_GREEK, WOFF2),
+        ("/fonts/roboto-mono-vietnamese-wght-normal.woff2", *FONT_VIETNAMESE, WOFF2),
     ]
     .into_iter()
     .map(|(path, content, content_type)| (path, StaticFile::new(content, content_type)))
