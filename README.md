@@ -263,10 +263,10 @@ mprober volume
 
 ```
           Reading Rate | Read Data | Writing Rate | Written Data
-nvme0n1p2        0 B/s     7.25 MB          0 B/s        7.25 MB
+nvme0n1p2        0 B/s     7.30 MB          0 B/s      192.51 KB
           [||||||||||||||||||                     ] 975.23 MB / 2.01 GB (48.46%)
-nvme0n1p4        0 B/s    12.39 GB          0 B/s       12.39 GB
-          [|||||||||                              ] 473.00 GB / 1.99 TB (23.77%)
+nvme0n1p4        0 B/s    20.82 GB          0 B/s       60.67 GB
+          [|||||||||                              ] 473.37 GB / 1.99 TB (23.79%)
 ```
 
 Add `--mounts` to also list the mount points of each volume, and `-i` to skip the I/O rates.
