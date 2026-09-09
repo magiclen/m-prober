@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use mprober_lib::{
     Error, cpu, hostname, kernel, load_average, memory, network, rtc_time, uptime, volume,
 };
@@ -124,8 +129,11 @@ pub async fn volume_detect(State(state): State<AppState>) -> ApiResult<Json<Vec<
     Ok(Json(latest(&state).await?.volumes.clone()))
 }
 
-pub async fn all(State(state): State<AppState>) -> ApiResult<Json<Snapshot>> {
-    Ok(Json((*latest(&state).await?).clone()))
+/// The snapshot is serialized straight out of its `Arc`, since cloning it would copy every list it holds for each request.
+pub async fn all(State(state): State<AppState>) -> ApiResult<Response> {
+    let snapshot = latest(&state).await?;
+
+    Ok(Json(&*snapshot).into_response())
 }
 
 /// The sampler always has a snapshot once it has run one round, so a failure here means it stopped for good.
