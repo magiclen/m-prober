@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
+use std::{borrow::Cow, cmp::Ordering};
 
 use anyhow::anyhow;
 use byte_unit::{Byte, Unit, UnitType};
@@ -6,9 +6,55 @@ use chrono::SecondsFormat;
 use mprober_lib::process;
 use regex::Regex;
 use terminal_size::terminal_size;
-use uzers::{Group, Groups, User, Users, UsersCache};
+use uzers::{Groups, Users, UsersCache};
 
 use crate::{CLIArgs, CLICommands, terminal::*};
+
+/// One process, formatted. Holding the columns of a row together keeps them from drifting apart when a row is cut short because the terminal is too narrow.
+struct Row {
+    pid:        String,
+    ppid:       String,
+    /// The real-time priority is marked with a `*`, so this is not a number.
+    priority:   String,
+    nice:       String,
+    percentage: f64,
+    vsz:        String,
+    rss:        String,
+    anon:       String,
+    thd:        String,
+    tty:        String,
+    user:       String,
+    group:      String,
+    program:    String,
+    state:      &'static str,
+    /// Empty unless the start time was asked for.
+    start_time: String,
+    cmdline:    String,
+}
+
+/// The width of a name column: wide enough for its heading, and never wider than the truncation length, which can be shorter than that heading.
+fn column_width(
+    lengths: impl Iterator<Item = usize>,
+    heading: usize,
+    truncate_inc: usize,
+) -> usize {
+    lengths.max().unwrap_or(0).min(truncate_inc).max(heading)
+}
+
+/// Cut a name that is longer than `width` down to it and mark it with a trailing `+`. The cut lands on a character boundary, so that a name outside ASCII does not come out as broken UTF-8.
+fn truncate_with_marker(name: &str, width: usize) -> Cow<'_, str> {
+    if name.len() <= width {
+        return Cow::Borrowed(name);
+    }
+
+    let mut end = width - 1;
+
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+
+    Cow::Owned(format!("{}+", &name[..end]))
+}
 
 #[inline]
 pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
@@ -121,7 +167,7 @@ fn draw_process(
         Some(group_filter) => match user_cache.get_group_by_name(group_filter) {
             Some(group) => Some(group.gid()),
             None => {
-                return Err(anyhow!("Cannot find the user {:?}.", group_filter));
+                return Err(anyhow!("Cannot find the group {:?}.", group_filter));
             },
         },
         None => None,
@@ -139,7 +185,7 @@ fn draw_process(
         tty_filter: tty_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
     };
 
-    let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {
+    let processes: Vec<(process::Process, f64)> = if only_information {
         let mut processes_with_stats = process::get_processes_with_stat(&process_filter).unwrap();
 
         processes_with_stats.sort_unstable_by_key(|(a, _)| std::cmp::Reverse(a.vsz));
@@ -148,7 +194,7 @@ fn draw_process(
             processes_with_stats.truncate(top);
         }
 
-        (processes_with_stats.into_iter().map(|(process, _)| process).collect(), BTreeMap::new())
+        processes_with_stats.into_iter().map(|(process, _)| (process, 0f64)).collect()
     } else {
         let mut processes_with_percentage =
             process::get_processes_with_cpu_utilization_in_percentage(
@@ -191,100 +237,64 @@ fn draw_process(
             processes_with_percentage.truncate(top);
         }
 
-        let mut processes = Vec::with_capacity(processes_with_percentage.len());
-        let mut processes_percentage = BTreeMap::new();
-
-        for (process, percentage) in processes_with_percentage {
-            processes_percentage.insert(process.pid, percentage);
-
-            processes.push(process);
-        }
-
-        (processes, processes_percentage)
+        processes_with_percentage
     };
 
-    let processes_len = processes.len();
+    let format_byte = |value: u64| match unit {
+        Some(unit) => format!("{:.1}", Byte::from(value).get_adjusted_unit(unit)),
+        None => format!("{:.1}", Byte::from(value).get_appropriate_unit(UnitType::Binary)),
+    };
 
-    let mut pid: Vec<String> = Vec::with_capacity(processes_len);
-    let mut ppid: Vec<String> = Vec::with_capacity(processes_len);
-    let mut vsz: Vec<String> = Vec::with_capacity(processes_len);
-    let mut rss: Vec<String> = Vec::with_capacity(processes_len);
-    let mut anon: Vec<String> = Vec::with_capacity(processes_len);
-    let mut thd: Vec<String> = Vec::with_capacity(processes_len);
-    let mut tty: Vec<&str> = Vec::with_capacity(processes_len);
-    let mut user: Vec<Arc<User>> = Vec::with_capacity(processes_len);
-    let mut group: Vec<Arc<Group>> = Vec::with_capacity(processes_len);
-    let mut program: Vec<&str> = Vec::with_capacity(processes_len);
-    let mut state: Vec<&'static str> = Vec::with_capacity(processes_len);
-
-    for process in processes.iter() {
-        pid.push(process.pid.to_string());
-        ppid.push(process.ppid.to_string());
-
-        let (p_vsz, p_rss, p_anon) =
-            (Byte::from(process.vsz), Byte::from(process.rss), Byte::from(process.rss_anon));
-
-        match unit {
-            Some(byte_unit) => {
-                vsz.push(format!("{:.1}", p_vsz.get_adjusted_unit(byte_unit)));
-                rss.push(format!("{:.1}", p_rss.get_adjusted_unit(byte_unit)));
-                anon.push(format!("{:.1}", p_anon.get_adjusted_unit(byte_unit)));
+    let rows: Vec<Row> = processes
+        .into_iter()
+        .map(|(process, percentage)| Row {
+            pid: process.pid.to_string(),
+            ppid: process.ppid.to_string(),
+            priority: match process.real_time_priority {
+                Some(real_time_priority) => format!("*{real_time_priority}"),
+                None => process.priority.to_string(),
             },
-            None => {
-                vsz.push(format!("{:.1}", p_vsz.get_appropriate_unit(UnitType::Binary)));
-                rss.push(format!("{:.1}", p_rss.get_appropriate_unit(UnitType::Binary)));
-                anon.push(format!("{:.1}", p_anon.get_appropriate_unit(UnitType::Binary)));
-            },
-        }
-
-        tty.push(process.tty.as_deref().unwrap_or(""));
-
-        thd.push(process.threads.to_string());
-
-        // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
-        user.push(
-            user_cache
+            nice: process.nice.to_string(),
+            percentage,
+            vsz: format_byte(process.vsz),
+            rss: format_byte(process.rss),
+            anon: format_byte(process.rss_anon),
+            thd: process.threads.to_string(),
+            tty: process.tty.unwrap_or_default(),
+            // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
+            user: user_cache
                 .get_user_by_uid(process.effective_uid)
-                .unwrap_or_else(|| Arc::new(User::new(0, "systemd?", 0))),
-        );
-        group.push(
-            user_cache
+                .map(|user| user.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| String::from("systemd?")),
+            group: user_cache
                 .get_group_by_gid(process.effective_gid)
-                .unwrap_or_else(|| Arc::new(Group::new(0, "systemd?"))),
-        );
-
-        program.push(process.program.as_str());
-        state.push(process.state.as_str());
-    }
+                .map(|group| group.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| String::from("systemd?")),
+            program: process.program,
+            state: process.state.as_str(),
+            start_time: if start_time {
+                process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true)
+            } else {
+                String::new()
+            },
+            cmdline: process.cmdline,
+        })
+        .collect();
 
     let truncate_inc = if truncate == 0 { usize::MAX } else { truncate + 1 };
 
-    let pid_len = pid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
-    let ppid_len = ppid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
-    let vsz_len = vsz.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let rss_len = rss.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let anon_len = anon.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let thd_len = thd.iter().map(|s| s.len()).max().map(|s| s.max(3)).unwrap_or(0);
-    let tty_len = tty.iter().map(|s| s.len()).max().map(|s| s.max(4)).unwrap_or(0);
-    let user_len = user
-        .iter()
-        .map(|user| user.name().len())
-        .max()
-        .map(|s| s.clamp(4, truncate_inc))
-        .unwrap_or(truncate_inc);
-    let group_len = group
-        .iter()
-        .map(|group| group.name().len())
-        .max()
-        .map(|s| s.clamp(5, truncate_inc))
-        .unwrap_or(truncate_inc);
-    let program_len = program
-        .iter()
-        .map(|s| s.len())
-        .max()
-        .map(|s| s.clamp(7, truncate_inc))
-        .unwrap_or(truncate_inc);
-    let state_len = state.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let pid_len = rows.iter().map(|row| row.pid.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let ppid_len = rows.iter().map(|row| row.ppid.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let vsz_len = rows.iter().map(|row| row.vsz.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let rss_len = rows.iter().map(|row| row.rss.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let anon_len = rows.iter().map(|row| row.anon.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let thd_len = rows.iter().map(|row| row.thd.len()).max().map(|s| s.max(3)).unwrap_or(0);
+    let tty_len = rows.iter().map(|row| row.tty.len()).max().map(|s| s.max(4)).unwrap_or(0);
+    let state_len = rows.iter().map(|row| row.state.len()).max().map(|s| s.max(5)).unwrap_or(0);
+
+    let user_len = column_width(rows.iter().map(|row| row.user.len()), 4, truncate_inc);
+    let group_len = column_width(rows.iter().map(|row| row.group.len()), 5, truncate_inc);
+    let program_len = column_width(rows.iter().map(|row| row.program.len()), 7, truncate_inc);
 
     #[allow(clippy::never_loop)]
     loop {
@@ -296,10 +306,8 @@ fn draw_process(
             break;
         }
 
-        for _ in 3..pid_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", pid_len.saturating_sub(3)).unwrap();
+        width += pid_len.saturating_sub(3);
 
         write!(&mut stdout, "PID").unwrap(); // 3
         width += 3;
@@ -308,10 +316,8 @@ fn draw_process(
             break;
         }
 
-        for _ in 3..ppid_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", ppid_len.saturating_sub(3)).unwrap();
+        width += ppid_len.saturating_sub(3);
 
         write!(&mut stdout, "PPID").unwrap(); // 4
         width += 4;
@@ -343,10 +349,8 @@ fn draw_process(
             break;
         }
 
-        for _ in 2..vsz_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", vsz_len.saturating_sub(2)).unwrap();
+        width += vsz_len.saturating_sub(2);
 
         write!(&mut stdout, "VSZ").unwrap(); // 3
         width += 3;
@@ -355,10 +359,8 @@ fn draw_process(
             break;
         }
 
-        for _ in 2..rss_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", rss_len.saturating_sub(2)).unwrap();
+        width += rss_len.saturating_sub(2);
 
         write!(&mut stdout, "RSS").unwrap(); // 3
         width += 3;
@@ -367,10 +369,8 @@ fn draw_process(
             break;
         }
 
-        for _ in 3..anon_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", anon_len.saturating_sub(3)).unwrap();
+        width += anon_len.saturating_sub(3);
 
         write!(&mut stdout, "ANON").unwrap(); // 4
         width += 4;
@@ -379,10 +379,8 @@ fn draw_process(
             break;
         }
 
-        for _ in 2..thd_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", thd_len.saturating_sub(2)).unwrap();
+        width += thd_len.saturating_sub(2);
 
         write!(&mut stdout, "THD").unwrap(); // 3
         width += 3;
@@ -394,10 +392,8 @@ fn draw_process(
         write!(&mut stdout, " TTY").unwrap(); // 4
         width += 4;
 
-        for _ in 3..tty_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", tty_len.saturating_sub(3)).unwrap();
+        width += tty_len.saturating_sub(3);
 
         if width + 1 + user_len > terminal_width {
             break;
@@ -406,10 +402,8 @@ fn draw_process(
         write!(&mut stdout, " USER").unwrap(); // 5
         width += 5;
 
-        for _ in 4..user_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", user_len.saturating_sub(4)).unwrap();
+        width += user_len.saturating_sub(4);
 
         if width + 1 + group_len > terminal_width {
             break;
@@ -418,10 +412,8 @@ fn draw_process(
         write!(&mut stdout, " GROUP").unwrap(); // 6
         width += 6;
 
-        for _ in 5..group_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", group_len.saturating_sub(5)).unwrap();
+        width += group_len.saturating_sub(5);
 
         if width + 1 + program_len > terminal_width {
             break;
@@ -430,10 +422,8 @@ fn draw_process(
         write!(&mut stdout, " PROGRAM").unwrap(); // 8
         width += 8;
 
-        for _ in 7..program_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", program_len.saturating_sub(7)).unwrap();
+        width += program_len.saturating_sub(7);
 
         if width + 1 + state_len > terminal_width {
             break;
@@ -442,10 +432,8 @@ fn draw_process(
         write!(&mut stdout, " STATE").unwrap(); // 6
         width += 6;
 
-        for _ in 5..state_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", state_len.saturating_sub(5)).unwrap();
+        width += state_len.saturating_sub(5);
 
         if start_time {
             if width + 21 > terminal_width {
@@ -455,10 +443,8 @@ fn draw_process(
             write!(&mut stdout, " START").unwrap(); // 6
             width += 6;
 
-            for _ in 5..20 {
-                write!(&mut stdout, " ").unwrap(); // 1
-                width += 1;
-            }
+            write!(&mut stdout, "{:15}", "").unwrap();
+            width += 15;
         }
 
         if width + 8 > terminal_width {
@@ -473,19 +459,7 @@ fn draw_process(
     stdout.set_color(&COLOR_DEFAULT).unwrap();
     writeln!(&mut stdout).unwrap();
 
-    let mut pid_iter = pid.into_iter();
-    let mut ppid_iter = ppid.into_iter();
-    let mut vsz_iter = vsz.into_iter();
-    let mut rss_iter = rss.into_iter();
-    let mut tty_iter = tty.into_iter();
-    let mut anon_iter = anon.into_iter();
-    let mut thd_iter = thd.into_iter();
-    let mut user_iter = user.into_iter();
-    let mut group_iter = group.into_iter();
-    let mut program_iter = program.into_iter();
-    let mut state_iter = state.into_iter();
-
-    for process in processes.iter() {
+    for row in rows.iter() {
         let mut width = 0;
 
         if width + pid_len > terminal_width {
@@ -495,10 +469,8 @@ fn draw_process(
             continue;
         }
 
-        let pid = pid_iter.next().unwrap();
-
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
-        write!(&mut stdout, "{1:>0$}", pid_len, pid).unwrap();
+        write!(&mut stdout, "{1:>0$}", pid_len, row.pid).unwrap();
         width += pid_len;
 
         if width + 1 + ppid_len > terminal_width {
@@ -507,15 +479,8 @@ fn draw_process(
 
         stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
 
-        let ppid = ppid_iter.next().unwrap();
-
-        for _ in 0..=(ppid_len - ppid.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(ppid.as_bytes()).unwrap();
-        width += ppid.len();
+        write!(&mut stdout, "{1:>0$}", ppid_len + 1, row.ppid).unwrap();
+        width += ppid_len + 1;
 
         if width + 5 > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -524,11 +489,7 @@ fn draw_process(
             continue;
         }
 
-        if let Some(real_time_priority) = process.real_time_priority {
-            write!(&mut stdout, "{:>5}", format!("*{}", real_time_priority)).unwrap();
-        } else {
-            write!(&mut stdout, "{:>5}", process.priority).unwrap();
-        }
+        write!(&mut stdout, "{:>5}", row.priority).unwrap();
         width += 5;
 
         if width + 4 > terminal_width {
@@ -538,7 +499,7 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, "{:>4}", process.nice).unwrap();
+        write!(&mut stdout, "{:>4}", row.nice).unwrap();
         width += 4;
 
         if !only_information {
@@ -549,7 +510,7 @@ fn draw_process(
                 continue;
             }
 
-            write!(&mut stdout, " {:>4.1}", percentage.get(&process.pid).unwrap() * 100.0).unwrap();
+            write!(&mut stdout, " {:>4.1}", row.percentage * 100.0).unwrap();
             width += 5;
         }
 
@@ -560,15 +521,8 @@ fn draw_process(
             continue;
         }
 
-        let vsz = vsz_iter.next().unwrap();
-
-        for _ in 0..=(vsz_len - vsz.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(vsz.as_bytes()).unwrap();
-        width += vsz.len();
+        write!(&mut stdout, "{1:>0$}", vsz_len + 1, row.vsz).unwrap();
+        width += vsz_len + 1;
 
         if width + 1 + rss_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -577,15 +531,8 @@ fn draw_process(
             continue;
         }
 
-        let rss = rss_iter.next().unwrap();
-
-        for _ in 0..=(rss_len - rss.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(rss.as_bytes()).unwrap();
-        width += rss.len();
+        write!(&mut stdout, "{1:>0$}", rss_len + 1, row.rss).unwrap();
+        width += rss_len + 1;
 
         if width + 1 + anon_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -594,15 +541,8 @@ fn draw_process(
             continue;
         }
 
-        let anon = anon_iter.next().unwrap();
-
-        for _ in 0..=(anon_len - anon.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(anon.as_bytes()).unwrap();
-        width += anon.len();
+        write!(&mut stdout, "{1:>0$}", anon_len + 1, row.anon).unwrap();
+        width += anon_len + 1;
 
         if width + 1 + thd_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -611,15 +551,8 @@ fn draw_process(
             continue;
         }
 
-        let thd = thd_iter.next().unwrap();
-
-        for _ in 0..=(thd_len - thd.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(thd.as_bytes()).unwrap();
-        width += thd.len();
+        write!(&mut stdout, "{1:>0$}", thd_len + 1, row.thd).unwrap();
+        width += thd_len + 1;
 
         if width + 1 + tty_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -628,18 +561,8 @@ fn draw_process(
             continue;
         }
 
-        let tty = tty_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        stdout.write_all(tty.as_bytes()).unwrap();
-        width += tty.len();
-
-        for _ in 0..(tty_len - tty.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, " {1:<0$}", tty_len, row.tty).unwrap();
+        width += 1 + tty_len;
 
         if width + 1 + user_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -648,33 +571,9 @@ fn draw_process(
             continue;
         }
 
-        let user = user_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        {
-            let s = user.name().to_str().unwrap();
-
-            if s.len() > truncate_inc {
-                stdout.write_all(&s.as_bytes()[..(truncate_inc - 1)]).unwrap();
-                write!(&mut stdout, "+").unwrap(); // 1
-                width += truncate_inc;
-
-                for _ in truncate_inc..4 {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            } else {
-                stdout.write_all(s.as_bytes()).unwrap();
-                width += s.len();
-
-                for _ in 0..(user_len - s.len()) {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            }
-        }
+        write!(&mut stdout, " {1:<0$}", user_len, truncate_with_marker(&row.user, truncate_inc))
+            .unwrap();
+        width += 1 + user_len;
 
         if width + 1 + group_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -683,33 +582,9 @@ fn draw_process(
             continue;
         }
 
-        let group = group_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        {
-            let s = group.name().to_str().unwrap();
-
-            if s.len() > truncate_inc {
-                stdout.write_all(&s.as_bytes()[..(truncate_inc - 1)]).unwrap();
-                write!(&mut stdout, "+").unwrap(); // 1
-                width += truncate_inc;
-
-                for _ in truncate_inc..5 {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            } else {
-                stdout.write_all(s.as_bytes()).unwrap();
-                width += s.len();
-
-                for _ in 0..(group_len - s.len()) {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            }
-        }
+        write!(&mut stdout, " {1:<0$}", group_len, truncate_with_marker(&row.group, truncate_inc))
+            .unwrap();
+        width += 1 + group_len;
 
         if width + 1 + program_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -718,29 +593,14 @@ fn draw_process(
             continue;
         }
 
-        let program = program_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        if program.len() > truncate_inc {
-            stdout.write_all(&program.as_bytes()[..(truncate_inc - 1)]).unwrap();
-            write!(&mut stdout, "+").unwrap(); // 1
-            width += truncate_inc;
-
-            for _ in truncate_inc..7 {
-                write!(&mut stdout, " ").unwrap(); // 1
-                width += 1;
-            }
-        } else {
-            stdout.write_all(program.as_bytes()).unwrap();
-            width += program.len();
-
-            for _ in 0..(program_len - program.len()) {
-                write!(&mut stdout, " ").unwrap(); // 1
-                width += 1;
-            }
-        }
+        write!(
+            &mut stdout,
+            " {1:<0$}",
+            program_len,
+            truncate_with_marker(&row.program, truncate_inc)
+        )
+        .unwrap();
+        width += 1 + program_len;
 
         if width + 1 + state_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -749,18 +609,8 @@ fn draw_process(
             continue;
         }
 
-        let state = state_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        stdout.write_all(state.as_bytes()).unwrap();
-        width += state.len();
-
-        for _ in 0..(state_len - state.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, " {1:<0$}", state_len, row.state).unwrap();
+        width += 1 + state_len;
 
         if start_time {
             if width + 21 > terminal_width {
@@ -772,9 +622,7 @@ fn draw_process(
 
             write!(&mut stdout, " ").unwrap(); // 1
 
-            stdout
-                .write_all(process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true).as_bytes())
-                .unwrap();
+            stdout.write_all(row.start_time.as_bytes()).unwrap();
 
             width += 21;
         }
@@ -791,15 +639,7 @@ fn draw_process(
 
         let remain_width = terminal_width - width;
 
-        if process.cmdline.len() > remain_width {
-            let cmdline =
-                String::from_utf8_lossy(&process.cmdline.as_bytes()[..(remain_width - 1)]);
-
-            stdout.write_all(cmdline.as_bytes()).unwrap();
-            write!(&mut stdout, "+").unwrap(); // 1
-        } else {
-            stdout.write_all(process.cmdline.as_bytes()).unwrap();
-        }
+        stdout.write_all(truncate_with_marker(&row.cmdline, remain_width).as_bytes()).unwrap();
 
         stdout.set_color(&COLOR_DEFAULT).unwrap();
         writeln!(&mut stdout).unwrap();
@@ -808,4 +648,41 @@ fn draw_process(
     output.print(&stdout).unwrap();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_width_of_a_truncation_shorter_than_the_heading() {
+        // `--truncate 5` leaves 6 for a name, which is narrower than the 7 of `PROGRAM`.
+        assert_eq!(7, column_width([8, 12].into_iter(), 7, 6));
+        assert_eq!(4, column_width([8, 12].into_iter(), 4, 2));
+    }
+
+    #[test]
+    fn test_column_width_without_a_truncation() {
+        // `--truncate 0` turns the truncation off.
+        assert_eq!(12, column_width([8, 12].into_iter(), 7, usize::MAX));
+        assert_eq!(7, column_width([3, 5].into_iter(), 7, usize::MAX));
+    }
+
+    #[test]
+    fn test_column_width_of_an_empty_list() {
+        // Nothing matched the filters, so only the heading has to fit.
+        assert_eq!(7, column_width(std::iter::empty(), 7, usize::MAX));
+    }
+
+    #[test]
+    fn test_truncate_with_marker() {
+        assert_eq!("magiclen", truncate_with_marker("magiclen", 8));
+        assert_eq!("magicl+", truncate_with_marker("magiclen", 7));
+    }
+
+    #[test]
+    fn test_truncate_with_marker_cuts_on_a_character_boundary() {
+        assert_eq!("日+", truncate_with_marker("日本語", 6));
+        assert_eq!("+", truncate_with_marker("日本語", 3));
+    }
 }
