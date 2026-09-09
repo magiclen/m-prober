@@ -1,14 +1,10 @@
-extern crate benchmarking;
-
 use std::{
-    cell::RefCell,
     collections::HashMap,
     error::Error,
     fmt::{self, Display, Formatter},
     fs::{self, File},
     io::{self, Read, Seek, SeekFrom, Write},
     path::Path,
-    rc::Rc,
     time::{Duration, SystemTime},
 };
 
@@ -140,12 +136,15 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                 println!("{model_name} {}C/{}T", cpu.cpu_cores, cpu.siblings);
 
+                // An architecture whose `/proc/cpuinfo` reports no `cpu MHz`, and which has no cpufreq files either, leaves nothing to print here.
                 let mut cpu_mhz_iter = cpu.cpus_mhz.into_iter();
 
-                print!("{:.0}", cpu_mhz_iter.next().unwrap());
+                if let Some(cpu_mhz) = cpu_mhz_iter.next() {
+                    print!("{cpu_mhz:.0}");
 
-                for cpu_mhz in cpu_mhz_iter {
-                    print!(" {:.0}", cpu_mhz);
+                    for cpu_mhz in cpu_mhz_iter {
+                        print!(" {cpu_mhz:.0}");
+                    }
                 }
 
                 println!("\n");
@@ -312,306 +311,31 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
     // Volume
     {
         if config.volume {
+            let all_volumes = volume::get_volumes()?;
+
+            if !all_volumes.is_empty() && config.print_out.has_stderr() {
+                if config.cpu || config.memory {
+                    eprintln!();
+                }
+
+                eprintln!("Benchmarking volumes...");
+            }
+
             let mut volumes_result: HashMap<String, (f64, f64)> = HashMap::new();
 
-            const BUFFER_SIZE: usize = 4096;
-            const TEST_FILE_SIZE: u64 = 1024 * 1024 * 1024; // N times of BUFFER_SIZE
+            for volume in all_volumes {
+                if let Some((read_result, write_result)) = benchmark_volume(&volume, config) {
+                    if config.print_out.has_stdout() {
+                        let read_result_string = format_speed(read_result);
+                        let write_result_string = format_speed(write_result);
 
-            {
-                let volumes = volume::get_volumes()?;
-
-                if !volumes.is_empty() {
-                    if config.print_out.has_stderr() {
-                        if config.cpu || config.memory {
-                            eprintln!();
-                        }
-
-                        eprintln!("Benchmarking volumes...");
+                        println!(
+                            "{:<19}: Read {read_result_string}/s, Write {write_result_string}/s",
+                            volume.device
+                        );
                     }
 
-                    for volume in volumes {
-                        let available = volume.size - volume.used;
-
-                        if available > TEST_FILE_SIZE
-                            && available - TEST_FILE_SIZE > 1024 * 1024 * 1024
-                        {
-                            // preserve 1 GiB space
-                            let mut can_write = false;
-
-                            for point in volume.points {
-                                let path = Path::new(&point).join(format!(
-                                    "mprober-{}.tmp",
-                                    SystemTime::now()
-                                        .duration_since(SystemTime::UNIX_EPOCH)
-                                        .unwrap()
-                                        .as_millis()
-                                ));
-
-                                match File::create(&path) {
-                                    Ok(file) => {
-                                        can_write = true;
-
-                                        if config.print_out.has_stderr() {
-                                            eprintln!(
-                                                "Benchmarking {} ... Please wait for {:?}.",
-                                                volume.device,
-                                                config.benchmark_duration * 2
-                                            );
-                                        }
-
-                                        let file = Rc::new(RefCell::new(file));
-                                        let file_2 = file.clone();
-
-                                        let write = Rc::new(RefCell::new((true, 1)));
-                                        let write_2 = write.clone();
-
-                                        let bench_result_r =
-                                            benchmarking::bench_function_with_duration(
-                                                config.benchmark_duration,
-                                                move |measurer| {
-                                                    if write_2.borrow().0 {
-                                                        let mut file = file_2.borrow_mut();
-
-                                                        let write = if measurer.get_seq()
-                                                            * BUFFER_SIZE as u128
-                                                            > u128::from(TEST_FILE_SIZE)
-                                                                * write_2.borrow().1
-                                                        {
-                                                            if file
-                                                                .seek(SeekFrom::Start(0))
-                                                                .is_err()
-                                                            {
-                                                                write_2.borrow_mut().0 = false;
-
-                                                                false
-                                                            } else {
-                                                                write_2.borrow_mut().1 += 1;
-
-                                                                true
-                                                            }
-                                                        } else {
-                                                            true
-                                                        };
-
-                                                        if write {
-                                                            let buffer = [(measurer.get_seq() % 256)
-                                                                as u8;
-                                                                BUFFER_SIZE];
-
-                                                            measurer.measure(|| {
-                                                                if file.write_all(&buffer).is_err()
-                                                                {
-                                                                    write_2.borrow_mut().0 = false;
-                                                                } else {
-                                                                    file.flush().unwrap();
-                                                                }
-                                                            });
-                                                        }
-                                                    } else {
-                                                        measurer.measure(|| {});
-                                                    }
-                                                },
-                                            );
-
-                                        if let Ok(bench_result) = bench_result_r {
-                                            if write.borrow().0 {
-                                                let write_result =
-                                                    bench_result.speed() * BUFFER_SIZE as f64;
-                                                let mut file = file.borrow_mut();
-
-                                                /// Returns the length of this stream (in bytes).
-                                                ///
-                                                /// `Seek.stream_len(&mut self)` is unstable, so it is re-implemented here
-                                                fn stream_len(
-                                                    file: &mut File,
-                                                ) -> Result<u64, io::Error>
-                                                {
-                                                    let old_pos = file.stream_position()?;
-                                                    let len = file.seek(SeekFrom::End(0))?;
-
-                                                    if old_pos != len {
-                                                        file.seek(SeekFrom::Start(old_pos))?;
-                                                    }
-
-                                                    Ok(len)
-                                                }
-
-                                                match stream_len(&mut file) {
-                                                    Ok(file_size) => {
-                                                        let read = if file_size < TEST_FILE_SIZE {
-                                                            let buffer = [0u8; BUFFER_SIZE];
-
-                                                            if file.write_all(&buffer).is_err() {
-                                                                if config.print_out.has_stderr() {
-                                                                    eprintln!(
-                                                                        "{} cannot be written \
-                                                                         successfully!",
-                                                                        volume.device
-                                                                    );
-                                                                }
-
-                                                                false
-                                                            } else {
-                                                                true
-                                                            }
-                                                        } else {
-                                                            true
-                                                        };
-
-                                                        let read = if read {
-                                                            match file.seek(SeekFrom::Start(0)) {
-                                                                Ok(_) => true,
-                                                                Err(_) => {
-                                                                    if config.print_out.has_stderr()
-                                                                    {
-                                                                        eprintln!(
-                                                                            "{} cannot be read \
-                                                                             successfully!",
-                                                                            volume.device
-                                                                        );
-                                                                    }
-
-                                                                    false
-                                                                },
-                                                            }
-                                                        } else {
-                                                            false
-                                                        };
-
-                                                        drop(file);
-
-                                                        if read {
-                                                            let read =
-                                                                Rc::new(RefCell::new((true, 1)));
-                                                            let read_2 = Rc::clone(&read);
-
-                                                            match File::open(&path) {
-                                                                Ok(mut file) => {
-                                                                    let bench_result_r = benchmarking::bench_function_with_duration(config.benchmark_duration, move |measurer| {
-                                                                        if read_2.borrow().0 {
-                                                                            let read = if measurer.get_seq() * BUFFER_SIZE as u128 >= u128::from(TEST_FILE_SIZE) * read_2.borrow().1 {
-                                                                                if file.seek(SeekFrom::Start(0)).is_err() {
-                                                                                    read_2.borrow_mut().0 = false;
-
-                                                                                    false
-                                                                                } else {
-                                                                                    read_2.borrow_mut().1 += 1;
-
-                                                                                    true
-                                                                                }
-                                                                            } else {
-                                                                                true
-                                                                            };
-
-                                                                            if read {
-                                                                                let mut buffer = [0u8; BUFFER_SIZE];
-
-                                                                                measurer.measure(|| {
-                                                                                    if file.read_exact(&mut buffer).is_err() {
-                                                                                        read_2.borrow_mut().0 = false;
-                                                                                    }
-                                                                                });
-                                                                            }
-                                                                        } else {
-                                                                            measurer.measure(|| {});
-                                                                        }
-                                                                    });
-
-                                                                    if let Ok(bench_result) =
-                                                                        bench_result_r
-                                                                    {
-                                                                        if read.borrow().0 {
-                                                                            let read_result =
-                                                                                bench_result
-                                                                                    .speed()
-                                                                                    * BUFFER_SIZE
-                                                                                        as f64;
-
-                                                                            let read_result_string = format!("{:.2}", Byte::from_f64_with_unit(read_result, Unit::B).unwrap().get_appropriate_unit(UnitType::Binary));
-                                                                            let write_result_string = format!("{:.2}", Byte::from_f64_with_unit(write_result, Unit::B).unwrap().get_appropriate_unit(UnitType::Binary));
-
-                                                                            if config
-                                                                                .print_out
-                                                                                .has_stdout()
-                                                                            {
-                                                                                let mut s = volume
-                                                                                    .device
-                                                                                    .clone();
-
-                                                                                let s_len = s.len();
-
-                                                                                for _ in s_len..19 {
-                                                                                    s.push(' ');
-                                                                                }
-
-                                                                                println!("{s}: Read {read_result_string}/s, Write {write_result_string}/s");
-
-                                                                                s.truncate(s_len);
-
-                                                                                volumes_result.insert(s, (read_result, write_result));
-                                                                            }
-                                                                        } else if config
-                                                                            .print_out
-                                                                            .has_stderr()
-                                                                        {
-                                                                            eprintln!(
-                                                                                "{} cannot be \
-                                                                                 read successfully!\
-                                                                                 ",
-                                                                                volume.device
-                                                                            );
-                                                                        }
-                                                                    } else {
-                                                                        unreachable!();
-                                                                    }
-                                                                },
-                                                                Err(_) => {
-                                                                    if config.print_out.has_stderr()
-                                                                    {
-                                                                        eprintln!(
-                                                                            "{} cannot be read \
-                                                                             successfully!",
-                                                                            volume.device
-                                                                        );
-                                                                    }
-                                                                },
-                                                            }
-                                                        }
-                                                    },
-                                                    Err(_) => {
-                                                        if config.print_out.has_stderr() {
-                                                            eprintln!(
-                                                                "{} cannot be read successfully!",
-                                                                volume.device
-                                                            );
-                                                        }
-                                                    },
-                                                }
-                                            } else if config.print_out.has_stderr() {
-                                                eprintln!(
-                                                    "{} cannot be written successfully!",
-                                                    volume.device
-                                                );
-                                            }
-                                        } else {
-                                            unreachable!();
-                                        }
-
-                                        try_delete(path);
-                                    },
-                                    Err(_) => {
-                                        continue;
-                                    },
-                                }
-                            }
-
-                            if !can_write && config.print_out.has_stderr() {
-                                eprintln!("{} cannot be written!", volume.device);
-                            }
-                        } else if config.print_out.has_stderr() {
-                            eprintln!("{} doesn't have enough space to benchmark!", volume.device);
-                        }
-                    }
+                    volumes_result.insert(volume.device, (read_result, write_result));
                 }
             }
 
@@ -627,7 +351,194 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
     })
 }
 
+/// The size of one read or write of the volume benchmark.
+const VOLUME_BUFFER_SIZE: usize = 4096;
+
+/// How much is written before the file is rewound, so that a long benchmark does not fill the volume. It is a whole number of buffers.
+const TEST_FILE_SIZE: u64 = 1024 * 1024 * 1024;
+
+/// A volume is only benchmarked when this much would still be free afterwards.
+const RESERVED_SIZE: u64 = 1024 * 1024 * 1024;
+
+#[inline]
+fn format_speed(bytes_per_second: f64) -> String {
+    format!(
+        "{:.2}",
+        Byte::from_f64_with_unit(bytes_per_second, Unit::B)
+            .unwrap()
+            .get_appropriate_unit(UnitType::Binary)
+    )
+}
+
+/// Returns the length of this stream (in bytes).
+///
+/// `Seek.stream_len(&mut self)` is unstable, so it is re-implemented here
+fn stream_len(file: &mut File) -> Result<u64, io::Error> {
+    let old_pos = file.stream_position()?;
+    let len = file.seek(SeekFrom::End(0))?;
+
+    if old_pos != len {
+        file.seek(SeekFrom::Start(old_pos))?;
+    }
+
+    Ok(len)
+}
+
+/// Measure the read and the write speed of one volume, in bytes per second.
+///
+/// Only the first mount point that can be written to is measured, since every other one leads to the
+/// same device and would only measure it again.
+fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option<(f64, f64)> {
+    let available = volume.size.saturating_sub(volume.used);
+
+    if available <= TEST_FILE_SIZE || available - TEST_FILE_SIZE <= RESERVED_SIZE {
+        if config.print_out.has_stderr() {
+            eprintln!("{} doesn't have enough space to benchmark!", volume.device);
+        }
+
+        return None;
+    }
+
+    for point in volume.points.iter() {
+        let path = Path::new(point).join(format!(
+            "mprober-{}.tmp",
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
+        ));
+
+        let Ok(mut file) = File::create(&path) else {
+            continue;
+        };
+
+        if config.print_out.has_stderr() {
+            eprintln!(
+                "Benchmarking {} ... Please wait for {:?}.",
+                volume.device,
+                config.benchmark_duration * 2
+            );
+        }
+
+        let result = measure_file(&mut file, &path, config.benchmark_duration);
+
+        drop(file);
+
+        try_delete(&path);
+
+        return match result {
+            Ok(speeds) => Some(speeds),
+            Err(stage) => {
+                if config.print_out.has_stderr() {
+                    eprintln!("{} cannot be {stage} successfully!", volume.device);
+                }
+
+                None
+            },
+        };
+    }
+
+    if config.print_out.has_stderr() {
+        eprintln!("{} cannot be written!", volume.device);
+    }
+
+    None
+}
+
+/// Measure one file, writing to it first and then reading it back. The error names the step that failed.
+fn measure_file(
+    file: &mut File,
+    path: &Path,
+    duration: Duration,
+) -> Result<(f64, f64), &'static str> {
+    let write_result = measure_write(file, duration).ok_or("written")?;
+
+    // Reading stops at the end of the file, so it has to hold at least one buffer.
+    let file_size = stream_len(file).map_err(|_| "read")?;
+
+    if file_size < TEST_FILE_SIZE {
+        file.write_all(&[0u8; VOLUME_BUFFER_SIZE]).map_err(|_| "written")?;
+    }
+
+    file.seek(SeekFrom::Start(0)).map_err(|_| "read")?;
+
+    let read_result = measure_read(path, duration).ok_or("read")?;
+
+    Ok((read_result, write_result))
+}
+
+/// Write to the file for the whole duration, rewinding it once it has grown to the test size. `None` means a write failed, which leaves nothing worth reporting.
+fn measure_write(file: &mut File, duration: Duration) -> Option<f64> {
+    let mut healthy = true;
+    let mut laps = 1u128;
+
+    let result = benchmarking::bench_function_with_duration(duration, |measurer| {
+        if !healthy {
+            measurer.measure(|| {});
+
+            return;
+        }
+
+        if measurer.get_seq() * VOLUME_BUFFER_SIZE as u128 > u128::from(TEST_FILE_SIZE) * laps {
+            if file.seek(SeekFrom::Start(0)).is_err() {
+                healthy = false;
+
+                return;
+            }
+
+            laps += 1;
+        }
+
+        let buffer = [(measurer.get_seq() % 256) as u8; VOLUME_BUFFER_SIZE];
+
+        measurer.measure(|| {
+            if file.write_all(&buffer).is_err() {
+                healthy = false;
+            } else {
+                file.flush().unwrap();
+            }
+        });
+    })
+    .ok()?;
+
+    healthy.then(|| result.speed() * VOLUME_BUFFER_SIZE as f64)
+}
+
+/// Read the file back for the whole duration, rewinding it once the test size has been read. `None` means a read failed.
+fn measure_read(path: &Path, duration: Duration) -> Option<f64> {
+    let mut file = File::open(path).ok()?;
+
+    let mut healthy = true;
+    let mut laps = 1u128;
+
+    let result = benchmarking::bench_function_with_duration(duration, |measurer| {
+        if !healthy {
+            measurer.measure(|| {});
+
+            return;
+        }
+
+        if measurer.get_seq() * VOLUME_BUFFER_SIZE as u128 >= u128::from(TEST_FILE_SIZE) * laps {
+            if file.seek(SeekFrom::Start(0)).is_err() {
+                healthy = false;
+
+                return;
+            }
+
+            laps += 1;
+        }
+
+        let mut buffer = [0u8; VOLUME_BUFFER_SIZE];
+
+        measurer.measure(|| {
+            if file.read_exact(&mut buffer).is_err() {
+                healthy = false;
+            }
+        });
+    })
+    .ok()?;
+
+    healthy.then(|| result.speed() * VOLUME_BUFFER_SIZE as f64)
+}
+
 #[inline]
 fn try_delete<P: AsRef<Path>>(path: P) {
-    if fs::remove_file(path.as_ref()).is_err() {}
+    let _ = fs::remove_file(path.as_ref());
 }
