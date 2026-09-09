@@ -188,6 +188,29 @@ pub fn bar_cells(value: u64, total: u64, progress_max: usize, remaining: &mut us
     cells
 }
 
+/// The columns can be wider than the terminal, and what is left over must not wrap around to a huge count of cells.
+#[inline]
+pub fn bar_width(terminal_width: usize, occupied: usize) -> usize {
+    terminal_width.saturating_sub(occupied).max(1)
+}
+
+/// A bar cell and the padding around it are the same byte written many times, which `write!` cannot do without allocating a string.
+pub fn write_cells(output: &mut impl Write, cell: u8, count: usize) -> std::io::Result<()> {
+    const CHUNK: usize = 64;
+
+    let buffer = [cell; CHUNK];
+
+    let mut remaining = count;
+
+    while remaining > CHUNK {
+        output.write_all(&buffer)?;
+
+        remaining -= CHUNK;
+    }
+
+    output.write_all(&buffer[..remaining])
+}
+
 pub fn get_term_width() -> usize {
     terminal_size()
         .map(|(width, _)| (width.0 as usize).max(MIN_TERMINAL_WIDTH))
@@ -199,8 +222,10 @@ macro_rules! monitor_handler {
         match $monitor {
             Some(monitor) => {
                 ::std::thread::spawn(move || {
+                    let getch = ::getch::Getch::new();
+
                     loop {
-                        let key = ::getch::Getch::new().getch().unwrap();
+                        let key = getch.getch().unwrap();
 
                         if let b'q' = key {
                             break;
@@ -228,8 +253,10 @@ macro_rules! monitor_handler {
     ($monitor:expr, $monitor_interval_milli_secs:expr, $s:stmt) => {
         if $monitor {
             ::std::thread::spawn(move || {
+                let getch = ::getch::Getch::new();
+
                 loop {
-                    let key = ::getch::Getch::new().getch().unwrap();
+                    let key = getch.getch().unwrap();
 
                     if let b'q' = key {
                         break;
@@ -256,8 +283,10 @@ macro_rules! monitor_handler {
         match $monitor {
             Some(monitor) => {
                 ::std::thread::spawn(move || {
+                    let getch = ::getch::Getch::new();
+
                     loop {
-                        let key = ::getch::Getch::new().getch().unwrap();
+                        let key = getch.getch().unwrap();
 
                         if let b'q' = key {
                             break;
@@ -308,6 +337,31 @@ mod tests {
 
         assert_eq!(0, bar_cells(0, 0, 40, &mut remaining));
         assert_eq!(40, remaining);
+    }
+
+    #[test]
+    fn test_bar_width_of_a_terminal_narrower_than_the_columns() {
+        assert_eq!(40, bar_width(80, 40));
+        assert_eq!(1, bar_width(80, 80));
+        assert_eq!(1, bar_width(80, 200));
+    }
+
+    #[test]
+    fn test_write_cells() {
+        let mut buffer = Vec::new();
+
+        write_cells(&mut buffer, b'|', 0).unwrap();
+        assert_eq!(b"", buffer.as_slice());
+
+        write_cells(&mut buffer, b'|', 3).unwrap();
+        assert_eq!(b"|||", buffer.as_slice());
+
+        // More than one chunk.
+        let mut buffer = Vec::new();
+
+        write_cells(&mut buffer, b' ', 100).unwrap();
+        assert_eq!(100, buffer.len());
+        assert!(buffer.iter().all(|byte| *byte == b' '));
     }
 
     #[test]

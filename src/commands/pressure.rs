@@ -56,7 +56,7 @@ fn draw_pressure() -> anyhow::Result<()> {
     let output = get_stdout_output();
     let mut stdout = output.buffer();
 
-    let progress_max = get_term_width() - LABEL_WIDTH - 4 - VALUES_WIDTH;
+    let progress_max = bar_width(get_term_width(), LABEL_WIDTH + 4 + VALUES_WIDTH);
 
     stdout.set_color(&COLOR_LABEL).unwrap();
     write!(&mut stdout, "{:width$}", "", width = LABEL_WIDTH + 4 + progress_max).unwrap();
@@ -74,13 +74,9 @@ fn draw_pressure() -> anyhow::Result<()> {
             ((stat.avg10 * progress_max as f64 / 100f64).round() as usize).min(progress_max);
 
         stdout.set_color(&COLOR_USED).unwrap();
-        for _ in 0..progress_used {
-            write!(&mut stdout, "|").unwrap();
-        }
+        write_cells(&mut stdout, b'|', progress_used).unwrap();
 
-        for _ in 0..(progress_max - progress_used) {
-            write!(&mut stdout, " ").unwrap();
-        }
+        write_cells(&mut stdout, b' ', progress_max - progress_used).unwrap();
 
         stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
         write!(&mut stdout, "] ").unwrap();

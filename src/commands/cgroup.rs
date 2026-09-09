@@ -197,7 +197,7 @@ fn draw_bar(
     let percentage = format!("{:.2}%", percentage_of(current, max));
 
     let values_width = current_text.len() + 3 + max_text.len() + 2 + percentage.len() + 1;
-    let progress_max = terminal_width.saturating_sub(LABEL_WIDTH + 4 + values_width).max(1);
+    let progress_max = bar_width(terminal_width, LABEL_WIDTH + 4 + values_width);
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(stdout, " [").unwrap();
@@ -207,13 +207,9 @@ fn draw_bar(
     let progress_used = bar_cells(current, max, progress_max, &mut remaining);
 
     stdout.set_color(&COLOR_USED).unwrap();
-    for _ in 0..progress_used {
-        write!(stdout, "|").unwrap();
-    }
+    write_cells(stdout, b'|', progress_used).unwrap();
 
-    for _ in 0..remaining {
-        write!(stdout, " ").unwrap();
-    }
+    write_cells(stdout, b' ', remaining).unwrap();
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(stdout, "] ").unwrap();

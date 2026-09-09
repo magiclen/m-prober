@@ -69,7 +69,8 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " [").unwrap(); // 2
 
-    let progress_max = terminal_width - 10 - used_len - 3 - total_len - 2 - percentage_len - 1;
+    let progress_max =
+        bar_width(terminal_width, 10 + used_len + 3 + total_len + 2 + percentage_len + 1);
 
     let mut remaining = progress_max;
 
@@ -78,39 +79,24 @@ fn draw_memory(unit: Option<Unit>) {
     let progress_buffers =
         bar_cells(free.mem.buffers, free.mem.total, progress_max, &mut remaining);
 
+    // Without colors the segments are told apart by their character instead.
+    let (cache_cell, buffers_cell) = if is_plain_mode() { (b'$', b'#') } else { (b'|', b'|') };
+
     stdout.set_color(&COLOR_USED).unwrap();
-    for _ in 0..progress_used {
-        write!(&mut stdout, "|").unwrap(); // 1
-    }
+    write_cells(&mut stdout, b'|', progress_used).unwrap();
 
     stdout.set_color(&COLOR_CACHE).unwrap();
-    for _ in 0..progress_cache {
-        if is_plain_mode() {
-            write!(&mut stdout, "$").unwrap(); // 1
-        } else {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-    }
+    write_cells(&mut stdout, cache_cell, progress_cache).unwrap();
 
     stdout.set_color(&COLOR_BUFFERS).unwrap();
-    for _ in 0..progress_buffers {
-        if is_plain_mode() {
-            write!(&mut stdout, "#").unwrap(); // 1
-        } else {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-    }
+    write_cells(&mut stdout, buffers_cell, progress_buffers).unwrap();
 
-    for _ in 0..remaining {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write_cells(&mut stdout, b' ', remaining).unwrap();
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, "] ").unwrap(); // 2
 
-    for _ in 0..(used_len - mem_used.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", used_len - mem_used.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(mem_used.as_bytes()).unwrap();
@@ -118,18 +104,14 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " / ").unwrap(); // 3
 
-    for _ in 0..(total_len - mem_total.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", total_len - mem_total.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(mem_total.as_bytes()).unwrap();
 
     write!(&mut stdout, " (").unwrap(); // 2
 
-    for _ in 0..(percentage_len - mem_percentage.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", percentage_len - mem_percentage.len()).unwrap();
 
     stdout.write_all(mem_percentage.as_bytes()).unwrap();
 
@@ -151,29 +133,17 @@ fn draw_memory(unit: Option<Unit>) {
     let progress_cache = bar_cells(free.swap.cache, free.swap.total, progress_max, &mut remaining);
 
     stdout.set_color(&COLOR_USED).unwrap();
-    for _ in 0..progress_used {
-        write!(&mut stdout, "|").unwrap(); // 1
-    }
+    write_cells(&mut stdout, b'|', progress_used).unwrap();
 
     stdout.set_color(&COLOR_CACHE).unwrap();
-    for _ in 0..progress_cache {
-        if is_plain_mode() {
-            write!(&mut stdout, "$").unwrap(); // 1
-        } else {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-    }
+    write_cells(&mut stdout, cache_cell, progress_cache).unwrap();
 
-    for _ in 0..remaining {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write_cells(&mut stdout, b' ', remaining).unwrap();
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, "] ").unwrap(); // 2
 
-    for _ in 0..(used_len - swap_used.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", used_len - swap_used.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(swap_used.as_bytes()).unwrap();
@@ -181,18 +151,14 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " / ").unwrap(); // 3
 
-    for _ in 0..(total_len - swap_total.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", total_len - swap_total.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(swap_total.as_bytes()).unwrap();
 
     write!(&mut stdout, " (").unwrap(); // 2
 
-    for _ in 0..(percentage_len - swap_percentage.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", percentage_len - swap_percentage.len()).unwrap();
 
     stdout.write_all(swap_percentage.as_bytes()).unwrap();
 
