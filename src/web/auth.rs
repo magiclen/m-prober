@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use axum::{
     Json,
     extract::{Request, State},
@@ -27,7 +29,13 @@ impl Auth {
 
             let bytes: [u8; 32] = rng.random();
 
-            bytes.iter().map(|b| format!("{b:02x}")).collect()
+            let mut token = String::with_capacity(bytes.len() * 2);
+
+            for byte in bytes {
+                write!(&mut token, "{byte:02x}").unwrap();
+            }
+
+            token
         };
 
         Auth {
