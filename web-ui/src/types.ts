@@ -73,6 +73,23 @@ interface NetworkWithSpeed {
     speed: NetworkSpeed;
 }
 
+interface VolumeStat {
+    reads_completed: number;
+    read_bytes: number;
+    read_time: Duration;
+    writes_completed: number;
+    write_bytes: number;
+    write_time: Duration;
+    io_in_progress: number;
+    io_time: Duration;
+    weighted_io_time: Duration;
+    discards_completed: number;
+    discard_bytes: number;
+    discard_time: Duration;
+    flushes_completed: number;
+    flush_time: Duration;
+}
+
 interface VolumeSpeed {
     read: number;
     write: number;
@@ -84,6 +101,7 @@ interface VolumeSpeed {
 
 export interface VolumeWithSpeed {
     device: string;
+    stat: VolumeStat;
     size: number;
     used: number;
     available: number;

@@ -53,6 +53,22 @@ export const testSnapshot: Snapshot = {
     volumes: [
         {
             device: "vda1",
+            stat: {
+                reads_completed: 100,
+                read_bytes: 8_000_000,
+                read_time: { secs: 0, nanos: 0 },
+                writes_completed: 50,
+                write_bytes: 4_000_000,
+                write_time: { secs: 0, nanos: 0 },
+                io_in_progress: 0,
+                io_time: { secs: 0, nanos: 0 },
+                weighted_io_time: { secs: 0, nanos: 0 },
+                discards_completed: 0,
+                discard_bytes: 0,
+                discard_time: { secs: 0, nanos: 0 },
+                flushes_completed: 0,
+                flush_time: { secs: 0, nanos: 0 },
+            },
             size: 100_000_000_000,
             used: 25_000_000_000,
             available: 75_000_000_000,

@@ -34,9 +34,12 @@ export function UsageBar({ label, segments, total, value }: UsageBarProps): Reac
                 </Text>
             </Group>
             <Progress.Root size="lg">
-                {segments.map((segment) => (
+                {/* The segments of a bar are a fixed list in a fixed order, so the position is
+                    what identifies one; a color or a label can repeat between two of them. */}
+                {segments.map((segment, index) => (
                     <Progress.Section
-                        key={segment.color}
+                        // oxlint-disable-next-line react/no-array-index-key
+                        key={index}
                         value={total > 0 ? (segment.value * 100) / total : 0}
                         color={segment.color}
                     >
