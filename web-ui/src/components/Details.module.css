@@ -1,0 +1,27 @@
+.details {
+    border: 1px solid var(--mantine-color-default-border);
+    border-radius: var(--mantine-radius-sm);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.details > summary {
+    cursor: pointer;
+    padding: var(--mantine-spacing-md);
+    color: var(--mantine-primary-color-light-color);
+    background: var(--mantine-color-gray-0);
+    overflow-wrap: anywhere;
+}
+
+.details[open] > summary {
+    border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.details > summary:focus-visible {
+    outline: 2px solid var(--mantine-primary-color-filled);
+    outline-offset: -2px;
+}
+
+:global([data-mantine-color-scheme="dark"]) .details > summary {
+    background: var(--mantine-color-dark-6);
+}

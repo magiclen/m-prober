@@ -1,25 +1,4 @@
-/*
- * The panels flow into as many columns as fit. `auto-fit` collapses the columns that stay empty and
- * stretches the rest over the whole width, so a wide screen shows them side by side instead of a
- * narrow strip with empty margins, and a phone still gets one column.
- *
- * Nothing here may span every column: such an item occupies the columns that would otherwise be
- * empty, which stops them collapsing and leaves the panels at their minimum width.
- *
- * CSS columns would pack the panels tighter, since a short one would not leave a gap under it, but
- * they balance the columns to an equal height and so leave the right of a wide screen empty, which
- * is the thing this layout is here to avoid.
- */
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(rem(520px), 1fr));
-    gap: var(--mantine-spacing-md);
-    /* Each panel keeps its own height rather than being stretched to the tallest one in its row. */
-    align-items: start;
-}
-
-@media (max-width: rem(560px)) {
-    .grid {
-        grid-template-columns: 1fr;
-    }
+.section {
+    min-width: 0;
+    scroll-margin-top: calc(var(--dashboard-header-height) + var(--mantine-spacing-md));
 }

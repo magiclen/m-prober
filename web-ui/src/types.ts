@@ -99,7 +99,7 @@ interface VolumeSpeed {
     average_queue_length: number;
 }
 
-export interface VolumeWithSpeed {
+interface VolumeWithSpeed {
     device: string;
     stat: VolumeStat;
     size: number;
@@ -113,7 +113,7 @@ export interface VolumeWithSpeed {
     speed: VolumeSpeed;
 }
 
-export interface PressureStat {
+interface PressureStat {
     avg10: number;
     avg60: number;
     avg300: number;
@@ -164,6 +164,13 @@ interface CgroupSummary {
     pids: CgroupPids | null;
 }
 
+export interface CpuThreadSnapshot {
+    id: number;
+    physical_id: number | null;
+    usage: number | null;
+    frequency_mhz: number | null;
+}
+
 export interface Snapshot {
     hostname: string;
     kernel: string;
@@ -173,6 +180,7 @@ export interface Snapshot {
     cpus: Cpu[];
     /** The first entry is the average over every CPU, the rest are the individual ones. */
     cpus_stat: number[];
+    cpu_threads: CpuThreadSnapshot[];
     memory: Free;
     network: NetworkWithSpeed[];
     volumes: VolumeWithSpeed[];

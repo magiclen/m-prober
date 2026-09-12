@@ -464,6 +464,10 @@ A rate can only be measured over a period, so these serve the latest snapshot of
     "load_average": { "one": 0.55, "five": 0.62, "fifteen": 0.7 },
     "cpus": [ { "physical_id": 0, "model_name": "Intel(R) Core(TM) Ultra 9 285K", "cpus_mhz": [800.0], "siblings": 24, "cpu_cores": 24 } ],
     "cpus_stat": [0.0375, 0.14, 0.01],
+    "cpu_threads": [
+        { "id": 0, "physical_id": 0, "usage": 0.14, "frequency_mhz": 2830.0 },
+        { "id": 1, "physical_id": 0, "usage": 0.01, "frequency_mhz": 800.0 }
+    ],
     "memory": { "mem": {}, "swap": {} },
     "network": [ { "interface": "lo", "stat": {}, "speed": { "receive": 0.0, "transmit": 0.0, "receive_packets": 0.0, "transmit_packets": 0.0 } } ],
     "volumes": [ { "device": "nvme0n1p1", "stat": {}, "size": 97033216, "used": 6399488, "fs_type": "vfat", "points": ["/boot/efi"], "speed": {} } ],
@@ -473,6 +477,8 @@ A rate can only be measured over a period, so these serve the latest snapshot of
 ```
 
 `pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2.
+
+`cpu_threads` in `/api/all` and its stream pairs each logical CPU's kernel number (`id`) with its physical CPU (`physical_id`), utilization fraction (`usage`) and frequency in MHz (`frequency_mhz`). Entries are ordered by `id`; the latter three fields can be `null` when unavailable. A CPU without a reading at the start of the interval has `usage: null`; its legacy `cpus_stat` entry is `0`. Existing fields and endpoints are unchanged.
 
 ##### *GET* `/api/all/stream`
 

@@ -1,52 +1,49 @@
-import { Group, Progress, Text } from "@mantine/core";
+import { Text } from "@mantine/core";
 
 import { formatPercentage } from "@/format.ts";
 
-interface Segment {
-    value: number;
-    color: string;
-    label: string;
-}
+import { UsageMeter } from "./UsageMeter.tsx";
+import type { UsageSegment } from "./UsageMeter.tsx";
+
+import classes from "./UsageBar.module.css";
 
 interface UsageBarProps {
     label: string;
-    /** The segments are drawn in order and are expected to add up to at most `total`. */
-    segments: Segment[];
+    used: number;
     total: number;
-    /** Shown at the right, in place of the percentage when given. */
     value?: string;
+    color?: string;
+    text?: string;
+    segments?: UsageSegment[];
 }
 
-export function UsageBar({ label, segments, total, value }: UsageBarProps): React.JSX.Element {
-    const used = segments.reduce((sum, segment) => sum + segment.value, 0);
-
-    // A total of zero happens for a machine without swap, and must not turn every section into `NaN%`.
-    const ratio = total > 0 ? used / total : 0;
-
+export function UsageBar({
+    label,
+    used,
+    total,
+    value,
+    color,
+    text,
+    segments,
+}: UsageBarProps): React.JSX.Element {
+    const percentage = total > 0 ? formatPercentage(used / total) : "N/A";
+    const displayed = text ?? (value === undefined ? percentage : `${value} (${percentage})`);
     return (
-        <div>
-            <Group justify="space-between" gap="xs" wrap="nowrap" mb={4}>
-                <Text size="sm" fw={500} truncate>
-                    {label}
-                </Text>
-                <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                    {value ?? formatPercentage(ratio)}
-                </Text>
-            </Group>
-            <Progress.Root size="lg">
-                {/* The segments of a bar are a fixed list in a fixed order, so the position is
-                    what identifies one; a color or a label can repeat between two of them. */}
-                {segments.map((segment, index) => (
-                    <Progress.Section
-                        // oxlint-disable-next-line react/no-array-index-key
-                        key={index}
-                        value={total > 0 ? (segment.value * 100) / total : 0}
-                        color={segment.color}
-                    >
-                        <Progress.Label>{segment.label}</Progress.Label>
-                    </Progress.Section>
-                ))}
-            </Progress.Root>
+        <div className={classes.row}>
+            <Text size="sm" fw={500}>
+                {label}
+            </Text>
+            <UsageMeter
+                label={label}
+                used={used}
+                total={total}
+                color={color}
+                text={displayed}
+                segments={segments}
+            />
+            <Text size="sm" className={classes.value}>
+                {displayed}
+            </Text>
         </div>
     );
 }

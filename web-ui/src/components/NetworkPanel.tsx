@@ -10,23 +10,23 @@ import classes from "./DataTable.module.css";
 export function NetworkPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
     if (snapshot.network.length === 0) {
         return (
-            <Panel title="Network">
+            <Panel title="Networks">
                 <Unsupported>No network interface was found.</Unsupported>
             </Panel>
         );
     }
 
     return (
-        <Panel title="Network">
+        <Panel title="Networks">
             <Table.ScrollContainer minWidth={480}>
                 <Table striped highlightOnHover className={classes.table}>
                     <Table.Thead>
                         <Table.Tr>
                             <Table.Th>Interface</Table.Th>
-                            <Table.Th ta="right">Download</Table.Th>
-                            <Table.Th ta="right">Upload</Table.Th>
-                            <Table.Th ta="right">Received</Table.Th>
-                            <Table.Th ta="right">Transmitted</Table.Th>
+                            <Table.Th ta="right">Upload Rate</Table.Th>
+                            <Table.Th ta="right">Uploaded Data</Table.Th>
+                            <Table.Th ta="right">Download Rate</Table.Th>
+                            <Table.Th ta="right">Downloaded Data</Table.Th>
                         </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -37,13 +37,13 @@ export function NetworkPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.El
                                         {network.interface}
                                     </Text>
                                 </Table.Td>
-                                <Table.Td ta="right">{formatRate(network.speed.receive)}</Table.Td>
                                 <Table.Td ta="right">{formatRate(network.speed.transmit)}</Table.Td>
                                 <Table.Td ta="right">
-                                    {formatDecimalBytes(network.stat.receive_bytes)}
-                                </Table.Td>
-                                <Table.Td ta="right">
                                     {formatDecimalBytes(network.stat.transmit_bytes)}
+                                </Table.Td>
+                                <Table.Td ta="right">{formatRate(network.speed.receive)}</Table.Td>
+                                <Table.Td ta="right">
+                                    {formatDecimalBytes(network.stat.receive_bytes)}
                                 </Table.Td>
                             </Table.Tr>
                         ))}

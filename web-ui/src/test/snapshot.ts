@@ -17,6 +17,10 @@ export const testSnapshot: Snapshot = {
         },
     ],
     cpus_stat: [0.25, 0.3, 0.2],
+    cpu_threads: [
+        { id: 0, physical_id: 0, usage: 0.3, frequency_mhz: 3600 },
+        { id: 1, physical_id: 0, usage: 0.2, frequency_mhz: 3600 },
+    ],
     memory: {
         mem: {
             total: 1024 ** 3 * 4,

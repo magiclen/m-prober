@@ -62,7 +62,7 @@ describe("formatDuration", () => {
 
 describe("formatFrequency", () => {
     test("switches to GHz at 1000 MHz", () => {
-        expect("800 MHz").toBe(formatFrequency(800));
-        expect("3.60 GHz").toBe(formatFrequency(3600));
+        expect("800.00MHz").toBe(formatFrequency(800));
+        expect("3.60GHz").toBe(formatFrequency(3600));
     });
 });

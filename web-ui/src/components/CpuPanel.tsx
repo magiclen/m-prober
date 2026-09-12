@@ -1,78 +1,71 @@
 import { Stack, Text } from "@mantine/core";
 
 import { formatFrequency, formatPercentage } from "@/format.ts";
-import type { Snapshot } from "@/types.ts";
+import type { CpuThreadSnapshot, Snapshot } from "@/types.ts";
 
+import { Details } from "./Details.tsx";
 import { Panel } from "./Panel.tsx";
 import { UsageBar } from "./UsageBar.tsx";
 
-import classes from "./CpuPanel.module.css";
-
-const UNKNOWN_MODEL_NAME = "Unknown CPU";
-
-function usageColor(ratio: number): string {
-    if (ratio >= 0.9) {
-        return "red";
-    }
-
-    return ratio >= 0.7 ? "orange" : "cyan";
-}
-
-function CoreBar({ index, ratio }: { index: number; ratio: number }): React.JSX.Element {
+function ThreadRows({ threads }: { threads: CpuThreadSnapshot[] }): React.JSX.Element {
     return (
-        <UsageBar
-            label={`Core ${index}`}
-            total={1}
-            value={formatPercentage(ratio)}
-            segments={[{ value: ratio, color: usageColor(ratio), label: "" }]}
-        />
+        <Stack gap="sm">
+            {threads.length === 0 ? (
+                <Text size="sm">Unavailable</Text>
+            ) : (
+                threads.map((thread) => (
+                    <UsageBar
+                        key={thread.id}
+                        label={`CPU${thread.id}`}
+                        used={thread.usage ?? 0}
+                        total={thread.usage === null ? 0 : 1}
+                        text={`${thread.usage === null ? "Unavailable" : formatPercentage(thread.usage)} (${thread.frequency_mhz === null ? "Unavailable" : formatFrequency(thread.frequency_mhz)})`}
+                    />
+                ))
+            )}
+        </Stack>
     );
 }
 
 export function CpuPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
-    const { load_average: load, cpus, cpus_stat: stat } = snapshot;
-
-    // The first entry is the average over every CPU and the rest are the individual ones.
-    const average = stat[0] ?? 0;
-    const cores = stat.slice(1).map((ratio, index) => ({ core: index, ratio }));
-
-    const logicalCores = cpus.reduce((sum, cpu) => sum + cpu.siblings, 0);
-
-    const models = cpus.map((cpu) => {
-        const averageMhz =
-            cpu.cpus_mhz.length > 0
-                ? cpu.cpus_mhz.reduce((sum, mhz) => sum + mhz, 0) / cpu.cpus_mhz.length
-                : 0;
-
-        return `${cpu.model_name ?? UNKNOWN_MODEL_NAME} ${cpu.cpu_cores}C/${cpu.siblings}T @ ${formatFrequency(
-            averageMhz,
-        )}`;
-    });
-
+    const { cpus, cpus_stat: stat } = snapshot;
+    const threads = snapshot.cpu_threads.toSorted((a, b) => a.id - b.id);
+    const knownIds = new Set(cpus.map((cpu) => cpu.physical_id));
+    const unknown = threads.filter(
+        (thread) => thread.physical_id === null || !knownIds.has(thread.physical_id),
+    );
     return (
-        <Panel title="CPU" aside={models.join(" / ")}>
-            <Stack gap="sm">
-                {/* The total is one value, so its bar is kept to a width the eye can cross rather
-                    than stretched across a wide screen with the label and the value at either end. */}
-                <div className={classes.summary}>
-                    <UsageBar
-                        label="Total"
-                        total={1}
-                        value={formatPercentage(average)}
-                        segments={[{ value: average, color: usageColor(average), label: "" }]}
-                    />
-
-                    <Text size="sm" c="dimmed">
-                        Load average {load.one.toFixed(2)} / {load.five.toFixed(2)} /{" "}
-                        {load.fifteen.toFixed(2)} over {logicalCores} logical cores
-                    </Text>
-                </div>
-
-                <div className={classes.cores}>
-                    {cores.map(({ core, ratio }) => (
-                        <CoreBar key={core} index={core} ratio={ratio} />
-                    ))}
-                </div>
+        <Panel title="CPU">
+            <Stack gap="md">
+                <UsageBar label="CPU" used={stat[0] ?? 0} total={stat.length > 0 ? 1 : 0} />
+                {cpus.map((cpu) => {
+                    const members = threads.filter(
+                        (thread) => thread.physical_id === cpu.physical_id,
+                    );
+                    const frequencies = members.flatMap((thread) =>
+                        thread.frequency_mhz === null ? [] : [thread.frequency_mhz],
+                    );
+                    const average =
+                        frequencies.length === 0
+                            ? "Unavailable"
+                            : formatFrequency(
+                                  frequencies.reduce((sum, value) => sum + value, 0) /
+                                      frequencies.length,
+                              );
+                    return (
+                        <Details
+                            key={cpu.physical_id}
+                            label={`${cpu.model_name ?? "Unknown CPU"} ${cpu.cpu_cores}C/${cpu.siblings}T ${average}`}
+                        >
+                            <ThreadRows threads={members} />
+                        </Details>
+                    );
+                })}
+                {unknown.length > 0 && (
+                    <Details label="Unknown CPU">
+                        <ThreadRows threads={unknown} />
+                    </Details>
+                )}
             </Stack>
         </Panel>
     );

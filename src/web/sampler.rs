@@ -10,7 +10,10 @@ use mprober_lib::{
 use serde::Serialize;
 use tokio::sync::{Notify, watch};
 
-use super::probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithSpeed};
+use super::{
+    cpu_sample::{self, CpuThreadSnapshot},
+    probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithSpeed},
+};
 
 /// How long sampling keeps running after the last one-shot request, expressed in detect intervals.
 const IDLE_INTERVALS: u32 = 3;
@@ -27,6 +30,7 @@ pub struct Snapshot {
     pub load_average: load_average::LoadAverage,
     pub cpus:         Vec<cpu::CPU>,
     pub cpus_stat:    Vec<f64>,
+    pub cpu_threads:  Vec<CpuThreadSnapshot>,
     pub memory:       memory::Free,
     pub network:      Vec<NetworkWithSpeed>,
     pub volumes:      Vec<VolumeWithSpeed>,
@@ -161,15 +165,16 @@ async fn run(
 
 fn sample(detect_interval: Duration) -> Result<Snapshot, Error> {
     // Each of these three probes sleeps for the whole interval, so they have to run at the same time.
-    let (cpus_stat, network, volumes) = thread::scope(|scope| {
-        let cpus_stat =
-            scope.spawn(|| cpu::get_all_cpu_utilization_in_percentage(true, detect_interval));
+    let (cpu_sample, network, volumes) = thread::scope(|scope| {
+        let cpus_stat = scope.spawn(|| cpu_sample::sample(detect_interval));
         let network = scope.spawn(|| network::get_networks_with_speed(detect_interval));
 
         let volumes = volume::get_volumes_with_speed(detect_interval);
 
         (cpus_stat.join().unwrap(), network.join().unwrap(), volumes)
     });
+
+    let cpu_sample = cpu_sample?;
 
     Ok(Snapshot {
         hostname:     hostname::get_hostname()?,
@@ -178,7 +183,8 @@ fn sample(detect_interval: Duration) -> Result<Snapshot, Error> {
         rtc_time:     rtc_time::get_rtc_date_time()?,
         load_average: load_average::get_load_average()?,
         cpus:         cpu::get_cpus()?,
-        cpus_stat:    cpus_stat?,
+        cpus_stat:    cpu_sample.cpus_stat,
+        cpu_threads:  cpu_sample.threads,
         memory:       memory::free()?,
         network:      NetworkWithSpeed::collect(network?),
         volumes:      VolumeWithSpeed::collect(volumes?),

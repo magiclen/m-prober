@@ -1,0 +1,25 @@
+.row {
+    display: grid;
+    grid-template-columns: minmax(rem(90px), 0.4fr) minmax(0, 2fr) minmax(rem(220px), 1.2fr);
+    align-items: center;
+    gap: var(--mantine-spacing-sm);
+}
+
+.value {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 62em) {
+    .row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+
+    .row > :nth-child(2) {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+
+    .value {
+        text-align: right;
+    }
+}

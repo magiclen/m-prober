@@ -1,9 +1,11 @@
 import { Stack } from "@mantine/core";
 
+import { sections } from "@/sections.ts";
 import type { Snapshot } from "@/types.ts";
 
 import { CgroupPanel } from "./CgroupPanel.tsx";
 import { CpuPanel } from "./CpuPanel.tsx";
+import { LoadPanel } from "./LoadPanel.tsx";
 import { MemoryPanel } from "./MemoryPanel.tsx";
 import { NetworkPanel } from "./NetworkPanel.tsx";
 import { PressurePanel } from "./PressurePanel.tsx";
@@ -12,21 +14,34 @@ import { VolumesPanel } from "./VolumesPanel.tsx";
 
 import classes from "./Dashboard.module.css";
 
+const panels = [
+    SystemPanel,
+    LoadPanel,
+    CpuPanel,
+    MemoryPanel,
+    NetworkPanel,
+    VolumesPanel,
+    PressurePanel,
+    CgroupPanel,
+];
+
 export function Dashboard({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
     return (
         <Stack gap="md">
-            {/* These two read better across the whole width, so they stay out of the grid: an item
-                spanning every column would keep the grid from collapsing its empty columns. */}
-            <SystemPanel snapshot={snapshot} />
-            <CpuPanel snapshot={snapshot} />
-
-            <div className={classes.grid}>
-                <MemoryPanel snapshot={snapshot} />
-                <PressurePanel snapshot={snapshot} />
-                <CgroupPanel snapshot={snapshot} />
-                <NetworkPanel snapshot={snapshot} />
-                <VolumesPanel snapshot={snapshot} />
-            </div>
+            {sections.map((section, index) => {
+                const Component = panels[index];
+                return (
+                    <section
+                        key={section.id}
+                        id={section.id}
+                        aria-label={section.label}
+                        tabIndex={-1}
+                        className={classes.section}
+                    >
+                        <Component snapshot={snapshot} />
+                    </section>
+                );
+            })}
         </Stack>
     );
 }

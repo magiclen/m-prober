@@ -3,8 +3,7 @@
  *
  * Mantine writes every size as `calc(<n>rem * var(--mantine-scale))`, and so does the `rem()` of
  * postcss-preset-mantine and the one Mantine uses for its style props, so this single variable
- * carries the font sizes, the spacing, the radii, the component heights, the minimum column width
- * of the dashboard grid and the per-core cells with it. Nothing else has to be adjusted.
+ * carries the font sizes, spacing, radii, component heights, sidebar width and header height with it.
  *
  * The measure is the CSS width rather than the pixel density on purpose. A 4K screen at 200% system
  * scaling reports a 1920px viewport and the browser already draws the text with twice the device

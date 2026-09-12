@@ -64,6 +64,6 @@ export const formatDuration = (duration: Duration): string => {
 
 /** `/proc/cpuinfo` reports the frequency in MHz, which is worth scaling once it reaches GHz. */
 export const formatFrequency = (mhz: number): string =>
-    mhz >= 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${mhz.toFixed(0)} MHz`;
+    mhz >= 1000 ? `${(mhz / 1000).toFixed(2)}GHz` : `${mhz.toFixed(2)}MHz`;
 
 export const formatDateTime = (rtcTime: string): string => rtcTime.replace("T", " ");

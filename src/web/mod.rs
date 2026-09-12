@@ -1,5 +1,6 @@
 mod api;
 mod auth;
+mod cpu_sample;
 mod error;
 mod probes;
 mod sampler;

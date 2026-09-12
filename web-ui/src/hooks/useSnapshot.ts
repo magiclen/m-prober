@@ -8,61 +8,66 @@ type ConnectionState = "connecting" | "live" | "lost";
 export interface SnapshotState {
     snapshot: Snapshot | null;
     connection: ConnectionState;
+    lastReceivedAt: number | null;
 }
 
-/**
- * Follow the server-sent snapshots. The first one is also fetched over plain HTTP, so that the page
- * fills in without waiting for the sampler to finish its current round.
- */
+const initialState: SnapshotState = {
+    snapshot: null,
+    connection: "connecting",
+    lastReceivedAt: null,
+};
+
+/** Follow streamed snapshots and use HTTP to fill the page before the first stream message. */
 export const useSnapshot = (enabled: boolean): SnapshotState => {
-    const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-    const [connection, setConnection] = useState<ConnectionState>("connecting");
+    const [state, setState] = useState<SnapshotState>(initialState);
+
+    const [previousEnabled, setPreviousEnabled] = useState(enabled);
+    if (previousEnabled !== enabled) {
+        setPreviousEnabled(enabled);
+        setState(initialState);
+    }
 
     useEffect((): (() => void) | undefined => {
         if (!enabled) {
             return undefined;
         }
-
         let cancelled = false;
+        let receivedStream = false;
 
         fetchSnapshot()
-            .then((initial): void => {
-                // A snapshot which arrived over the stream in the meantime is newer than this one.
-                if (!cancelled) {
-                    setSnapshot((current): Snapshot => current ?? initial);
+            .then((snapshot): void => {
+                // A late HTTP response must not replace a streamed snapshot or its receive time.
+                if (!cancelled && !receivedStream) {
+                    const lastReceivedAt = Date.now();
+                    setState((current) => ({ ...current, snapshot, lastReceivedAt }));
                 }
             })
             .catch((): void => {
-                // The stream reports the connection state on its own, so a failure here needs no handling.
+                // The stream reports the connection state on its own.
             });
 
         const source = new EventSource("/api/all/stream", { withCredentials: true });
-
         source.addEventListener("message", (event: MessageEvent<string>): void => {
             if (cancelled) {
                 return;
             }
-
             const parsed: unknown = JSON.parse(event.data);
-
-            // This page is served by the same binary that produces the event, so the two always agree.
+            receivedStream = true;
+            // This page and the API are served by the same binary.
             // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-            setSnapshot(parsed as Snapshot);
-            setConnection("live");
+            const snapshot = parsed as Snapshot;
+            setState({ snapshot, connection: "live", lastReceivedAt: Date.now() });
         });
-
-        // The browser reconnects on its own, so this only has to show that the data is stale.
         source.addEventListener("error", (): void => {
             if (!cancelled) {
-                setConnection("lost");
+                setState((current) => ({ ...current, connection: "lost" }));
             }
         });
-
         return (): void => {
             cancelled = true;
             source.close();
         };
     }, [enabled]);
 
-    return { snapshot, connection };
+    return enabled ? state : initialState;
 };

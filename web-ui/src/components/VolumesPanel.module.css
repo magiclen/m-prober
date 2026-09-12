@@ -1,0 +1,16 @@
+.table {
+    white-space: nowrap;
+}
+
+.table th,
+.table td {
+    text-align: left;
+}
+
+.table tbody:nth-of-type(even) {
+    background: var(--mantine-color-gray-0);
+}
+
+:global([data-mantine-color-scheme="dark"]) .table tbody:nth-of-type(even) {
+    background: var(--mantine-color-dark-6);
+}
