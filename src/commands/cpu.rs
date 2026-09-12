@@ -126,11 +126,8 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
         let all_percentage: Vec<f64> = if only_information {
             Vec::new()
         } else {
-            cpu::get_all_cpu_utilization_in_percentage(false, match monitor {
-                Some(monitor) => monitor,
-                None => DEFAULT_INTERVAL,
-            })
-            .unwrap()
+            cpu::get_all_cpu_utilization_in_percentage(false, monitor.unwrap_or(DEFAULT_INTERVAL))
+                .unwrap()
         };
 
         let cpus = cpu::get_cpus().unwrap();
@@ -139,7 +136,7 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
         let mut i = 0;
 
-        let cpus_len_dec = cpus.len() - 1;
+        let cpus_len_dec = cpus.len().saturating_sub(1);
 
         for (cpu_index, cpu) in cpus.into_iter().enumerate() {
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
@@ -169,20 +166,8 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
             let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap_or(0);
 
-            // The max length of `CPU<number> `.
-            let d = {
-                let mut n = cpu.siblings;
-
-                let mut d = 1;
-
-                while n > 10 {
-                    n /= 10;
-
-                    d += 1;
-                }
-
-                d + 4
-            };
+            // The max length of `CPU<number> `, where the highest number is one below the count.
+            let d = cpu.siblings.saturating_sub(1).checked_ilog10().unwrap_or(0) as usize + 5;
 
             if only_information {
                 for (i, hz_string) in hz_string.into_iter().enumerate() {
@@ -262,11 +247,8 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
             (0f64, "".to_string())
         } else {
             let average_percentage =
-                cpu::get_average_cpu_utilization_in_percentage(match monitor {
-                    Some(monitor) => monitor,
-                    None => DEFAULT_INTERVAL,
-                })
-                .unwrap();
+                cpu::get_average_cpu_utilization_in_percentage(monitor.unwrap_or(DEFAULT_INTERVAL))
+                    .unwrap();
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
 

@@ -30,16 +30,11 @@ pub fn handle_network(args: CLIArgs) {
 }
 
 fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
-    let networks_with_speed = network::get_networks_with_speed(match monitor {
-        Some(monitor) => monitor,
-        None => DEFAULT_INTERVAL,
-    })
-    .unwrap();
+    let networks_with_speed =
+        network::get_networks_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL)).unwrap();
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
-
-    debug_assert!(!networks_with_speed.is_empty());
 
     let rows: Vec<Row> = networks_with_speed
         .into_iter()
@@ -78,7 +73,18 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
         })
         .collect();
 
-    let interface_len = rows.iter().map(|row| row.interface.len()).max().unwrap();
+    if rows.is_empty() {
+        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
+        writeln!(&mut stdout, "There are no network interfaces to show.").unwrap();
+
+        stdout.set_color(&COLOR_DEFAULT).unwrap();
+
+        output.print(&stdout).unwrap();
+
+        return;
+    }
+
+    let interface_len = rows.iter().map(|row| display_width(&row.interface)).max().unwrap();
     let interface_len_inc = interface_len + 1;
 
     // Each column is at least as wide as its own heading.
@@ -112,7 +118,7 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
 
     for row in rows {
         stdout.set_color(&COLOR_LABEL).unwrap();
-        write!(&mut stdout, "{1:<0$}", interface_len_inc, row.interface).unwrap();
+        write_left_aligned(&mut stdout, &row.interface, interface_len_inc).unwrap();
 
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
 

@@ -55,6 +55,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures-util = { version = "0.3", default-features = false }
 lazy-static-include = "4"
+unicode-width = "0.2.2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

@@ -91,8 +91,6 @@ fn draw_volume(
     let (headers, rows): (&[&str], Vec<Row>) = if only_information {
         let volumes = volume::get_volumes().unwrap();
 
-        debug_assert!(!volumes.is_empty());
-
         let rows = volumes
             .into_iter()
             .map(|volume| {
@@ -107,13 +105,8 @@ fn draw_volume(
 
         (&INFORMATION_HEADERS, rows)
     } else {
-        let volumes_with_speed = volume::get_volumes_with_speed(match monitor {
-            Some(monitor) => monitor,
-            None => DEFAULT_INTERVAL,
-        })
-        .unwrap();
-
-        debug_assert!(!volumes_with_speed.is_empty());
+        let volumes_with_speed =
+            volume::get_volumes_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL)).unwrap();
 
         let rows = volumes_with_speed
             .into_iter()
@@ -132,7 +125,15 @@ fn draw_volume(
         (&SPEED_HEADERS, rows)
     };
 
-    draw_rows(&mut stdout, headers, &rows, terminal_width, mounts);
+    if rows.is_empty() {
+        // A container whose mounts are all overlay or tmpfs has no device in `/proc/diskstats` to match.
+        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
+        writeln!(&mut stdout, "There are no volumes to show.").unwrap();
+
+        stdout.set_color(&COLOR_DEFAULT).unwrap();
+    } else {
+        draw_rows(&mut stdout, headers, &rows, terminal_width, mounts);
+    }
 
     output.print(&stdout).unwrap();
 }
@@ -144,7 +145,7 @@ fn draw_rows(
     terminal_width: usize,
     mounts: bool,
 ) {
-    let devices_len = rows.iter().map(|row| row.device.len()).max().unwrap();
+    let devices_len = rows.iter().map(|row| display_width(&row.device)).max().unwrap();
     let devices_len_inc = devices_len + 1;
 
     let used_len = rows.iter().map(|row| row.used_text.len()).max().unwrap();
@@ -181,7 +182,7 @@ fn draw_rows(
 
     for row in rows {
         stdout.set_color(&COLOR_LABEL).unwrap();
-        write!(stdout, "{1:<0$}", devices_len_inc, row.device).unwrap();
+        write_left_aligned(stdout, &row.device, devices_len_inc).unwrap();
 
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
 

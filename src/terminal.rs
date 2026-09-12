@@ -10,6 +10,7 @@ pub use std::{io::Write, time::Duration};
 pub use termcolor::WriteColor;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec};
 use terminal_size::terminal_size;
+use unicode_width::UnicodeWidthStr;
 
 // dark mode
 const CYAN_COLOR: Color = Color::Rgb(0, 177, 177);
@@ -211,6 +212,25 @@ pub fn write_cells(output: &mut impl Write, cell: u8, count: usize) -> std::io::
     output.write_all(&buffer[..remaining])
 }
 
+/// How many terminal columns a string takes up, which outside ASCII is neither its length in bytes nor its number of characters.
+#[inline]
+pub fn display_width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
+}
+
+/// Write `text` and then enough blanks to fill `width` columns.
+///
+/// `{:width$}` counts characters instead, so a column holding a name outside ASCII would come out ragged.
+pub fn write_left_aligned(
+    output: &mut impl Write,
+    text: &str,
+    width: usize,
+) -> std::io::Result<()> {
+    output.write_all(text.as_bytes())?;
+
+    write_cells(output, b' ', width.saturating_sub(display_width(text)))
+}
+
 pub fn get_term_width() -> usize {
     terminal_size()
         .map(|(width, _)| (width.0 as usize).max(MIN_TERMINAL_WIDTH))
@@ -330,6 +350,23 @@ mod tests {
         write_cells(&mut buffer, b' ', 100).unwrap();
         assert_eq!(100, buffer.len());
         assert!(buffer.iter().all(|byte| *byte == b' '));
+    }
+
+    #[test]
+    fn test_write_left_aligned_of_a_name_outside_ascii() {
+        let mut buffer = Vec::new();
+
+        // Three characters, six columns, nine bytes.
+        write_left_aligned(&mut buffer, "日本語", 8).unwrap();
+        assert_eq!("日本語  ".as_bytes(), buffer.as_slice());
+    }
+
+    #[test]
+    fn test_write_left_aligned_of_a_name_wider_than_the_column() {
+        let mut buffer = Vec::new();
+
+        write_left_aligned(&mut buffer, "magiclen", 4).unwrap();
+        assert_eq!(b"magiclen", buffer.as_slice());
     }
 
     #[test]
