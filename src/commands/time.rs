@@ -14,7 +14,7 @@ pub fn handle_time(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, 1000, draw_time());
+        monitor_handler!(monitor.then_some(Duration::from_secs(1)), draw_time());
     }
 }
 

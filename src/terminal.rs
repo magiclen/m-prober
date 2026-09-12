@@ -217,23 +217,32 @@ pub fn get_term_width() -> usize {
         .unwrap_or(DEFAULT_TERMINAL_WIDTH)
 }
 
+/// Watch for the `q` that stops a monitoring loop, on a thread of its own since reading a key blocks.
+pub fn spawn_quit_watcher() {
+    ::std::thread::spawn(|| {
+        // `Getch` puts the terminal back the way it found it when it is dropped, and `exit` runs no destructors, so it has to go out of scope first.
+        {
+            let getch = ::getch::Getch::new();
+
+            loop {
+                match getch.getch() {
+                    Ok(b'q') => break,
+                    // Reading nothing means stdin is at its end, e.g. it was redirected from `/dev/null`, so no key will ever arrive and only a signal can stop this run.
+                    Ok(0) | Err(_) => return,
+                    Ok(_) => (),
+                }
+            }
+        }
+
+        ::std::process::exit(0);
+    });
+}
+
 macro_rules! monitor_handler {
     ($monitor:expr, $s:stmt) => {
         match $monitor {
             Some(monitor) => {
-                ::std::thread::spawn(move || {
-                    let getch = ::getch::Getch::new();
-
-                    loop {
-                        let key = getch.getch().unwrap();
-
-                        if let b'q' = key {
-                            break;
-                        }
-                    }
-
-                    ::std::process::exit(0);
-                });
+                crate::terminal::spawn_quit_watcher();
 
                 let sleep_interval = monitor;
 
@@ -250,53 +259,12 @@ macro_rules! monitor_handler {
             }
         }
     };
-    ($monitor:expr, $monitor_interval_milli_secs:expr, $s:stmt) => {
-        if $monitor {
-            ::std::thread::spawn(move || {
-                let getch = ::getch::Getch::new();
-
-                loop {
-                    let key = getch.getch().unwrap();
-
-                    if let b'q' = key {
-                        break;
-                    }
-                }
-
-                ::std::process::exit(0);
-            });
-
-            let sleep_interval = ::std::time::Duration::from_millis($monitor_interval_milli_secs);
-
-            loop {
-                ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA).unwrap();
-
-                $s
-
-                ::std::thread::sleep(sleep_interval);
-            }
-        } else {
-            $s
-        }
-    };
     ($monitor:expr, $s:stmt, $si:stmt, $no_self_sleep:expr) => {
         match $monitor {
             Some(monitor) => {
-                ::std::thread::spawn(move || {
-                    let getch = ::getch::Getch::new();
+                crate::terminal::spawn_quit_watcher();
 
-                    loop {
-                        let key = getch.getch().unwrap();
-
-                        if let b'q' = key {
-                            break;
-                        }
-                    }
-
-                    ::std::process::exit(0);
-                });
-
-                ::std::io::stdout().write_all(&CLEAR_SCREEN_DATA).unwrap();
+                ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA).unwrap();
 
                 $si
 
@@ -307,7 +275,7 @@ macro_rules! monitor_handler {
                         ::std::thread::sleep(sleep_interval);
                     }
 
-                    ::std::io::stdout().write_all(&CLEAR_SCREEN_DATA).unwrap();
+                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA).unwrap();
 
                     $s
                 }

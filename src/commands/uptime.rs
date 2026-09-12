@@ -15,7 +15,7 @@ pub fn handle_uptime(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, 1000, draw_uptime(second));
+        monitor_handler!(monitor.then_some(Duration::from_secs(1)), draw_uptime(second));
     }
 }
 
@@ -34,7 +34,7 @@ fn draw_uptime(second: bool) {
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
         write!(&mut stdout, "{uptime_sec} second").unwrap();
 
-        if uptime_sec > 1 {
+        if uptime_sec != 1 {
             write!(&mut stdout, "s").unwrap();
         }
     } else {
