@@ -388,6 +388,8 @@ To change the listening port, use the `-p <PORT>` option. To change the detectin
 
 One background sampler serves every client, so opening the page in several tabs still costs one sampling round per interval, and the sampler stops entirely while nobody is watching.
 
+The page and its stylesheet and script are served gzipped to a browser that takes them, which is most of a megabyte down to about 150 KB, and revalidated with an `ETag` so an upgrade is picked up without re-downloading anything that did not change.
+
 #### HTTP APIs
 
 Every response is the JSON that [`mprober-lib`](https://crates.io/crates/mprober-lib) serializes, so the field names are those of its types. A `std::time::Duration` is an object rather than a number:

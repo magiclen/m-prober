@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{fmt::Write, hint};
 
 use axum::{
     Json,
@@ -93,7 +93,8 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
         difference |= a ^ b;
     }
 
-    difference == 0
+    // Without a barrier the compiler is free to notice that the answer is settled as soon as one byte differs, which is the early exit this loop exists to avoid.
+    hint::black_box(difference) == 0
 }
 
 fn get_cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {

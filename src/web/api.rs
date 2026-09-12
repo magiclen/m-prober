@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use super::{
     error::{ApiError, ApiResult},
-    probes::{CgroupReport, NetworkWithSpeed, SystemPressure, VolumeWithSpeed},
+    probes::{CgroupReport, SystemPressure},
     sampler::Snapshot,
     state::AppState,
 };
@@ -47,10 +47,10 @@ pub struct CpuReport {
 }
 
 #[derive(Debug, Serialize)]
-pub struct CpuDetectReport {
-    pub load_average: load_average::LoadAverage,
-    pub cpus:         Vec<cpu::CPU>,
-    pub cpus_stat:    Vec<f64>,
+pub struct CpuDetectReport<'a> {
+    pub load_average: &'a load_average::LoadAverage,
+    pub cpus:         &'a [cpu::CPU],
+    pub cpus_stat:    &'a [f64],
 }
 
 pub async fn hostname() -> ApiResult<Json<String>> {
@@ -109,24 +109,29 @@ pub async fn cgroup() -> ApiResult<Json<CgroupReport>> {
     })
 }
 
-pub async fn cpu_detect(State(state): State<AppState>) -> ApiResult<Json<CpuDetectReport>> {
+/// Like `all`, these serialize straight out of the `Arc`, since cloning would copy every list they name for each request.
+pub async fn cpu_detect(State(state): State<AppState>) -> ApiResult<Response> {
     let snapshot = latest(&state).await?;
 
-    Ok(Json(CpuDetectReport {
-        load_average: snapshot.load_average.clone(),
-        cpus:         snapshot.cpus.clone(),
-        cpus_stat:    snapshot.cpus_stat.clone(),
-    }))
+    let report = CpuDetectReport {
+        load_average: &snapshot.load_average,
+        cpus:         &snapshot.cpus,
+        cpus_stat:    &snapshot.cpus_stat,
+    };
+
+    Ok(Json(report).into_response())
 }
 
-pub async fn network_detect(
-    State(state): State<AppState>,
-) -> ApiResult<Json<Vec<NetworkWithSpeed>>> {
-    Ok(Json(latest(&state).await?.network.clone()))
+pub async fn network_detect(State(state): State<AppState>) -> ApiResult<Response> {
+    let snapshot = latest(&state).await?;
+
+    Ok(Json(&snapshot.network).into_response())
 }
 
-pub async fn volume_detect(State(state): State<AppState>) -> ApiResult<Json<Vec<VolumeWithSpeed>>> {
-    Ok(Json(latest(&state).await?.volumes.clone()))
+pub async fn volume_detect(State(state): State<AppState>) -> ApiResult<Response> {
+    let snapshot = latest(&state).await?;
+
+    Ok(Json(&snapshot.volumes).into_response())
 }
 
 /// The snapshot is serialized straight out of its `Arc`, since cloning it would copy every list it holds for each request.
