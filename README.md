@@ -97,8 +97,6 @@ Commands:
 Options:
   -h, --help     Print help
   -V, --version  Print version
-
-Enjoy it! https://magiclen.org
 ```
 
 ## Requirements
