@@ -32,7 +32,12 @@ jobs:
         working-directory: web-ui
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
+      # The action looks for a `packageManager` in the package.json at the root of the
+      # repository, and this one keeps its package.json under `web-ui`, so it is told
+      # which pnpm to install instead.
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.3.4
       - uses: actions/setup-node@v6
         with:
           node-version: 24
