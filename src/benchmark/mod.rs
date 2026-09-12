@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     error::Error,
     fmt::{self, Display, Formatter},
     fs::{self, File, OpenOptions},
@@ -7,40 +6,12 @@ use std::{
     io::{self, Read, Seek, SeekFrom, Write},
     os::unix::fs::OpenOptionsExt,
     path::Path,
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::*;
 use rand::Rng;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum BenchmarkLog {
-    #[allow(unused)]
-    None,
-    Normal,
-    Verbose,
-}
-
-impl BenchmarkLog {
-    #[inline]
-    pub fn has_stdout(self) -> bool {
-        match self {
-            BenchmarkLog::None => false,
-            BenchmarkLog::Normal => true,
-            BenchmarkLog::Verbose => true,
-        }
-    }
-
-    #[inline]
-    pub fn has_stderr(self) -> bool {
-        match self {
-            BenchmarkLog::None => false,
-            BenchmarkLog::Normal => false,
-            BenchmarkLog::Verbose => true,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub enum BenchmarkError {
@@ -89,20 +60,12 @@ impl Display for BenchmarkError {
 
 impl Error for BenchmarkError {}
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct BenchmarkResult {
-    pub cpu_multi_thread:  Option<f64>,
-    pub cpu_single_thread: Option<f64>,
-    pub memory:            Option<f64>,
-    pub volumes:           Option<HashMap<String, (f64, f64)>>,
-}
-
 #[derive(Debug, Clone)]
 pub struct BenchmarkConfig {
     pub warming_up_duration: Duration,
     pub benchmark_duration:  Duration,
-    pub print_out:           BenchmarkLog,
+    /// Whether the progress of each benchmark is written to stderr.
+    pub verbose:             bool,
     pub cpu:                 bool,
     pub memory:              bool,
     pub volume:              bool,
@@ -221,7 +184,7 @@ fn parse_cache_size(text: &str) -> Option<u64> {
     number.parse::<u64>().ok().map(|number| number * scale)
 }
 
-pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, BenchmarkError> {
+pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
     if !config.cpu && !config.memory && !config.volume {
         return Err(BenchmarkError::NoNeedBenchmark);
     }
@@ -232,7 +195,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
     // Warm up
     {
-        if config.print_out.has_stderr() {
+        if config.verbose {
             eprintln!("Warming up... Please wait for {:?}.\n", config.warming_up_duration);
         }
 
@@ -242,41 +205,34 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             benchmarking::warm_up_with_duration(config.warming_up_duration);
         }
 
-        if config.print_out.has_stdout() {
-            let cpus = cpu::get_cpus()?;
+        let cpus = cpu::get_cpus()?;
 
-            for cpu in cpus {
-                let model_name =
-                    cpu.model_name.as_deref().unwrap_or(crate::commands::UNKNOWN_CPU_MODEL_NAME);
+        for cpu in cpus {
+            let model_name =
+                cpu.model_name.as_deref().unwrap_or(crate::commands::UNKNOWN_CPU_MODEL_NAME);
 
-                println!("{model_name} {}C/{}T", cpu.cpu_cores, cpu.siblings);
+            println!("{model_name} {}C/{}T", cpu.cpu_cores, cpu.siblings);
 
-                // An architecture whose `/proc/cpuinfo` reports no `cpu MHz`, and which has no cpufreq files either, leaves nothing to print here.
-                let mut cpu_mhz_iter = cpu.cpus_mhz.into_iter();
+            // An architecture whose `/proc/cpuinfo` reports no `cpu MHz`, and which has no cpufreq files either, leaves nothing to print here.
+            let mut cpu_mhz_iter = cpu.cpus_mhz.into_iter();
 
-                if let Some(cpu_mhz) = cpu_mhz_iter.next() {
-                    print!("{cpu_mhz:.0}");
+            if let Some(cpu_mhz) = cpu_mhz_iter.next() {
+                print!("{cpu_mhz:.0}");
 
-                    for cpu_mhz in cpu_mhz_iter {
-                        print!(" {cpu_mhz:.0}");
-                    }
+                for cpu_mhz in cpu_mhz_iter {
+                    print!(" {cpu_mhz:.0}");
                 }
-
-                println!("\n");
             }
+
+            println!("\n");
         }
     }
-
-    let mut cpu_multi_thread = None;
-    let mut cpu_single_thread = None;
-    let mut memory = None;
-    let mut volumes = None;
 
     // CPU
     {
         if config.cpu {
             if cpus_num > 1 {
-                if config.print_out.has_stderr() {
+                if config.verbose {
                     eprintln!(
                         "Benchmarking CPU (multi-thread)... Please wait for {:?}.",
                         config.benchmark_duration
@@ -291,18 +247,14 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
                 let speed = bench_result.speed() * CPU_TERMS_PER_ROUND as f64;
 
-                cpu_multi_thread = Some(speed);
+                println!("CPU (multi-thread) : {speed:.2} iterations/s");
 
-                if config.print_out.has_stdout() {
-                    println!("CPU (multi-thread) : {speed:.2} iterations/s");
-
-                    if config.print_out.has_stderr() {
-                        eprintln!();
-                    }
+                if config.verbose {
+                    eprintln!();
                 }
             }
 
-            if config.print_out.has_stderr() {
+            if config.verbose {
                 eprintln!(
                     "Benchmarking CPU (single-thread)... Please wait for {:?}.",
                     config.benchmark_duration
@@ -314,11 +266,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
             let speed = bench_result.speed() * CPU_TERMS_PER_ROUND as f64;
 
-            cpu_single_thread = Some(speed);
-
-            if config.print_out.has_stdout() {
-                println!("CPU (single thread): {speed:.2} iterations/s");
-            }
+            println!("CPU (single thread): {speed:.2} iterations/s");
         }
     }
 
@@ -328,7 +276,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
             let cache = last_level_cache_size();
             let buffer_size = memory_buffer_size(cache, memory::free()?.mem.available);
 
-            if config.print_out.has_stderr() {
+            if config.verbose {
                 if config.cpu {
                     eprintln!();
                 }
@@ -363,16 +311,12 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
 
             let speed = bench_result.speed() * buffer_size as f64;
 
-            memory = Some(speed);
+            let memory_result = format!(
+                "{:.2}",
+                Byte::from_f64(speed).unwrap().get_appropriate_unit(UnitType::Binary)
+            );
 
-            if config.print_out.has_stdout() {
-                let memory_result = format!(
-                    "{:.2}",
-                    Byte::from_f64(speed).unwrap().get_appropriate_unit(UnitType::Binary)
-                );
-
-                println!("Memory             : {memory_result}/s");
-            }
+            println!("Memory             : {memory_result}/s");
         }
     }
 
@@ -381,7 +325,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
         if config.volume {
             let all_volumes = volume::get_volumes()?;
 
-            if !all_volumes.is_empty() && config.print_out.has_stderr() {
+            if !all_volumes.is_empty() && config.verbose {
                 if config.cpu || config.memory {
                     eprintln!();
                 }
@@ -389,34 +333,21 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Benchm
                 eprintln!("Benchmarking volumes...");
             }
 
-            let mut volumes_result: HashMap<String, (f64, f64)> = HashMap::new();
-
             for volume in all_volumes {
                 if let Some((read_result, write_result)) = benchmark_volume(&volume, config) {
-                    if config.print_out.has_stdout() {
-                        let read_result_string = format_speed(read_result);
-                        let write_result_string = format_speed(write_result);
+                    let read_result_string = format_speed(read_result);
+                    let write_result_string = format_speed(write_result);
 
-                        println!(
-                            "{:<19}: Read {read_result_string}/s, Write {write_result_string}/s",
-                            volume.device
-                        );
-                    }
-
-                    volumes_result.insert(volume.device, (read_result, write_result));
+                    println!(
+                        "{:<19}: Read {read_result_string}/s, Write {write_result_string}/s",
+                        volume.device
+                    );
                 }
             }
-
-            volumes = Some(volumes_result);
         }
     }
 
-    Ok(BenchmarkResult {
-        cpu_multi_thread,
-        cpu_single_thread,
-        memory,
-        volumes,
-    })
+    Ok(())
 }
 
 /// The size of one read or write of the volume benchmark, which is also the alignment `O_DIRECT` asks for.
@@ -436,12 +367,14 @@ impl AlignedBuffer {
 /// Open the test file, asking the kernel to keep the page cache out of the way.
 ///
 /// Without `O_DIRECT` a benchmark this short never leaves the cache, and what it reports is the speed of the RAM in front of the device rather than of the device. A file system which does not implement the flag, e.g. tmpfs or a network mount, refuses to open at all, so the buffered path is still there to fall back on.
+///
+/// `O_NOFOLLOW` joins the `O_EXCL` the caller asks for, so that neither a file nor a link to one that is already there is ever opened.
 fn open_test_file(path: &Path, options: &mut OpenOptions) -> Option<(File, bool)> {
-    if let Ok(file) = options.custom_flags(libc::O_DIRECT).open(path) {
+    if let Ok(file) = options.custom_flags(libc::O_DIRECT | libc::O_NOFOLLOW).open(path) {
         return Some((file, true));
     }
 
-    options.custom_flags(0).open(path).ok().map(|file| (file, false))
+    options.custom_flags(libc::O_NOFOLLOW).open(path).ok().map(|file| (file, false))
 }
 
 /// How much is written before the file is rewound, so that a long benchmark does not fill the volume. It is a whole number of buffers.
@@ -480,7 +413,7 @@ fn stream_len(file: &mut File) -> Result<u64, io::Error> {
 /// same device and would only measure it again.
 fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option<(f64, f64)> {
     if volume.available <= TEST_FILE_SIZE + RESERVED_SIZE {
-        if config.print_out.has_stderr() {
+        if config.verbose {
             eprintln!("{} doesn't have enough space to benchmark!", volume.device);
         }
 
@@ -488,18 +421,16 @@ fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option
     }
 
     for point in volume.points.iter() {
-        let path = Path::new(point).join(format!(
-            "mprober-{}.tmp",
-            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
-        ));
+        // A name nobody can guess, created only if it is not already there, so that a mount point which anyone may write to, e.g. a `/tmp` of its own, cannot be seeded with a link for this to follow.
+        let path = Path::new(point).join(format!("mprober-{:016x}.tmp", rand::random::<u64>()));
 
         let Some((mut file, direct)) =
-            open_test_file(&path, OpenOptions::new().write(true).create(true).truncate(true))
+            open_test_file(&path, OpenOptions::new().write(true).create_new(true))
         else {
             continue;
         };
 
-        if config.print_out.has_stderr() {
+        if config.verbose {
             eprintln!(
                 "Benchmarking {} ... Please wait for {:?}.",
                 volume.device,
@@ -523,7 +454,7 @@ fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option
         return match result {
             Ok(speeds) => Some(speeds),
             Err(stage) => {
-                if config.print_out.has_stderr() {
+                if config.verbose {
                     eprintln!("{} cannot be {stage} successfully!", volume.device);
                 }
 
@@ -532,7 +463,7 @@ fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option
         };
     }
 
-    if config.print_out.has_stderr() {
+    if config.verbose {
         eprintln!("{} cannot be written!", volume.device);
     }
 
