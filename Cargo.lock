@@ -704,6 +704,7 @@ dependencies = [
  "getch",
  "http-body-util",
  "lazy-static-include",
+ "libc",
  "mprober-lib",
  "rand 0.10.2",
  "regex",

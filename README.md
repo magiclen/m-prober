@@ -347,18 +347,28 @@ mprober benchmark
 
 ```
 Intel(R) Core(TM) Ultra 9 285K 24C/24T
-5300 5106 5300 5300 5300 5300 5300 5300 4602 4602 4602 4602 4601 4602 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601
+5300 5300 5300 5300 5300 5300 5197 5300 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601
 
-CPU (multi-thread) : 1928195943.51 iterations/s
-CPU (single thread): 104721455.14 iterations/s
-Memory             : 126.11 GiB/s
+CPU (multi-thread) : 29998617843.41 iterations/s
+CPU (single thread): 1527022854.21 iterations/s
+Memory             : 29.77 GiB/s
 ```
 
 The second line is the frequency of each core in MHz while the CPU was loaded, which is where a machine that cannot hold its boost clock shows up.
 
+An iteration is one term of a series that needs a division and an addition. It is counted in batches, so that what the figure reports is the work rather than the clock the timer reads.
+
+The memory figure is the rate of reading through a buffer sized from the last-level cache this machine reports, so that the read has to reach the memory rather than the cache in front of it. The buffer never takes more than a quarter of the free memory, and a machine with too little free to get past its cache says so and measures what it can. Reading rather than copying keeps the figure about the machine: a copy goes to the C library's `memcpy`, and musl's is about half the speed of glibc's, so the same machine would score differently depending on which build you run.
+
+The volume benchmark writes a file with `O_DIRECT` and reads it back the same way, so the page cache is out of the picture and the figures are those of the device at a queue depth of one. A file system that does not implement the flag, e.g. tmpfs or a network mount, says so and falls back to buffered I/O.
+
+```
+nvme1n1            : Read 91.41 MiB/s, Write 186.97 MiB/s
+```
+
 In addition to `benchmark`, `b`, `bench`, and `performance` are also acceptable.
 
-Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run. The volume benchmark writes to each volume, so `--disable-volume` is worth knowing about.
+Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run. The volume benchmark writes to each volume, so `--disable-volume` is worth knowing about. A volume is only measured when it would still have 1 GiB free afterwards.
 
 ### Web (HTTP)
 
