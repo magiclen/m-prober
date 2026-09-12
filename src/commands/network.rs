@@ -13,7 +13,7 @@ struct Row {
 }
 
 #[inline]
-pub fn handle_network(args: CLIArgs) {
+pub fn handle_network(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Network { .. }));
 
     if let CLICommands::Network {
@@ -25,13 +25,15 @@ pub fn handle_network(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, draw_network(monitor, unit), draw_network(None, unit), false);
+        monitor_handler!(monitor, draw_network(monitor, unit)?, draw_network(None, unit)?, false);
     }
+
+    Ok(())
 }
 
-fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
+fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) -> anyhow::Result<()> {
     let networks_with_speed =
-        network::get_networks_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL)).unwrap();
+        network::get_networks_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL))?;
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
@@ -81,7 +83,7 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
 
         output.print(&stdout).unwrap();
 
-        return;
+        return Ok(());
     }
 
     let interface_len = rows.iter().map(|row| display_width(&row.interface)).max().unwrap();
@@ -141,4 +143,6 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
     }
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

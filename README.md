@@ -207,7 +207,7 @@ one     [|||                                                      ] 1.42 (5.92%)
 five    [||                                                       ] 0.86 (3.58%)
 fifteen [|                                                        ] 0.48 (2.00%)
 
-Intel(R) Core(TM) Ultra 9 285K 24C/24T 1.67GHz
+Intel(R) Core(TM) Ultra 9 285K 24C/24T 1.67 GHz
 CPU [||||||                                                              ] 9.51%
 ```
 

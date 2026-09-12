@@ -3,7 +3,7 @@ use mprober_lib::rtc_time;
 use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
-pub fn handle_time(args: CLIArgs) {
+pub fn handle_time(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Time { .. }));
 
     if let CLICommands::Time {
@@ -14,12 +14,14 @@ pub fn handle_time(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor.then_some(Duration::from_secs(1)), draw_time());
+        monitor_handler!(monitor.then_some(Duration::from_secs(1)), draw_time()?);
     }
+
+    Ok(())
 }
 
-fn draw_time() {
-    let rtc_date_time = rtc_time::get_rtc_date_time().unwrap();
+fn draw_time() -> anyhow::Result<()> {
+    let rtc_date_time = rtc_time::get_rtc_date_time()?;
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
@@ -46,4 +48,6 @@ fn draw_time() {
     writeln!(&mut stdout).unwrap();
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

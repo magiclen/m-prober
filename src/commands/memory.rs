@@ -4,7 +4,7 @@ use mprober_lib::memory;
 use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
-pub fn handle_memory(args: CLIArgs) {
+pub fn handle_memory(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Memory { .. }));
 
     if let CLICommands::Memory {
@@ -16,12 +16,14 @@ pub fn handle_memory(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, draw_memory(unit));
+        monitor_handler!(monitor, draw_memory(unit)?);
     }
+
+    Ok(())
 }
 
-fn draw_memory(unit: Option<Unit>) {
-    let free = memory::free().unwrap();
+fn draw_memory(unit: Option<Unit>) -> anyhow::Result<()> {
+    let free = memory::free()?;
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
@@ -168,4 +170,6 @@ fn draw_memory(unit: Option<Unit>) {
     writeln!(&mut stdout).unwrap();
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

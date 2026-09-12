@@ -41,7 +41,7 @@ impl Row {
 }
 
 #[inline]
-pub fn handle_volume(args: CLIArgs) {
+pub fn handle_volume(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Volume { .. }));
 
     if let CLICommands::Volume {
@@ -57,11 +57,13 @@ pub fn handle_volume(args: CLIArgs) {
 
         monitor_handler!(
             monitor,
-            draw_volume(monitor, unit, only_information, mounts),
-            draw_volume(None, unit, only_information, mounts),
+            draw_volume(monitor, unit, only_information, mounts)?,
+            draw_volume(None, unit, only_information, mounts)?,
             only_information
         );
     }
+
+    Ok(())
 }
 
 fn draw_volume(
@@ -69,7 +71,7 @@ fn draw_volume(
     unit: Option<Unit>,
     only_information: bool,
     mounts: bool,
-) {
+) -> anyhow::Result<()> {
     let output = get_stdout_output();
     let mut stdout = output.buffer();
 
@@ -89,7 +91,7 @@ fn draw_volume(
     };
 
     let (headers, rows): (&[&str], Vec<Row>) = if only_information {
-        let volumes = volume::get_volumes().unwrap();
+        let volumes = volume::get_volumes()?;
 
         let rows = volumes
             .into_iter()
@@ -106,7 +108,7 @@ fn draw_volume(
         (&INFORMATION_HEADERS, rows)
     } else {
         let volumes_with_speed =
-            volume::get_volumes_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL)).unwrap();
+            volume::get_volumes_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL))?;
 
         let rows = volumes_with_speed
             .into_iter()
@@ -136,6 +138,8 @@ fn draw_volume(
     }
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }
 
 fn draw_rows(
