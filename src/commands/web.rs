@@ -1,4 +1,4 @@
-use crate::{rocket_mounts, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, web};
 
 #[inline]
 pub fn handle_web(args: CLIArgs) -> anyhow::Result<()> {
@@ -12,9 +12,7 @@ pub fn handle_web(args: CLIArgs) -> anyhow::Result<()> {
         only_api,
     } = args.command
     {
-        let rocket = rocket_mounts::create(monitor, address, listen_port, auth_key, only_api);
-
-        rocket::execute(rocket.launch())?;
+        web::serve(monitor, address, listen_port, auth_key, only_api)?;
     }
 
     Ok(())

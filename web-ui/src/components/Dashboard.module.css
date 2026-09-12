@@ -1,0 +1,4 @@
+.section {
+    min-width: 0;
+    scroll-margin-top: calc(var(--dashboard-header-height) + var(--mantine-spacing-md));
+}

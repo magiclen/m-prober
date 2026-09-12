@@ -1,17 +1,8 @@
-#[macro_use]
-extern crate rocket;
-
-#[macro_use]
-extern crate rocket_include_static_resources;
-
-#[macro_use]
-extern crate rocket_include_handlebars;
-
 mod benchmark;
 mod cli;
 mod commands;
-mod rocket_mounts;
 mod terminal;
+mod web;
 
 use cli::*;
 use commands::*;
@@ -19,26 +10,32 @@ fn main() -> anyhow::Result<()> {
     let args = get_args();
 
     match &args.command {
-        CLICommands::Hostname => handle_hostname(),
-        CLICommands::Kernel => handle_kernel(),
+        CLICommands::Hostname => handle_hostname()?,
+        CLICommands::Kernel => handle_kernel()?,
         CLICommands::Uptime {
             ..
-        } => handle_uptime(args),
+        } => handle_uptime(args)?,
         CLICommands::Time {
             ..
-        } => handle_time(args),
+        } => handle_time(args)?,
         CLICommands::Cpu {
             ..
-        } => handle_cpu(args),
+        } => handle_cpu(args)?,
         CLICommands::Memory {
             ..
-        } => handle_memory(args),
+        } => handle_memory(args)?,
         CLICommands::Network {
             ..
-        } => handle_network(args),
+        } => handle_network(args)?,
         CLICommands::Volume {
             ..
-        } => handle_volume(args),
+        } => handle_volume(args)?,
+        CLICommands::Pressure {
+            ..
+        } => handle_pressure(args)?,
+        CLICommands::Cgroup {
+            ..
+        } => handle_cgroup(args)?,
         CLICommands::Process {
             ..
         } => handle_process(args)?,

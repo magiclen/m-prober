@@ -1,16 +1,26 @@
 [package]
 name = "mprober"
-version = "0.11.0-beta.17"
+version = "0.12.0"
 authors = ["Magic Len <len@magiclen.org>"]
-edition = "2021"
-rust-version = "1.70"
+edition = "2024"
+rust-version = "1.89"
 repository = "https://github.com/magiclen/m-prober"
 homepage = "https://magiclen.org/m-prober"
 keywords = ["probe", "mprober", "m-prober", "linux", "monitor"]
 categories = ["command-line-utilities"]
 description = "This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs."
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "front-end/**/*", "views/**/*"]
+# These are gitignore patterns, so the leading slash matters: a bare `LICENSE` matches one at any
+# depth, which is every dependency under `web-ui/node_modules` as well.
+include = [
+    "/src/**/*",
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE",
+    # The Open Font License asks to travel with the fonts embedded in `front-end`.
+    "/LICENSE-RobotoMono.txt",
+    "/front-end/**/*",
+]
 
 [profile.release]
 lto = true
@@ -20,34 +30,36 @@ strip = true
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 concat-with = "0.2"
-terminal_size = "0.3"
+terminal_size = "0.4"
 
 anyhow = "1"
 
-mprober-lib = "0.1"
+mprober-lib = { version = "0.2", features = ["serde"] }
 
-termcolor = "1"
+termcolor = "1.1.1"
 getch = "0.3"
+signal-hook = "0.4.4"
 
 byte-unit = "5"
-once_cell = "1"
 
-rand = "0.8"
-serde_json = "1"
-chrono = "0.4"
+rand = "0.10"
+serde = { version = "1.0.113", features = ["derive"] }
+serde_json = "1.0.29"
+chrono = "0.4.27"
 regex = "1"
-users = "0.11"
+uzers = "0.12"
 
-benchmarking = "0.4"
+benchmarking = "0.4.13"
 
-rocket = "0.5"
-rocket-simple-authorization = "0.10"
-rocket-cache-response = "0.6"
-rocket-json-response = "0.6"
-rocket-include-static-resources = { version = "0.10", features = ["cache"] }
-rocket-include-handlebars = "0.13"
+axum = "0.8"
+tokio = { version = "1.39", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+tokio-stream = { version = "0.1.3", features = ["sync"] }
+futures-util = { version = "0.3", default-features = false }
+lazy-static-include = "4"
+unicode-width = "0.2.2"
+libc = "0.2.189"
+flate2 = "1.1.10"
 
-[dependencies.validators]
-version = "0.25"
-default-features = false
-features = ["derive", "unsigned_integer", "number"]
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

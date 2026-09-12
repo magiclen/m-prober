@@ -1,4 +1,4 @@
-use crate::{benchmark, benchmark::BenchmarkLog, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, benchmark};
 
 #[inline]
 pub fn handle_benchmark(args: CLIArgs) -> anyhow::Result<()> {
@@ -16,8 +16,6 @@ pub fn handle_benchmark(args: CLIArgs) -> anyhow::Result<()> {
         enable_volume,
     } = args.command
     {
-        let print_out = if verbose { BenchmarkLog::Verbose } else { BenchmarkLog::Normal };
-
         let default = !(enable_cpu || enable_memory || enable_volume);
 
         let cpu = if disable_cpu { false } else { default || enable_cpu };
@@ -29,7 +27,7 @@ pub fn handle_benchmark(args: CLIArgs) -> anyhow::Result<()> {
         let benchmark_config = benchmark::BenchmarkConfig {
             warming_up_duration,
             benchmark_duration,
-            print_out,
+            verbose,
             cpu,
             memory,
             volume,

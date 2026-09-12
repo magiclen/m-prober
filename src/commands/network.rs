@@ -1,10 +1,19 @@
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::network;
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
+
+/// The columns of one interface, formatted, so that each of them can be measured before any of them is drawn.
+struct Row {
+    interface:      String,
+    upload:         String,
+    upload_total:   String,
+    download:       String,
+    download_total: String,
+}
 
 #[inline]
-pub fn handle_network(args: CLIArgs) {
+pub fn handle_network(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Network { .. }));
 
     if let CLICommands::Network {
@@ -16,71 +25,75 @@ pub fn handle_network(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, draw_network(monitor, unit), draw_network(None, unit), false);
+        monitor_handler!(monitor, draw_network(monitor, unit)?, draw_network(None, unit)?, false);
     }
+
+    Ok(())
 }
 
-fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
-    let networks_with_speed = network::get_networks_with_speed(match monitor {
-        Some(monitor) => monitor,
-        None => DEFAULT_INTERVAL,
-    })
-    .unwrap();
-
-    let networks_with_speed_len = networks_with_speed.len();
+fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) -> anyhow::Result<()> {
+    let networks_with_speed =
+        network::get_networks_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL))?;
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
 
-    debug_assert!(networks_with_speed_len > 0);
+    let rows: Vec<Row> = networks_with_speed
+        .into_iter()
+        .map(|(network, network_speed)| {
+            let upload = Byte::from_f64_with_unit(network_speed.transmit, Unit::B).unwrap();
+            let upload_total = Byte::from_u64(network.stat.transmit_bytes);
 
-    let mut uploads: Vec<String> = Vec::with_capacity(networks_with_speed_len);
-    let mut uploads_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+            let download = Byte::from_f64_with_unit(network_speed.receive, Unit::B).unwrap();
+            let download_total = Byte::from_u64(network.stat.receive_bytes);
 
-    let mut downloads: Vec<String> = Vec::with_capacity(networks_with_speed_len);
-    let mut downloads_total: Vec<String> = Vec::with_capacity(networks_with_speed_len);
+            let (mut upload, upload_total, mut download, download_total) = match unit {
+                Some(unit) => (
+                    format!("{:.2}", upload.get_adjusted_unit(unit)),
+                    format!("{:.2}", upload_total.get_adjusted_unit(unit)),
+                    format!("{:.2}", download.get_adjusted_unit(unit)),
+                    format!("{:.2}", download_total.get_adjusted_unit(unit)),
+                ),
+                None => (
+                    format!("{:.2}", upload.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", upload_total.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", download.get_appropriate_unit(UnitType::Decimal)),
+                    format!("{:.2}", download_total.get_appropriate_unit(UnitType::Decimal)),
+                ),
+            };
 
-    for (network, network_speed) in networks_with_speed.iter() {
-        let upload = Byte::from_f64_with_unit(network_speed.transmit, Unit::B).unwrap();
-        let upload_total = Byte::from_u64(network.stat.transmit_bytes);
+            upload.push_str("/s");
+            download.push_str("/s");
 
-        let download = Byte::from_f64_with_unit(network_speed.receive, Unit::B).unwrap();
-        let download_total = Byte::from_u64(network.stat.receive_bytes);
+            Row {
+                interface: network.interface,
+                upload,
+                upload_total,
+                download,
+                download_total,
+            }
+        })
+        .collect();
 
-        let (mut upload, upload_total, mut download, download_total) = match unit {
-            Some(unit) => (
-                format!("{:.2}", upload.get_adjusted_unit(unit)),
-                format!("{:.2}", upload_total.get_adjusted_unit(unit)),
-                format!("{:.2}", download.get_adjusted_unit(unit)),
-                format!("{:.2}", download_total.get_adjusted_unit(unit)),
-            ),
-            None => (
-                format!("{:.2}", upload.get_appropriate_unit(UnitType::Decimal)),
-                format!("{:.2}", upload_total.get_appropriate_unit(UnitType::Decimal)),
-                format!("{:.2}", download.get_appropriate_unit(UnitType::Decimal)),
-                format!("{:.2}", download_total.get_appropriate_unit(UnitType::Decimal)),
-            ),
-        };
+    if rows.is_empty() {
+        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
+        writeln!(&mut stdout, "There are no network interfaces to show.").unwrap();
 
-        upload.push_str("/s");
-        download.push_str("/s");
+        stdout.set_color(&COLOR_DEFAULT).unwrap();
 
-        uploads.push(upload);
-        uploads_total.push(upload_total);
-        downloads.push(download);
-        downloads_total.push(download_total);
+        output.print(&stdout).unwrap();
+
+        return Ok(());
     }
 
-    let interface_len =
-        networks_with_speed.iter().map(|(network, _)| network.interface.len()).max().unwrap();
+    let interface_len = rows.iter().map(|row| display_width(&row.interface)).max().unwrap();
     let interface_len_inc = interface_len + 1;
 
-    let upload_len = uploads.iter().map(|upload| upload.len()).max().unwrap().max(11);
-    let upload_total_len =
-        uploads_total.iter().map(|upload_total| upload_total.len()).max().unwrap().max(13);
-    let download_len = downloads.iter().map(|download| download.len()).max().unwrap().max(13);
-    let download_total_len =
-        downloads_total.iter().map(|download_total| download_total.len()).max().unwrap().max(15);
+    // Each column is at least as wide as its own heading.
+    let upload_len = rows.iter().map(|row| row.upload.len()).max().unwrap().max(11);
+    let upload_total_len = rows.iter().map(|row| row.upload_total.len()).max().unwrap().max(13);
+    let download_len = rows.iter().map(|row| row.download.len()).max().unwrap().max(13);
+    let download_total_len = rows.iter().map(|row| row.download_total.len()).max().unwrap().max(15);
 
     stdout.set_color(&COLOR_LABEL).unwrap();
     write!(&mut stdout, "{1:>0$}", interface_len_inc + upload_len, "Upload Rate").unwrap();
@@ -105,56 +118,31 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) {
 
     writeln!(&mut stdout).unwrap();
 
-    let mut uploads_iter = uploads.into_iter();
-    let mut uploads_total_iter = uploads_total.into_iter();
-    let mut downloads_iter = downloads.into_iter();
-    let mut downloads_total_iter = downloads_total.into_iter();
-
-    for (network, _) in networks_with_speed.into_iter() {
-        let upload = uploads_iter.next().unwrap();
-        let upload_total = uploads_total_iter.next().unwrap();
-
-        let download = downloads_iter.next().unwrap();
-        let download_total = downloads_total_iter.next().unwrap();
-
+    for row in rows {
         stdout.set_color(&COLOR_LABEL).unwrap();
-        write!(&mut stdout, "{1:<0$}", interface_len_inc, network.interface).unwrap();
+        write_left_aligned(&mut stdout, &row.interface, interface_len_inc).unwrap();
 
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
 
-        for _ in 0..(upload_len - upload.len()) {
-            write!(&mut stdout, " ").unwrap();
-        }
-
-        stdout.write_all(upload.as_bytes()).unwrap();
+        write!(&mut stdout, "{1:>0$}", upload_len, row.upload).unwrap();
 
         write!(&mut stdout, "   ").unwrap();
 
-        for _ in 0..(upload_total_len - upload_total.len()) {
-            write!(&mut stdout, " ").unwrap();
-        }
-
-        stdout.write_all(upload_total.as_bytes()).unwrap();
+        write!(&mut stdout, "{1:>0$}", upload_total_len, row.upload_total).unwrap();
 
         write!(&mut stdout, "   ").unwrap();
 
-        for _ in 0..(download_len - download.len()) {
-            write!(&mut stdout, " ").unwrap();
-        }
-
-        stdout.write_all(download.as_bytes()).unwrap();
+        write!(&mut stdout, "{1:>0$}", download_len, row.download).unwrap();
 
         write!(&mut stdout, "   ").unwrap();
 
-        for _ in 0..(download_total_len - download_total.len()) {
-            write!(&mut stdout, " ").unwrap();
-        }
-
-        stdout.write_all(download_total.as_bytes()).unwrap();
+        write!(&mut stdout, "{1:>0$}", download_total_len, row.download_total).unwrap();
 
         stdout.set_color(&COLOR_DEFAULT).unwrap();
         writeln!(&mut stdout).unwrap();
     }
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

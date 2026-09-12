@@ -1,0 +1,12 @@
+/*
+ * A rate, a size and an interface name are each one token, so none of them may be broken across two
+ * lines: `2.91 KB/s` split after the number reads as two different figures, and a bridge name split
+ * after its dash reads as a different name.
+ *
+ * Keeping the cells on one line also gives the table a real minimum width, which is what makes
+ * `Table.ScrollContainer` scroll instead of squeezing the columns until the text folds.
+ */
+.table th,
+.table td {
+    white-space: nowrap;
+}

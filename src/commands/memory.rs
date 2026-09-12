@@ -1,10 +1,10 @@
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::memory;
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
-pub fn handle_memory(args: CLIArgs) {
+pub fn handle_memory(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Memory { .. }));
 
     if let CLICommands::Memory {
@@ -16,12 +16,14 @@ pub fn handle_memory(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, draw_memory(unit));
+        monitor_handler!(monitor, draw_memory(unit)?);
     }
+
+    Ok(())
 }
 
-fn draw_memory(unit: Option<Unit>) {
-    let free = memory::free().unwrap();
+fn draw_memory(unit: Option<Unit>) -> anyhow::Result<()> {
+    let free = memory::free()?;
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
@@ -53,9 +55,9 @@ fn draw_memory(unit: Option<Unit>) {
     let used_len = mem_used.len().max(swap_used.len());
     let total_len = mem_total.len().max(swap_total.len());
 
-    let mem_percentage = format!("{:.2}%", free.mem.used as f64 * 100f64 / free.mem.total as f64);
-    let swap_percentage =
-        format!("{:.2}%", free.swap.used as f64 * 100f64 / free.swap.total as f64);
+    let mem_percentage = format!("{:.2}%", percentage_of(free.mem.used, free.mem.total));
+    // A machine with no swap has a total of zero, which must not turn the percentage into `NaN`.
+    let swap_percentage = format!("{:.2}%", percentage_of(free.swap.used, free.swap.total));
 
     let percentage_len = mem_percentage.len().max(swap_percentage.len());
 
@@ -69,49 +71,34 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " [").unwrap(); // 2
 
-    let progress_max = terminal_width - 10 - used_len - 3 - total_len - 2 - percentage_len - 1;
+    let progress_max =
+        bar_width(terminal_width, 10 + used_len + 3 + total_len + 2 + percentage_len + 1);
 
-    let f = progress_max as f64 / free.mem.total as f64;
+    let mut remaining = progress_max;
 
-    let progress_used = (free.mem.used as f64 * f).floor() as usize;
+    let progress_used = bar_cells(free.mem.used, free.mem.total, progress_max, &mut remaining);
+    let progress_cache = bar_cells(free.mem.cache, free.mem.total, progress_max, &mut remaining);
+    let progress_buffers =
+        bar_cells(free.mem.buffers, free.mem.total, progress_max, &mut remaining);
+
+    // Without colors the segments are told apart by their character instead.
+    let (cache_cell, buffers_cell) = if is_plain_mode() { (b'$', b'#') } else { (b'|', b'|') };
 
     stdout.set_color(&COLOR_USED).unwrap();
-    for _ in 0..progress_used {
-        write!(&mut stdout, "|").unwrap(); // 1
-    }
-
-    let progress_cache = (free.mem.cache as f64 * f).floor() as usize;
+    write_cells(&mut stdout, b'|', progress_used).unwrap();
 
     stdout.set_color(&COLOR_CACHE).unwrap();
-    for _ in 0..progress_cache {
-        if unsafe { FORCE_PLAIN_MODE } {
-            write!(&mut stdout, "$").unwrap(); // 1
-        } else {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-    }
-
-    let progress_buffers = (free.mem.buffers as f64 * f).floor() as usize;
+    write_cells(&mut stdout, cache_cell, progress_cache).unwrap();
 
     stdout.set_color(&COLOR_BUFFERS).unwrap();
-    for _ in 0..progress_buffers {
-        if unsafe { FORCE_PLAIN_MODE } {
-            write!(&mut stdout, "#").unwrap(); // 1
-        } else {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-    }
+    write_cells(&mut stdout, buffers_cell, progress_buffers).unwrap();
 
-    for _ in 0..(progress_max - progress_used - progress_cache - progress_buffers) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write_cells(&mut stdout, b' ', remaining).unwrap();
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, "] ").unwrap(); // 2
 
-    for _ in 0..(used_len - mem_used.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", used_len - mem_used.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(mem_used.as_bytes()).unwrap();
@@ -119,18 +106,14 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " / ").unwrap(); // 3
 
-    for _ in 0..(total_len - mem_total.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", total_len - mem_total.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(mem_total.as_bytes()).unwrap();
 
     write!(&mut stdout, " (").unwrap(); // 2
 
-    for _ in 0..(percentage_len - mem_percentage.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", percentage_len - mem_percentage.len()).unwrap();
 
     stdout.write_all(mem_percentage.as_bytes()).unwrap();
 
@@ -146,36 +129,23 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " [").unwrap(); // 2
 
-    let f = progress_max as f64 / free.swap.total as f64;
+    let mut remaining = progress_max;
 
-    let progress_used = (free.swap.used as f64 * f).floor() as usize;
+    let progress_used = bar_cells(free.swap.used, free.swap.total, progress_max, &mut remaining);
+    let progress_cache = bar_cells(free.swap.cache, free.swap.total, progress_max, &mut remaining);
 
     stdout.set_color(&COLOR_USED).unwrap();
-    for _ in 0..progress_used {
-        write!(&mut stdout, "|").unwrap(); // 1
-    }
-
-    let progress_cache = (free.swap.cache as f64 * f).floor() as usize;
+    write_cells(&mut stdout, b'|', progress_used).unwrap();
 
     stdout.set_color(&COLOR_CACHE).unwrap();
-    for _ in 0..progress_cache {
-        if unsafe { FORCE_PLAIN_MODE } {
-            write!(&mut stdout, "$").unwrap(); // 1
-        } else {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-    }
+    write_cells(&mut stdout, cache_cell, progress_cache).unwrap();
 
-    for _ in 0..(progress_max - progress_used - progress_cache) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write_cells(&mut stdout, b' ', remaining).unwrap();
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, "] ").unwrap(); // 2
 
-    for _ in 0..(used_len - swap_used.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", used_len - swap_used.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(swap_used.as_bytes()).unwrap();
@@ -183,18 +153,14 @@ fn draw_memory(unit: Option<Unit>) {
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, " / ").unwrap(); // 3
 
-    for _ in 0..(total_len - swap_total.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", total_len - swap_total.len()).unwrap();
 
     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
     stdout.write_all(swap_total.as_bytes()).unwrap();
 
     write!(&mut stdout, " (").unwrap(); // 2
 
-    for _ in 0..(percentage_len - swap_percentage.len()) {
-        write!(&mut stdout, " ").unwrap(); // 1
-    }
+    write!(&mut stdout, "{:1$}", "", percentage_len - swap_percentage.len()).unwrap();
 
     stdout.write_all(swap_percentage.as_bytes()).unwrap();
 
@@ -204,4 +170,6 @@ fn draw_memory(unit: Option<Unit>) {
     writeln!(&mut stdout).unwrap();
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
+use std::{borrow::Cow, cmp::Ordering};
 
 use anyhow::anyhow;
 use byte_unit::{Byte, Unit, UnitType};
@@ -6,9 +6,88 @@ use chrono::SecondsFormat;
 use mprober_lib::process;
 use regex::Regex;
 use terminal_size::terminal_size;
-use users::{Group, Groups, User, Users, UsersCache};
+use unicode_width::UnicodeWidthChar;
+use uzers::{Groups, Users, UsersCache};
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
+
+/// One process, formatted. Holding the columns of a row together keeps them from drifting apart when a row is cut short because the terminal is too narrow.
+struct Row {
+    pid:        String,
+    ppid:       String,
+    /// The real-time priority is marked with a `*`, so this is not a number.
+    priority:   String,
+    nice:       String,
+    percentage: f64,
+    vsz:        String,
+    rss:        String,
+    anon:       String,
+    thd:        String,
+    tty:        String,
+    user:       String,
+    group:      String,
+    program:    String,
+    state:      &'static str,
+    /// Empty unless the start time was asked for.
+    start_time: String,
+    cmdline:    String,
+}
+
+/// The width of a name column: wide enough for its heading, and never wider than the truncation length, which can be shorter than that heading.
+fn column_width(widths: impl Iterator<Item = usize>, heading: usize, truncate_inc: usize) -> usize {
+    widths.max().unwrap_or(0).min(truncate_inc).max(heading)
+}
+
+/// Cut a name that is wider than `width` columns down to it and mark it with a trailing `+`.
+///
+/// A character outside ASCII can be two columns wide and is several bytes long, so neither count stands in for the other here.
+fn truncate_with_marker(name: &str, width: usize) -> Cow<'_, str> {
+    if display_width(name) <= width {
+        return Cow::Borrowed(name);
+    }
+
+    // One column goes to the marker.
+    let Some(budget) = width.checked_sub(1) else {
+        return Cow::Borrowed("");
+    };
+
+    let mut taken = 0;
+    let mut end = 0;
+
+    for (index, character) in name.char_indices() {
+        let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
+
+        if taken + character_width > budget {
+            break;
+        }
+
+        taken += character_width;
+        end = index + character.len_utf8();
+    }
+
+    Cow::Owned(format!("{}+", &name[..end]))
+}
+
+/// The width of the start time, which is an RFC 3339 timestamp in seconds, e.g. `2026-09-12T13:15:35Z`.
+const START_TIME_WIDTH: usize = 20;
+
+/// Below this a process is idle enough that its memory size says more about it than its share of the CPU does.
+const BUSY_PERCENTAGE: f64 = 0.01;
+
+/// Order the busy processes first, the busiest of them at the top, and the idle ones after them by memory size.
+///
+/// Two processes can be handed exactly the same number of jiffies over one interval, so the busy ones have to fall back to the same key as the idle ones rather than calling either of them the greater.
+fn busier_first(a: (f64, u64), b: (f64, u64)) -> Ordering {
+    let (percentage_a, vsz_a) = a;
+    let (percentage_b, vsz_b) = b;
+
+    match (percentage_a > BUSY_PERCENTAGE, percentage_b > BUSY_PERCENTAGE) {
+        (true, true) => percentage_b.total_cmp(&percentage_a).then(vsz_b.cmp(&vsz_a)),
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+        (false, false) => vsz_b.cmp(&vsz_a),
+    }
+}
 
 #[inline]
 pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
@@ -72,8 +151,6 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(unused_variables)]
-#[allow(unused_mut)]
 #[allow(clippy::too_many_arguments)]
 fn draw_process(
     monitor: Option<Duration>,
@@ -123,375 +200,287 @@ fn draw_process(
         Some(group_filter) => match user_cache.get_group_by_name(group_filter) {
             Some(group) => Some(group.gid()),
             None => {
-                return Err(anyhow!("Cannot find the user {:?}.", group_filter));
+                return Err(anyhow!("Cannot find the group {:?}.", group_filter));
             },
         },
         None => None,
     };
 
+    // The filters are predicates now, so the regexes have to be wrapped before they are borrowed.
+    let program_matcher = program_filter.map(|regex| move |program: &str| regex.is_match(program));
+    let tty_matcher = tty_filter.map(|regex| move |tty: &str| regex.is_match(tty));
+
     let process_filter = process::ProcessFilter {
         pid_filter,
         uid_filter,
         gid_filter,
-        program_filter,
-        tty_filter,
+        program_filter: program_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
+        tty_filter: tty_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
     };
 
-    let (processes, percentage): (Vec<process::Process>, BTreeMap<u32, f64>) = if only_information {
-        let mut processes_with_stats = process::get_processes_with_stat(&process_filter).unwrap();
+    let processes: Vec<(process::Process, f64)> = if only_information {
+        let mut processes_with_stats = process::get_processes_with_stat(&process_filter)?;
 
-        processes_with_stats.sort_unstable_by(|(a, _), (b, _)| b.vsz.cmp(&a.vsz));
+        processes_with_stats.sort_unstable_by_key(|(a, _)| std::cmp::Reverse(a.vsz));
 
         if let Some(top) = top {
-            if top < processes_with_stats.len() {
-                unsafe {
-                    processes_with_stats.set_len(top);
-                }
-            }
+            processes_with_stats.truncate(top);
         }
 
-        (processes_with_stats.into_iter().map(|(process, _)| process).collect(), BTreeMap::new())
+        processes_with_stats.into_iter().map(|(process, _)| (process, 0f64)).collect()
     } else {
         let mut processes_with_percentage =
             process::get_processes_with_cpu_utilization_in_percentage(
                 &process_filter,
-                match monitor {
-                    Some(monitor) => monitor,
-                    None => DEFAULT_INTERVAL,
-                },
-            )
-            .unwrap();
+                monitor.unwrap_or(DEFAULT_INTERVAL),
+            )?;
 
         processes_with_percentage.sort_unstable_by(
             |(process_a, percentage_a), (process_b, percentage_b)| {
-                let percentage_a = *percentage_a;
-                let percentage_b = *percentage_b;
-
-                if percentage_a > 0.01 {
-                    if percentage_a > percentage_b {
-                        Ordering::Less
-                    } else if percentage_b > 0.01
-                    // percentage_a == percentage_b hardly happens
-                    {
-                        Ordering::Greater
-                    } else {
-                        process_b.vsz.cmp(&process_a.vsz)
-                    }
-                } else if percentage_b > 0.01 {
-                    if percentage_b > percentage_a {
-                        Ordering::Greater
-                    } else {
-                        process_b.vsz.cmp(&process_a.vsz)
-                    }
-                } else {
-                    process_b.vsz.cmp(&process_a.vsz)
-                }
+                busier_first((*percentage_a, process_a.vsz), (*percentage_b, process_b.vsz))
             },
         );
 
         if let Some(top) = top {
-            if top < processes_with_percentage.len() {
-                unsafe {
-                    processes_with_percentage.set_len(top);
-                }
-            }
+            processes_with_percentage.truncate(top);
         }
 
-        let mut processes = Vec::with_capacity(processes_with_percentage.len());
-        let mut processes_percentage = BTreeMap::new();
-
-        for (process, percentage) in processes_with_percentage {
-            processes_percentage.insert(process.pid, percentage);
-
-            processes.push(process);
-        }
-
-        (processes, processes_percentage)
+        processes_with_percentage
     };
 
-    let processes_len = processes.len();
+    let format_byte = |value: u64| match unit {
+        Some(unit) => format!("{:.1}", Byte::from(value).get_adjusted_unit(unit)),
+        None => format!("{:.1}", Byte::from(value).get_appropriate_unit(UnitType::Binary)),
+    };
 
-    let mut pid: Vec<String> = Vec::with_capacity(processes_len);
-    let mut ppid: Vec<String> = Vec::with_capacity(processes_len);
-    let mut vsz: Vec<String> = Vec::with_capacity(processes_len);
-    let mut rss: Vec<String> = Vec::with_capacity(processes_len);
-    let mut anon: Vec<String> = Vec::with_capacity(processes_len);
-    let mut thd: Vec<String> = Vec::with_capacity(processes_len);
-    let mut tty: Vec<&str> = Vec::with_capacity(processes_len);
-    let mut user: Vec<Arc<User>> = Vec::with_capacity(processes_len);
-    let mut group: Vec<Arc<Group>> = Vec::with_capacity(processes_len);
-    let mut program: Vec<&str> = Vec::with_capacity(processes_len);
-    let mut state: Vec<&'static str> = Vec::with_capacity(processes_len);
-
-    for process in processes.iter() {
-        pid.push(process.pid.to_string());
-        ppid.push(process.ppid.to_string());
-
-        let (p_vsz, p_rss, p_anon) =
-            (Byte::from(process.vsz), Byte::from(process.rss), Byte::from(process.rss_anon));
-
-        match unit {
-            Some(byte_unit) => {
-                vsz.push(format!("{:.1}", p_vsz.get_adjusted_unit(byte_unit)));
-                rss.push(format!("{:.1}", p_rss.get_adjusted_unit(byte_unit)));
-                anon.push(format!("{:.1}", p_anon.get_adjusted_unit(byte_unit)));
+    let rows: Vec<Row> = processes
+        .into_iter()
+        .map(|(process, percentage)| Row {
+            pid: process.pid.to_string(),
+            ppid: process.ppid.to_string(),
+            priority: match process.real_time_priority {
+                Some(real_time_priority) => format!("*{real_time_priority}"),
+                None => process.priority.to_string(),
             },
-            None => {
-                vsz.push(format!("{:.1}", p_vsz.get_appropriate_unit(UnitType::Binary)));
-                rss.push(format!("{:.1}", p_rss.get_appropriate_unit(UnitType::Binary)));
-                anon.push(format!("{:.1}", p_anon.get_appropriate_unit(UnitType::Binary)));
-            },
-        }
-
-        tty.push(process.tty.as_deref().unwrap_or(""));
-
-        thd.push(process.threads.to_string());
-
-        // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
-        user.push(
-            user_cache
+            nice: process.nice.to_string(),
+            percentage,
+            vsz: format_byte(process.vsz),
+            rss: format_byte(process.rss),
+            anon: format_byte(process.rss_anon),
+            thd: process.threads.to_string(),
+            tty: process.tty.unwrap_or_default(),
+            // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
+            user: user_cache
                 .get_user_by_uid(process.effective_uid)
-                .unwrap_or_else(|| Arc::new(User::new(0, "systemd?", 0))),
-        );
-        group.push(
-            user_cache
+                .map(|user| user.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| String::from("systemd?")),
+            group: user_cache
                 .get_group_by_gid(process.effective_gid)
-                .unwrap_or_else(|| Arc::new(Group::new(0, "systemd?"))),
-        );
-
-        program.push(process.program.as_str());
-        state.push(process.state.as_str());
-    }
+                .map(|group| group.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| String::from("systemd?")),
+            program: process.program,
+            state: process.state.as_str(),
+            start_time: if start_time {
+                process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true)
+            } else {
+                String::new()
+            },
+            cmdline: process.cmdline,
+        })
+        .collect();
 
     let truncate_inc = if truncate == 0 { usize::MAX } else { truncate + 1 };
 
-    let pid_len = pid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
-    let ppid_len = ppid.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
-    let vsz_len = vsz.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let rss_len = rss.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let anon_len = anon.iter().map(|s| s.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let thd_len = thd.iter().map(|s| s.len()).max().map(|s| s.max(3)).unwrap_or(0);
-    let tty_len = tty.iter().map(|s| s.len()).max().map(|s| s.max(4)).unwrap_or(0);
-    let user_len = user
-        .iter()
-        .map(|user| user.name().len())
-        .max()
-        .map(|s| s.clamp(4, truncate_inc))
-        .unwrap_or(truncate_inc);
-    let group_len = group
-        .iter()
-        .map(|group| group.name().len())
-        .max()
-        .map(|s| s.clamp(5, truncate_inc))
-        .unwrap_or(truncate_inc);
-    let program_len = program
-        .iter()
-        .map(|s| s.len())
-        .max()
-        .map(|s| s.clamp(7, truncate_inc))
-        .unwrap_or(truncate_inc);
-    let state_len = state.iter().map(|s| s.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let pid_len = rows.iter().map(|row| row.pid.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let ppid_len = rows.iter().map(|row| row.ppid.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    let vsz_len = rows.iter().map(|row| row.vsz.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let rss_len = rows.iter().map(|row| row.rss.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let anon_len = rows.iter().map(|row| row.anon.len()).max().map(|s| s.max(9)).unwrap_or(0);
+    let thd_len = rows.iter().map(|row| row.thd.len()).max().map(|s| s.max(3)).unwrap_or(0);
+    let tty_len =
+        rows.iter().map(|row| display_width(&row.tty)).max().map(|s| s.max(4)).unwrap_or(0);
+    let state_len = rows.iter().map(|row| row.state.len()).max().map(|s| s.max(5)).unwrap_or(0);
 
-    #[allow(clippy::never_loop)]
-    loop {
+    let user_len = column_width(rows.iter().map(|row| display_width(&row.user)), 4, truncate_inc);
+    let group_len = column_width(rows.iter().map(|row| display_width(&row.group)), 5, truncate_inc);
+    let program_len =
+        column_width(rows.iter().map(|row| display_width(&row.program)), 7, truncate_inc);
+
+    'header: {
         let mut width = 0;
 
         stdout.set_color(&COLOR_LABEL).unwrap();
 
         if width + pid_len > terminal_width {
-            break;
+            break 'header;
         }
 
-        for _ in 3..pid_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", pid_len.saturating_sub(3)).unwrap();
+        width += pid_len.saturating_sub(3);
 
         write!(&mut stdout, "PID").unwrap(); // 3
         width += 3;
 
         if width + 1 + ppid_len > terminal_width {
-            break;
+            break 'header;
         }
 
-        for _ in 3..ppid_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", ppid_len.saturating_sub(3)).unwrap();
+        width += ppid_len.saturating_sub(3);
 
         write!(&mut stdout, "PPID").unwrap(); // 4
         width += 4;
 
         if width + 5 > terminal_width {
-            break;
+            break 'header;
         }
 
         write!(&mut stdout, "   PR").unwrap(); // 5
         width += 5;
 
         if width + 4 > terminal_width {
-            break;
+            break 'header;
         }
 
         write!(&mut stdout, "  NI").unwrap(); // 4
         width += 4;
 
         if !only_information {
-            if width + 5 > terminal_width {
-                break;
+            if width + 6 > terminal_width {
+                break 'header;
             }
 
-            write!(&mut stdout, " %CPU").unwrap(); // 5
-            width += 5;
+            // The share is of every CPU together, so a process on all of them prints `100.0`.
+            write!(&mut stdout, "  %CPU").unwrap(); // 6
+            width += 6;
         }
 
         if width + 1 + vsz_len > terminal_width {
-            break;
+            break 'header;
         }
 
-        for _ in 2..vsz_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", vsz_len.saturating_sub(2)).unwrap();
+        width += vsz_len.saturating_sub(2);
 
         write!(&mut stdout, "VSZ").unwrap(); // 3
         width += 3;
 
         if width + 1 + rss_len > terminal_width {
-            break;
+            break 'header;
         }
 
-        for _ in 2..rss_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", rss_len.saturating_sub(2)).unwrap();
+        width += rss_len.saturating_sub(2);
 
         write!(&mut stdout, "RSS").unwrap(); // 3
         width += 3;
 
         if width + 1 + anon_len > terminal_width {
-            break;
+            break 'header;
         }
 
-        for _ in 3..anon_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", anon_len.saturating_sub(3)).unwrap();
+        width += anon_len.saturating_sub(3);
 
         write!(&mut stdout, "ANON").unwrap(); // 4
         width += 4;
 
         if width + 1 + thd_len > terminal_width {
-            break;
+            break 'header;
         }
 
-        for _ in 2..thd_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        write!(&mut stdout, "{:1$}", "", thd_len.saturating_sub(2)).unwrap();
+        width += thd_len.saturating_sub(2);
 
         write!(&mut stdout, "THD").unwrap(); // 3
         width += 3;
 
         if width + 1 + tty_len > terminal_width {
-            break;
+            break 'header;
         }
 
         write!(&mut stdout, " TTY").unwrap(); // 4
         width += 4;
 
-        for _ in 3..tty_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        // A heading is padded out to the width of its column, but that padding is only written once the next heading is known to fit, so a line cut short by a narrow terminal ends in a word rather than in blanks.
+        let mut pending = tty_len.saturating_sub(3);
+        width += pending;
 
         if width + 1 + user_len > terminal_width {
-            break;
+            break 'header;
         }
+
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
         write!(&mut stdout, " USER").unwrap(); // 5
         width += 5;
 
-        for _ in 4..user_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        pending = user_len.saturating_sub(4);
+        width += pending;
 
         if width + 1 + group_len > terminal_width {
-            break;
+            break 'header;
         }
+
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
         write!(&mut stdout, " GROUP").unwrap(); // 6
         width += 6;
 
-        for _ in 5..group_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        pending = group_len.saturating_sub(5);
+        width += pending;
 
         if width + 1 + program_len > terminal_width {
-            break;
+            break 'header;
         }
+
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
         write!(&mut stdout, " PROGRAM").unwrap(); // 8
         width += 8;
 
-        for _ in 7..program_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        pending = program_len.saturating_sub(7);
+        width += pending;
 
         if width + 1 + state_len > terminal_width {
-            break;
+            break 'header;
         }
+
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
         write!(&mut stdout, " STATE").unwrap(); // 6
         width += 6;
 
-        for _ in 5..state_len {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        pending = state_len.saturating_sub(5);
+        width += pending;
 
         if start_time {
-            if width + 21 > terminal_width {
-                break;
+            if width + 1 + START_TIME_WIDTH > terminal_width {
+                break 'header;
             }
+
+            write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
             write!(&mut stdout, " START").unwrap(); // 6
             width += 6;
 
-            for _ in 5..20 {
-                write!(&mut stdout, " ").unwrap(); // 1
-                width += 1;
-            }
+            pending = START_TIME_WIDTH - 5;
+            width += pending;
         }
 
         if width + 8 > terminal_width {
-            break;
+            break 'header;
         }
 
-        write!(&mut stdout, " COMMAND").unwrap(); // 8
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
-        break;
+        write!(&mut stdout, " COMMAND").unwrap(); // 8
     }
 
     stdout.set_color(&COLOR_DEFAULT).unwrap();
     writeln!(&mut stdout).unwrap();
 
-    let mut pid_iter = pid.into_iter();
-    let mut ppid_iter = ppid.into_iter();
-    let mut vsz_iter = vsz.into_iter();
-    let mut rss_iter = rss.into_iter();
-    let mut tty_iter = tty.into_iter();
-    let mut anon_iter = anon.into_iter();
-    let mut thd_iter = thd.into_iter();
-    let mut user_iter = user.into_iter();
-    let mut group_iter = group.into_iter();
-    let mut program_iter = program.into_iter();
-    let mut state_iter = state.into_iter();
-
-    for process in processes.iter() {
+    for row in rows.iter() {
         let mut width = 0;
 
         if width + pid_len > terminal_width {
@@ -501,27 +490,21 @@ fn draw_process(
             continue;
         }
 
-        let pid = pid_iter.next().unwrap();
-
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
-        write!(&mut stdout, "{1:>0$}", pid_len, pid).unwrap();
+        write!(&mut stdout, "{1:>0$}", pid_len, row.pid).unwrap();
         width += pid_len;
 
         if width + 1 + ppid_len > terminal_width {
+            stdout.set_color(&COLOR_DEFAULT).unwrap();
+            writeln!(&mut stdout).unwrap();
+
             continue;
         }
 
         stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
 
-        let ppid = ppid_iter.next().unwrap();
-
-        for _ in 0..=(ppid_len - ppid.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(ppid.as_bytes()).unwrap();
-        width += ppid.len();
+        write!(&mut stdout, "{1:>0$}", ppid_len + 1, row.ppid).unwrap();
+        width += ppid_len + 1;
 
         if width + 5 > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -530,11 +513,7 @@ fn draw_process(
             continue;
         }
 
-        if let Some(real_time_priority) = process.real_time_priority {
-            write!(&mut stdout, "{:>5}", format!("*{}", real_time_priority)).unwrap();
-        } else {
-            write!(&mut stdout, "{:>5}", process.priority).unwrap();
-        }
+        write!(&mut stdout, "{:>5}", row.priority).unwrap();
         width += 5;
 
         if width + 4 > terminal_width {
@@ -544,19 +523,19 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, "{:>4}", process.nice).unwrap();
+        write!(&mut stdout, "{:>4}", row.nice).unwrap();
         width += 4;
 
         if !only_information {
-            if width + 5 > terminal_width {
+            if width + 6 > terminal_width {
                 stdout.set_color(&COLOR_DEFAULT).unwrap();
                 writeln!(&mut stdout).unwrap();
 
                 continue;
             }
 
-            write!(&mut stdout, " {:>4.1}", percentage.get(&process.pid).unwrap() * 100.0).unwrap();
-            width += 5;
+            write!(&mut stdout, " {:>5.1}", row.percentage * 100.0).unwrap();
+            width += 6;
         }
 
         if width + 1 + vsz_len > terminal_width {
@@ -566,15 +545,8 @@ fn draw_process(
             continue;
         }
 
-        let vsz = vsz_iter.next().unwrap();
-
-        for _ in 0..=(vsz_len - vsz.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(vsz.as_bytes()).unwrap();
-        width += vsz.len();
+        write!(&mut stdout, "{1:>0$}", vsz_len + 1, row.vsz).unwrap();
+        width += vsz_len + 1;
 
         if width + 1 + rss_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -583,15 +555,8 @@ fn draw_process(
             continue;
         }
 
-        let rss = rss_iter.next().unwrap();
-
-        for _ in 0..=(rss_len - rss.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(rss.as_bytes()).unwrap();
-        width += rss.len();
+        write!(&mut stdout, "{1:>0$}", rss_len + 1, row.rss).unwrap();
+        width += rss_len + 1;
 
         if width + 1 + anon_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -600,15 +565,8 @@ fn draw_process(
             continue;
         }
 
-        let anon = anon_iter.next().unwrap();
-
-        for _ in 0..=(anon_len - anon.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(anon.as_bytes()).unwrap();
-        width += anon.len();
+        write!(&mut stdout, "{1:>0$}", anon_len + 1, row.anon).unwrap();
+        width += anon_len + 1;
 
         if width + 1 + thd_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -617,15 +575,8 @@ fn draw_process(
             continue;
         }
 
-        let thd = thd_iter.next().unwrap();
-
-        for _ in 0..=(thd_len - thd.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
-
-        stdout.write_all(thd.as_bytes()).unwrap();
-        width += thd.len();
+        write!(&mut stdout, "{1:>0$}", thd_len + 1, row.thd).unwrap();
+        width += thd_len + 1;
 
         if width + 1 + tty_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -634,18 +585,9 @@ fn draw_process(
             continue;
         }
 
-        let tty = tty_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        stdout.write_all(tty.as_bytes()).unwrap();
-        width += tty.len();
-
-        for _ in 0..(tty_len - tty.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        // Each of these columns pays off the blank it is separated by and the blanks the columns before it owe, so a row cut short by a narrow terminal ends in a word rather than in blanks.
+        let mut pending = write_column(&mut stdout, 1, &row.tty, tty_len).unwrap();
+        width += 1 + tty_len;
 
         if width + 1 + user_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -654,33 +596,14 @@ fn draw_process(
             continue;
         }
 
-        let user = user_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        {
-            let s = user.name().to_str().unwrap();
-
-            if s.len() > truncate_inc {
-                stdout.write_all(s[..(truncate_inc - 1)].as_bytes()).unwrap();
-                write!(&mut stdout, "+").unwrap(); // 1
-                width += truncate_inc;
-
-                for _ in truncate_inc..4 {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            } else {
-                stdout.write_all(s.as_bytes()).unwrap();
-                width += s.len();
-
-                for _ in 0..(user_len - s.len()) {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            }
-        }
+        pending = write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.user, truncate_inc),
+            user_len,
+        )
+        .unwrap();
+        width += 1 + user_len;
 
         if width + 1 + group_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -689,33 +612,14 @@ fn draw_process(
             continue;
         }
 
-        let group = group_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        {
-            let s = group.name().to_str().unwrap();
-
-            if s.len() > truncate_inc {
-                stdout.write_all(s[..(truncate_inc - 1)].as_bytes()).unwrap();
-                write!(&mut stdout, "+").unwrap(); // 1
-                width += truncate_inc;
-
-                for _ in truncate_inc..5 {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            } else {
-                stdout.write_all(s.as_bytes()).unwrap();
-                width += s.len();
-
-                for _ in 0..(group_len - s.len()) {
-                    write!(&mut stdout, " ").unwrap(); // 1
-                    width += 1;
-                }
-            }
-        }
+        pending = write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.group, truncate_inc),
+            group_len,
+        )
+        .unwrap();
+        width += 1 + group_len;
 
         if width + 1 + program_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -724,29 +628,14 @@ fn draw_process(
             continue;
         }
 
-        let program = program_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        if program.len() > truncate_inc {
-            stdout.write_all(program[..(truncate_inc - 1)].as_bytes()).unwrap();
-            write!(&mut stdout, "+").unwrap(); // 1
-            width += truncate_inc;
-
-            for _ in truncate_inc..7 {
-                write!(&mut stdout, " ").unwrap(); // 1
-                width += 1;
-            }
-        } else {
-            stdout.write_all(program.as_bytes()).unwrap();
-            width += program.len();
-
-            for _ in 0..(program_len - program.len()) {
-                write!(&mut stdout, " ").unwrap(); // 1
-                width += 1;
-            }
-        }
+        pending = write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.program, truncate_inc),
+            program_len,
+        )
+        .unwrap();
+        width += 1 + program_len;
 
         if width + 1 + state_len > terminal_width {
             stdout.set_color(&COLOR_DEFAULT).unwrap();
@@ -755,34 +644,21 @@ fn draw_process(
             continue;
         }
 
-        let state = state_iter.next().unwrap();
-
-        write!(&mut stdout, " ").unwrap(); // 1
-        width += 1;
-
-        stdout.write_all(state.as_bytes()).unwrap();
-        width += state.len();
-
-        for _ in 0..(state_len - state.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-            width += 1;
-        }
+        pending = write_column(&mut stdout, pending + 1, row.state, state_len).unwrap();
+        width += 1 + state_len;
 
         if start_time {
-            if width + 21 > terminal_width {
+            if width + 1 + START_TIME_WIDTH > terminal_width {
                 stdout.set_color(&COLOR_DEFAULT).unwrap();
                 writeln!(&mut stdout).unwrap();
 
                 continue;
             }
 
-            write!(&mut stdout, " ").unwrap(); // 1
-
-            stdout
-                .write_all(process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true).as_bytes())
-                .unwrap();
-
-            width += 21;
+            // The timestamp is always the same length, so this column never owes anything.
+            pending =
+                write_column(&mut stdout, pending + 1, &row.start_time, START_TIME_WIDTH).unwrap();
+            width += 1 + START_TIME_WIDTH;
         }
 
         if width + 8 > terminal_width {
@@ -792,20 +668,18 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " ").unwrap(); // 1
         width += 1;
 
         let remain_width = terminal_width - width;
 
-        if process.cmdline.len() > remain_width {
-            let cmdline =
-                String::from_utf8_lossy(&process.cmdline.as_bytes()[..(remain_width - 1)]);
-
-            stdout.write_all(cmdline.as_bytes()).unwrap();
-            write!(&mut stdout, "+").unwrap(); // 1
-        } else {
-            stdout.write_all(process.cmdline.as_bytes()).unwrap();
-        }
+        // A kernel thread has no command line, and the last column owes nothing to a column after it.
+        write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.cmdline, remain_width),
+            0,
+        )
+        .unwrap();
 
         stdout.set_color(&COLOR_DEFAULT).unwrap();
         writeln!(&mut stdout).unwrap();
@@ -814,4 +688,62 @@ fn draw_process(
     output.print(&stdout).unwrap();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_width_of_a_truncation_shorter_than_the_heading() {
+        // `--truncate 5` leaves 6 for a name, which is narrower than the 7 of `PROGRAM`.
+        assert_eq!(7, column_width([8, 12].into_iter(), 7, 6));
+        assert_eq!(4, column_width([8, 12].into_iter(), 4, 2));
+    }
+
+    #[test]
+    fn test_column_width_without_a_truncation() {
+        // `--truncate 0` turns the truncation off.
+        assert_eq!(12, column_width([8, 12].into_iter(), 7, usize::MAX));
+        assert_eq!(7, column_width([3, 5].into_iter(), 7, usize::MAX));
+    }
+
+    #[test]
+    fn test_column_width_of_an_empty_list() {
+        // Nothing matched the filters, so only the heading has to fit.
+        assert_eq!(7, column_width(std::iter::empty(), 7, usize::MAX));
+    }
+
+    #[test]
+    fn test_truncate_with_marker() {
+        assert_eq!("magiclen", truncate_with_marker("magiclen", 8));
+        assert_eq!("magicl+", truncate_with_marker("magiclen", 7));
+    }
+
+    #[test]
+    fn test_busier_first_puts_the_busy_processes_on_top() {
+        assert_eq!(Ordering::Less, busier_first((0.50, 1), (0.20, 4096)));
+        assert_eq!(Ordering::Greater, busier_first((0.20, 4096), (0.50, 1)));
+
+        // An idle process is ordered by its memory size, however much the other one has.
+        assert_eq!(Ordering::Less, busier_first((0.001, 4096), (0.001, 1)));
+    }
+
+    #[test]
+    fn test_busier_first_of_an_equal_percentage() {
+        assert_eq!(Ordering::Less, busier_first((0.5, 4096), (0.5, 1)));
+        assert_eq!(Ordering::Greater, busier_first((0.5, 1), (0.5, 4096)));
+        assert_eq!(Ordering::Equal, busier_first((0.5, 4096), (0.5, 4096)));
+    }
+
+    #[test]
+    fn test_truncate_with_marker_counts_columns_not_bytes() {
+        // Three characters, six columns, nine bytes, so a six-column field holds it whole.
+        assert_eq!("日本語", truncate_with_marker("日本語", 6));
+        assert_eq!("日本+", truncate_with_marker("日本語", 5));
+        assert_eq!("日+", truncate_with_marker("日本語", 3));
+
+        // Not even one character fits beside the marker.
+        assert_eq!("+", truncate_with_marker("日本語", 2));
+    }
 }

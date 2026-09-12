@@ -1,0 +1,126 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+    "plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "jsdoc", "react", "jsx-a11y"],
+    "categories": {
+        "correctness": "error",
+        "suspicious": "error",
+        "perf": "warn",
+        "pedantic": "off",
+        "style": "off",
+        "restriction": "off",
+        "nursery": "off",
+    },
+    "env": {
+        "browser": true,
+        "node": true,
+    },
+    "options": {
+        "typeAware": true,
+        "typeCheck": true,
+        "reportUnusedDisableDirectives": "error",
+    },
+    "ignorePatterns": [],
+    "rules": {
+        // correctness
+        "unicorn/no-new-array": "off",
+        "import/no-unassigned-import": [
+            "error",
+            {
+                "allow": ["@testing-library/jest-dom/vitest", "**/*.css"],
+            },
+        ],
+
+        // suspicious
+        "react/react-in-jsx-scope": "off",
+
+        // perf
+        "eslint/no-useless-call": "error",
+        "unicorn/prefer-array-find": "error",
+        "oxc/no-accumulating-spread": "error",
+
+        // pedantic
+        "eslint/eqeqeq": "error",
+        "typescript/no-misused-promises": "error",
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-argument": "error",
+        "typescript/no-unsafe-call": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/no-unsafe-return": "error",
+        "typescript/no-unsafe-function-type": "error",
+        "typescript/switch-exhaustiveness-check": [
+            "error",
+            { "considerDefaultExhaustiveForUnions": true, "requireDefaultForNonUnion": true },
+        ],
+        "typescript/strict-boolean-expressions": "error",
+        "unicorn/new-for-builtins": "error",
+        "react/checked-requires-onchange-or-readonly": "error",
+        "react/jsx-no-target-blank": "error",
+        "react/rules-of-hooks": "error",
+
+        // style
+        "eslint/curly": "error",
+        "eslint/default-case-last": "error",
+        "eslint/default-param-last": "error",
+        "eslint/func-style": "error",
+        "eslint/new-cap": [
+            "error",
+            {
+                "capIsNew": false,
+            },
+        ],
+        "eslint/prefer-arrow-callback": "error",
+        "eslint/prefer-const": "error",
+        "eslint/vars-on-top": "error",
+        "typescript/consistent-type-definitions": "error",
+        "typescript/consistent-type-exports": "error",
+        "typescript/consistent-type-imports": "error",
+        "import/consistent-type-specifier-style": "error",
+        "react/function-component-definition": [
+            "error",
+            {
+                "namedComponents": "function-declaration",
+                "unnamedComponents": "arrow-function",
+            },
+        ],
+        "react/jsx-pascal-case": "error",
+        "react/self-closing-comp": "error",
+
+        // restriction
+        "eslint/no-use-before-define": [
+            "error",
+            {
+                "functions": false,
+                "typedefs": false,
+            },
+        ],
+        "typescript/explicit-function-return-type": "error",
+        "typescript/explicit-member-accessibility": [
+            "error",
+            {
+                "accessibility": "no-public",
+            },
+        ],
+        "typescript/explicit-module-boundary-types": "error",
+        "typescript/no-explicit-any": "error",
+        "typescript/no-empty-object-type": "error",
+        "typescript/no-non-null-assertion": "warn",
+        "typescript/no-require-imports": "error",
+        "unicorn/prefer-node-protocol": "error",
+        "react/no-unknown-property": "error",
+        "react/only-export-components": [
+            "warn",
+            {
+                "allowConstantExport": true,
+            },
+        ],
+    },
+    "overrides": [
+        {
+            "files": ["**/*.tsx"],
+            "rules": {
+                "eslint/func-style": "off",
+            },
+        },
+    ],
+}

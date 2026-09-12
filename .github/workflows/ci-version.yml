@@ -26,7 +26,7 @@ jobs:
     name: Test ${{ matrix.toolchain }} on ${{ matrix.os }} to ${{ matrix.target }} (${{ matrix.features }})
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -41,7 +41,7 @@ jobs:
         os:
           - ubuntu-latest
         toolchain:
-          - "1.70"
+          - "1.89"
         target:
           - x86_64-unknown-linux-gnu
           - x86_64-unknown-linux-musl
@@ -50,7 +50,7 @@ jobs:
     name: Test ${{ matrix.toolchain }} on ${{ matrix.os }} to ${{ matrix.target }} (${{ matrix.features }})
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}

@@ -1,10 +1,13 @@
 use byte_unit::{Byte, Unit, UnitType};
 use mprober_lib::{cpu, load_average};
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
+
+/// `/proc/cpuinfo` has no `model name` field on some architectures, e.g. on arm64.
+pub const UNKNOWN_CPU_MODEL_NAME: &str = "Unknown CPU";
 
 #[inline]
-pub fn handle_cpu(args: CLIArgs) {
+pub fn handle_cpu(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Cpu { .. }));
 
     if let CLICommands::Cpu {
@@ -19,42 +22,57 @@ pub fn handle_cpu(args: CLIArgs) {
 
         monitor_handler!(
             monitor,
-            draw_cpu_info(monitor, separate, only_information),
-            draw_cpu_info(None, separate, only_information),
+            draw_cpu_info(monitor, separate, only_information)?,
+            draw_cpu_info(None, separate, only_information)?,
             only_information
         );
     }
+
+    Ok(())
 }
 
-fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bool) {
+/// The frequency is reported in MHz, and is worth scaling once it reaches GHz. Only the first letter of the byte unit is kept, so that `MB` reads as `MHz`.
+fn scale_hz(mhz: f64) -> (f64, char) {
+    let hz =
+        Byte::from_f64_with_unit(mhz, Unit::MB).unwrap().get_appropriate_unit(UnitType::Decimal);
+
+    (hz.get_value(), hz.get_unit().as_str().as_bytes()[0] as char)
+}
+
+fn draw_cpu_info(
+    monitor: Option<Duration>,
+    separate: bool,
+    only_information: bool,
+) -> anyhow::Result<()> {
     let output = get_stdout_output();
     let mut stdout = output.buffer();
 
     let terminal_width = get_term_width();
 
-    let mut draw_load_average = |cpus: &[cpu::CPU]| {
-        let load_average = load_average::get_load_average().unwrap();
+    let mut draw_load_average = |cpus: &[cpu::CPU]| -> anyhow::Result<()> {
+        let load_average = load_average::get_load_average()?;
 
         let logical_cores_number: usize = cpus.iter().map(|cpu| cpu.siblings).sum();
         let logical_cores_number_f64 = logical_cores_number as f64;
 
-        let one = format!("{:.2}", load_average.one);
-        let five = format!("{:.2}", load_average.five);
-        let fifteen = format!("{:.2}", load_average.fifteen);
+        let rows = [
+            ("one    ", load_average.one),
+            ("five   ", load_average.five),
+            ("fifteen", load_average.fifteen),
+        ]
+        .map(|(label, value)| {
+            let value_string = format!("{value:.2}");
+            let percentage_string = format!("{:.2}%", value * 100f64 / logical_cores_number_f64);
 
-        let load_average_len = one.len().max(five.len()).max(fifteen.len());
+            (label, value, value_string, percentage_string)
+        });
 
-        let one_percentage =
-            format!("{:.2}%", load_average.one * 100f64 / logical_cores_number_f64);
-        let five_percentage =
-            format!("{:.2}%", load_average.five * 100f64 / logical_cores_number_f64);
-        let fifteen_percentage =
-            format!("{:.2}%", load_average.fifteen * 100f64 / logical_cores_number_f64);
-
+        let load_average_len = rows.iter().map(|(_, _, value, _)| value.len()).max().unwrap();
         let percentage_len =
-            one_percentage.len().max(five_percentage.len()).max(fifteen_percentage.len());
+            rows.iter().map(|(_, _, _, percentage)| percentage.len()).max().unwrap();
 
-        let progress_max = terminal_width - 11 - load_average_len - 2 - percentage_len - 1;
+        let progress_max =
+            bar_width(terminal_width, 11 + load_average_len + 2 + percentage_len + 1);
 
         // number of logical CPU cores
 
@@ -72,159 +90,66 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
         }
         writeln!(&mut stdout).unwrap();
 
-        // one
-
-        stdout.set_color(&COLOR_LABEL).unwrap();
-        write!(&mut stdout, "one    ").unwrap(); // 7
-
-        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-        write!(&mut stdout, " [").unwrap(); // 2
-
         let f = progress_max as f64 / logical_cores_number_f64;
 
-        let progress_used = ((load_average.one * f).floor() as usize).min(progress_max);
+        for (label, value, value_string, percentage_string) in rows {
+            stdout.set_color(&COLOR_LABEL).unwrap();
+            write!(&mut stdout, "{label}").unwrap(); // 7
 
-        stdout.set_color(&COLOR_USED).unwrap();
-        for _ in 0..progress_used {
-            write!(&mut stdout, "|").unwrap(); // 1
+            stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
+            write!(&mut stdout, " [").unwrap(); // 2
+
+            let progress_used = ((value * f).floor() as usize).min(progress_max);
+
+            stdout.set_color(&COLOR_USED).unwrap();
+            write_cells(&mut stdout, b'|', progress_used).unwrap();
+
+            write_cells(&mut stdout, b' ', progress_max - progress_used).unwrap();
+
+            stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
+            write!(&mut stdout, "] ").unwrap(); // 2
+
+            write!(&mut stdout, "{:1$}", "", load_average_len - value_string.len()).unwrap();
+
+            stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
+            stdout.write_all(value_string.as_bytes()).unwrap();
+
+            write!(&mut stdout, " (").unwrap(); // 2
+
+            write!(&mut stdout, "{:1$}", "", percentage_len - percentage_string.len()).unwrap();
+
+            stdout.write_all(percentage_string.as_bytes()).unwrap();
+
+            write!(&mut stdout, ")").unwrap(); // 1
+
+            writeln!(&mut stdout).unwrap();
         }
-
-        for _ in 0..(progress_max - progress_used) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-        write!(&mut stdout, "] ").unwrap(); // 2
-
-        for _ in 0..(load_average_len - one.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
-        stdout.write_all(one.as_bytes()).unwrap();
-
-        write!(&mut stdout, " (").unwrap(); // 2
-
-        for _ in 0..(percentage_len - one_percentage.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.write_all(one_percentage.as_bytes()).unwrap();
-
-        write!(&mut stdout, ")").unwrap(); // 1
 
         writeln!(&mut stdout).unwrap();
 
-        // five
-
-        stdout.set_color(&COLOR_LABEL).unwrap();
-        write!(&mut stdout, "five   ").unwrap(); // 7
-
-        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-        write!(&mut stdout, " [").unwrap(); // 2
-
-        let f = progress_max as f64 / logical_cores_number_f64;
-
-        let progress_used = ((load_average.five * f).floor() as usize).min(progress_max);
-
-        stdout.set_color(&COLOR_USED).unwrap();
-        for _ in 0..progress_used {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-
-        for _ in 0..(progress_max - progress_used) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-        write!(&mut stdout, "] ").unwrap(); // 2
-
-        for _ in 0..(load_average_len - five.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
-        stdout.write_all(five.as_bytes()).unwrap();
-
-        write!(&mut stdout, " (").unwrap(); // 2
-
-        for _ in 0..(percentage_len - five_percentage.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.write_all(five_percentage.as_bytes()).unwrap();
-
-        write!(&mut stdout, ")").unwrap(); // 1
-
-        writeln!(&mut stdout).unwrap();
-
-        // fifteen
-
-        stdout.set_color(&COLOR_LABEL).unwrap();
-        write!(&mut stdout, "fifteen").unwrap(); // 7
-
-        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-        write!(&mut stdout, " [").unwrap(); // 2
-
-        let f = progress_max as f64 / logical_cores_number_f64;
-
-        let progress_used = ((load_average.fifteen * f).floor() as usize).min(progress_max);
-
-        stdout.set_color(&COLOR_USED).unwrap();
-        for _ in 0..progress_used {
-            write!(&mut stdout, "|").unwrap(); // 1
-        }
-
-        for _ in 0..(progress_max - progress_used) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-        write!(&mut stdout, "] ").unwrap(); // 2
-
-        for _ in 0..(load_average_len - fifteen.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
-        stdout.write_all(fifteen.as_bytes()).unwrap();
-
-        write!(&mut stdout, " (").unwrap(); // 2
-
-        for _ in 0..(percentage_len - fifteen_percentage.len()) {
-            write!(&mut stdout, " ").unwrap(); // 1
-        }
-
-        stdout.write_all(fifteen_percentage.as_bytes()).unwrap();
-
-        write!(&mut stdout, ")").unwrap(); // 1
-
-        writeln!(&mut stdout).unwrap();
-        writeln!(&mut stdout).unwrap();
+        Ok(())
     };
 
     if separate {
         let all_percentage: Vec<f64> = if only_information {
             Vec::new()
         } else {
-            cpu::get_all_cpu_utilization_in_percentage(false, match monitor {
-                Some(monitor) => monitor,
-                None => DEFAULT_INTERVAL,
-            })
-            .unwrap()
+            cpu::get_all_cpu_utilization_in_percentage(false, monitor.unwrap_or(DEFAULT_INTERVAL))?
         };
 
-        let cpus = cpu::get_cpus().unwrap();
+        let cpus = cpu::get_cpus()?;
 
-        draw_load_average(&cpus);
+        draw_load_average(&cpus)?;
 
         let mut i = 0;
 
-        let cpus_len_dec = cpus.len() - 1;
+        let cpus_len_dec = cpus.len().saturating_sub(1);
 
         for (cpu_index, cpu) in cpus.into_iter().enumerate() {
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-            stdout.write_all(cpu.model_name.as_bytes()).unwrap();
+            stdout
+                .write_all(cpu.model_name.as_deref().unwrap_or(UNKNOWN_CPU_MODEL_NAME).as_bytes())
+                .unwrap();
 
             write!(&mut stdout, " ").unwrap();
 
@@ -234,36 +159,22 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
             writeln!(&mut stdout).unwrap();
 
-            let mut hz_string: Vec<String> = Vec::with_capacity(cpu.siblings);
+            // A kernel which reports no `cpu MHz` and has no cpufreq files leaves this empty, which only means the column is not drawn.
+            let hz_string: Vec<String> = cpu
+                .cpus_mhz
+                .iter()
+                .copied()
+                .map(|cpu_mhz| {
+                    let (value, unit) = scale_hz(cpu_mhz);
 
-            for cpu_mhz in cpu.cpus_mhz.iter().copied() {
-                let cpu_hz = Byte::from_f64_with_unit(cpu_mhz, Unit::MB)
-                    .unwrap()
-                    .get_appropriate_unit(UnitType::Decimal);
+                    format!("{value:.2} {unit}Hz")
+                })
+                .collect();
 
-                hz_string.push(format!(
-                    "{:.2} {}Hz",
-                    cpu_hz.get_value(),
-                    &cpu_hz.get_unit().as_str()[..1]
-                ));
-            }
+            let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap_or(0);
 
-            let hz_string_len = hz_string.iter().map(|s| s.len()).max().unwrap();
-
-            // The max length of `CPU<number> `.
-            let d = {
-                let mut n = cpu.siblings;
-
-                let mut d = 1;
-
-                while n > 10 {
-                    n /= 10;
-
-                    d += 1;
-                }
-
-                d + 4
-            };
+            // The max length of `CPU<number> `, where the highest number is one below the count.
+            let d = cpu.siblings.saturating_sub(1).checked_ilog10().unwrap_or(0) as usize + 5;
 
             if only_information {
                 for (i, hz_string) in hz_string.into_iter().enumerate() {
@@ -277,22 +188,28 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
                     writeln!(&mut stdout).unwrap();
                 }
             } else {
-                let mut percentage_string: Vec<String> = Vec::with_capacity(cpu.siblings);
+                // `/proc/stat` lists only the CPUs which are online, while `siblings` counts every thread the package has, so the tail can be shorter than this package asks for.
+                let percentage = all_percentage.get(i..).unwrap_or_default();
 
-                for p in all_percentage[i..].iter().copied().take(cpu.siblings) {
-                    percentage_string.push(format!("{:.2}%", p * 100f64));
-                }
+                let percentage_string: Vec<String> = percentage
+                    .iter()
+                    .copied()
+                    .take(cpu.siblings)
+                    .map(|p| format!("{:.2}%", p * 100f64))
+                    .collect();
 
-                let percentage_len = percentage_string.iter().map(|s| s.len()).max().unwrap();
+                let percentage_len = percentage_string.iter().map(|s| s.len()).max().unwrap_or(0);
 
-                let progress_max = terminal_width - d - 3 - percentage_len - 2 - hz_string_len - 1;
+                let progress_max =
+                    bar_width(terminal_width, d + 3 + percentage_len + 2 + hz_string_len + 1);
 
                 let mut percentage_string_iter = percentage_string.into_iter();
                 let mut hz_string_iter = hz_string.into_iter();
 
-                for (i, p) in all_percentage[i..].iter().take(cpu.siblings).enumerate() {
+                for (i, p) in percentage.iter().take(cpu.siblings).enumerate() {
                     let percentage_string = percentage_string_iter.next().unwrap();
-                    let hz_string = hz_string_iter.next().unwrap();
+                    // The frequencies are absent on a kernel which reports none, so this column collapses to nothing.
+                    let hz_string = hz_string_iter.next().unwrap_or_default();
 
                     stdout.set_color(&COLOR_LABEL).unwrap();
                     write!(&mut stdout, "{1:<0$}", d, format!("CPU{i}")).unwrap();
@@ -300,34 +217,27 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
                     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
                     write!(&mut stdout, "[").unwrap(); // 1
 
-                    let f = progress_max as f64;
-
-                    let progress_used = (p * f).floor() as usize;
+                    // `/proc/stat` can hand back a ratio above one when its counters are reset, e.g. by a CPU going offline, and the blanks below would then underflow.
+                    let progress_used =
+                        ((p * progress_max as f64).floor() as usize).min(progress_max);
 
                     stdout.set_color(&COLOR_USED).unwrap();
-                    for _ in 0..progress_used {
-                        write!(&mut stdout, "|").unwrap(); // 1
-                    }
+                    write_cells(&mut stdout, b'|', progress_used).unwrap();
 
-                    for _ in 0..(progress_max - progress_used) {
-                        write!(&mut stdout, " ").unwrap(); // 1
-                    }
+                    write_cells(&mut stdout, b' ', progress_max - progress_used).unwrap();
 
                     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
                     write!(&mut stdout, "] ").unwrap(); // 2
 
-                    for _ in 0..(percentage_len - percentage_string.len()) {
-                        write!(&mut stdout, " ").unwrap(); // 1
-                    }
+                    write!(&mut stdout, "{:1$}", "", percentage_len - percentage_string.len())
+                        .unwrap();
 
                     stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
                     stdout.write_all(percentage_string.as_bytes()).unwrap();
 
                     write!(&mut stdout, " (").unwrap(); // 2
 
-                    for _ in 0..(hz_string_len - hz_string.len()) {
-                        write!(&mut stdout, " ").unwrap(); // 1
-                    }
+                    write!(&mut stdout, "{:1$}", "", hz_string_len - hz_string.len()).unwrap();
 
                     stdout.write_all(hz_string.as_bytes()).unwrap();
 
@@ -348,25 +258,24 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
         let (average_percentage, average_percentage_string) = if only_information {
             (0f64, "".to_string())
         } else {
-            let average_percentage =
-                cpu::get_average_cpu_utilization_in_percentage(match monitor {
-                    Some(monitor) => monitor,
-                    None => DEFAULT_INTERVAL,
-                })
-                .unwrap();
+            let average_percentage = cpu::get_average_cpu_utilization_in_percentage(
+                monitor.unwrap_or(DEFAULT_INTERVAL),
+            )?;
 
             let average_percentage_string = format!("{:.2}%", average_percentage * 100f64);
 
             (average_percentage, average_percentage_string)
         };
 
-        let cpus = cpu::get_cpus().unwrap();
+        let cpus = cpu::get_cpus()?;
 
-        draw_load_average(&cpus);
+        draw_load_average(&cpus)?;
 
         for cpu in cpus {
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-            stdout.write_all(cpu.model_name.as_bytes()).unwrap();
+            stdout
+                .write_all(cpu.model_name.as_deref().unwrap_or(UNKNOWN_CPU_MODEL_NAME).as_bytes())
+                .unwrap();
 
             write!(&mut stdout, " ").unwrap();
 
@@ -374,23 +283,23 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
 
             write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings).unwrap();
 
-            write!(&mut stdout, " ").unwrap();
+            // A kernel which reports no `cpu MHz` and has no cpufreq files leaves this empty, and an average of nothing is not a number.
+            if !cpu.cpus_mhz.is_empty() {
+                write!(&mut stdout, " ").unwrap();
 
-            let cpu_mhz: f64 = cpu.cpus_mhz.iter().sum::<f64>() / cpu.cpus_mhz.len() as f64;
+                let cpu_mhz: f64 = cpu.cpus_mhz.iter().sum::<f64>() / cpu.cpus_mhz.len() as f64;
 
-            let cpu_hz = Byte::from_f64_with_unit(cpu_mhz, Unit::MB)
-                .unwrap()
-                .get_appropriate_unit(UnitType::Decimal);
+                let (value, unit) = scale_hz(cpu_mhz);
 
-            write!(&mut stdout, "{:.2}{}Hz", cpu_hz.get_value(), &cpu_hz.get_unit().as_str()[..1])
-                .unwrap();
+                write!(&mut stdout, "{value:.2} {unit}Hz").unwrap();
+            }
 
             stdout.set_color(&COLOR_DEFAULT).unwrap();
             writeln!(&mut stdout).unwrap();
         }
 
         if !only_information {
-            let progress_max = terminal_width - 7 - average_percentage_string.len();
+            let progress_max = bar_width(terminal_width, 7 + average_percentage_string.len());
 
             stdout.set_color(&COLOR_LABEL).unwrap();
             write!(&mut stdout, "CPU").unwrap(); // 3
@@ -398,18 +307,13 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
             write!(&mut stdout, " [").unwrap(); // 2
 
-            let f = progress_max as f64;
-
-            let progress_used = (average_percentage * f).floor() as usize;
+            let progress_used =
+                ((average_percentage * progress_max as f64).floor() as usize).min(progress_max);
 
             stdout.set_color(&COLOR_USED).unwrap();
-            for _ in 0..progress_used {
-                write!(&mut stdout, "|").unwrap(); // 1
-            }
+            write_cells(&mut stdout, b'|', progress_used).unwrap();
 
-            for _ in 0..(progress_max - progress_used) {
-                write!(&mut stdout, " ").unwrap(); // 1
-            }
+            write_cells(&mut stdout, b' ', progress_max - progress_used).unwrap();
 
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
             write!(&mut stdout, "] ").unwrap(); // 2
@@ -423,4 +327,6 @@ fn draw_cpu_info(monitor: Option<Duration>, separate: bool, only_information: bo
     }
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

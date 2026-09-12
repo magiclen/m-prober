@@ -3,11 +3,15 @@ M Prober
 
 [![CI](https://github.com/magiclen/m-prober/actions/workflows/ci.yml/badge.svg)](https://github.com/magiclen/m-prober/actions/workflows/ci.yml)
 
-This program aims to collect Linux system information including hostname, kernel version, uptime, RTC time, load average, CPU, memory, network interfaces, block devices and processes. It can be used not only as a normal CLI tool, but also a web application with a front-end webpage and useful HTTP APIs.
+This program collects Linux system information: hostname, kernel version, uptime, RTC time, load average, CPU, memory, PSI pressure, cgroup limits, network interfaces, block devices and processes. It is meant as a probe for a VPS, a cloud instance or a remote virtual machine, and works both as a CLI tool and as a web application with a front-end page and HTTP APIs.
 
 ## Help
 
 ```
+M Prober 0.12.0
+Magic Len <len@magiclen.org>
+M Prober is a free and simple probe utility for Linux.
+
 EXAMPLES:
 mprober hostname                      # Show the hostname
 mprober kernel                        # Show the kernel version
@@ -43,6 +47,11 @@ mprober volume -l                     # Show current volume stats without colors
 mprober volume -u kb                  # Show current volume stats in KB
 mprober volume -i                     # Only show volume information without I/O rates
 mprober volume --mounts               # Show current volume stats including mount points
+mprober pressure                      # Show PSI, which tells resource shortage apart from a busy but healthy system
+mprober pressure -m 1000              # Show PSI and refresh every 1000 milliseconds
+mprober cgroup                        # Show the CPU, memory and PID limits of the container or VM this runs in
+mprober cgroup -m 1000                # Show the cgroup stats and refresh every 1000 milliseconds
+mprober cgroup -u kb                  # Show the cgroup stats in KB
 mprober process                       # Show a snapshot of the current processes
 mprober process -m 1000               # Show a snapshot of the current processes and refresh every 1000 milliseconds
 mprober process -p                    # Show a snapshot of the current processes without colors
@@ -78,6 +87,8 @@ Commands:
   memory     Show memory stats
   network    Show network stats
   volume     Show volume stats
+  pressure   Show PSI (Pressure Stall Information)
+  cgroup     Show the limits and usage of the cgroup this program runs in
   process    Show process stats
   web        Start a HTTP service to monitor this computer
   benchmark  Run benchmarks to measure the performance of this environment
@@ -90,7 +101,11 @@ Options:
 
 ## Requirements
 
-* Linux Kernel Version: 3.10+
+* Linux kernel 5.10 or later.
+* `pressure` needs a kernel built with `CONFIG_PSI` which was not booted with `psi=0`.
+* `cgroup` needs cgroup v2, which is what every current distribution mounts.
+
+Both subcommands say so and exit instead of failing when the machine does not provide the data, and their HTTP APIs answer `404` there.
 
 ## Usage
 
@@ -114,91 +129,211 @@ From [GitHub](https://github.com/magiclen/m-prober) (x86 and x86_64),
 
 ### CLI
 
-##### Get Hostname
+Every subcommand accepts a few shared flags:
+
+| Flag | Effect |
+| --- | --- |
+| `-m`, `--monitor` | Redraw on an interval instead of printing once. Press `q` to leave. |
+| `-p`, `--plain` | No colors, and the bars are drawn with `\|`, `$` and `#` so they stay readable. |
+| `-l`, `--light` | Darker colors, which fit a light terminal theme. |
+| `-u`, `--unit` | Force a fixed unit, e.g. `-u kb`, instead of picking one per value. |
+
+`MPROBER_FORCE_PLAIN` and `MPROBER_LIGHT` set `--plain` and `--light` for every run, which is useful when the output is piped or when the terminal has a light theme. Set either to anything other than `0` to enable it.
+
+The samples below are the plain output, so they are what you get when the color escapes are stripped.
+
+#### Get Hostname
 
 ```bash
 mprober hostname
 ```
 
+```
+magiclen-linux
+```
+
 In addition to `hostname`, `h`, `host`, `name`, and `servername` are also acceptable.
 
-![hostname.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/hostname.png)
-
-##### Get Kernel Version
+#### Get Kernel Version
 
 ```bash
 mprober kernel
 ```
 
+```
+6.17.0-40-generic
+```
+
 In addition to `kernel`, `k`, `l`, and `linux` are also acceptable.
 
-![kernel.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/kernel.png)
-
-##### Get System Uptime
+#### Get System Uptime
 
 ```bash
 mprober uptime
 ```
 
+```
+This computer has been up for 2 hours, 54 minutes, and 41 seconds.
+```
+
+Add `-s` to get the number of seconds instead.
+
 In addition to `uptime`, `u`, `up`, `utime`, and `ut` are also acceptable.
 
-![uptime.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/uptime.png)
-
-##### Get RTC Time
+#### Get RTC Time
 
 ```bash
 mprober time
 ```
 
+```
+RTC Date 2026-09-07
+RTC Time 13:43:28
+```
+
 In addition to `time`, `t`, `systime`, `stime`, `st`, `utc`, `utctime`, `rtc`, `rtctime`, and `date` are also acceptable.
 
-![time.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/time.png)
-
-##### Show CPU Stats
+#### Show CPU Stats
 
 ```bash
 mprober cpu
 ```
 
+```
+There are 24 logical CPU cores.
+one     [|||                                                      ] 1.42 (5.92%)
+five    [||                                                       ] 0.86 (3.58%)
+fifteen [|                                                        ] 0.48 (2.00%)
+
+Intel(R) Core(TM) Ultra 9 285K 24C/24T 1.67 GHz
+CPU [||||||                                                              ] 9.51%
+```
+
+Add `-s` to get a bar and a frequency per core instead of the average, one row per core:
+
+```
+Intel(R) Core(TM) Ultra 9 285K 24C/24T
+CPU0  [|||||||||||||||||||||||||||||||||||||||||||||||||||] 100.00% (  5.50 GHz)
+CPU1  [                                                   ]   0.00% (  4.96 GHz)
+CPU2  [                                                   ]   0.00% (800.00 MHz)
+...
+```
+
+Add `-i` to skip the utilization, which then needs no sampling interval and returns at once.
+
 In addition to `cpu`, `c`, `cpus`, `core`, `cores`, `load`, `processor`, and `processors` are also acceptable.
 
-![cpu.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/cpu.png)
-
-##### Show Memory Stats
+#### Show Memory Stats
 
 ```bash
 mprober memory
 ```
 
+```
+Memory [|||||||||||||$$$$$$$$$$$$$$$$$$$$$$$$$$ ] 21.36 GiB / 62.07 GiB (34.41%)
+Swap   [                                        ] 12.40 MiB /  7.63 GiB ( 0.16%)
+```
+
+In the plain output `|` is the used memory, `$` the page cache and `#` the buffers. With colors they are three shades instead.
+
 In addition to `memory`, `m`, `mem`, `f`,`free`, `memories`, `swap`, `ram`, `dram`, `ddr`, `cache`, `buffer`, `buffers`, `buf`, and `buff` are also acceptable.
 
-![memory.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/memory.png)
-
-##### Show Network Stats
+#### Show Network Stats
 
 ```bash
 mprober network
 ```
 
+```
+        Upload Rate | Uploaded Data | Download Rate | Downloaded Data
+lo            0 B/s         7.94 MB           0 B/s           7.94 MB
+enp1s0    1.30 KB/s       193.34 MB       4.18 KB/s           1.80 GB
+docker0       0 B/s         6.27 KB           0 B/s              84 B
+```
+
 In addition to `network`, `n`, `net`, `networks`,`bandwidth`, and `traffic` are also acceptable.
 
-![network.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/network.png)
-
-##### Show Volume Stats
+#### Show Volume Stats
 
 ```bash
 mprober volume
 ```
 
+```
+          Reading Rate | Read Data | Writing Rate | Written Data
+nvme0n1p2        0 B/s     7.30 MB          0 B/s      192.51 KB
+          [||||||||||||||||||                     ] 975.23 MB / 2.01 GB (48.46%)
+nvme0n1p4        0 B/s    20.82 GB          0 B/s       60.67 GB
+          [|||||||||                              ] 473.37 GB / 1.99 TB (23.79%)
+```
+
+Add `--mounts` to also list the mount points of each volume, and `-i` to skip the I/O rates.
+
 In addition to `volume`, `v`, `storage`, `volumes`, `d`, `disk`, `disks`, `blk`, `block`, `blocks`, `mount`, `mounts`, `ssd`, and `hdd` are also acceptable.
 
-![volume.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/volume.png)
+#### Show Pressure (PSI)
 
-#### Color Mode
+```bash
+mprober pressure
+```
 
-Environment variables, `MPROBER_LIGHT` and `MPROBER_FORCE_PLAIN` can be used to control the output colors.
+```
+                                                           avg10   avg60  avg300
+CPU    some [                                         ]    0.00%   0.00%   0.00%
+CPU    full [                                         ]    0.00%   0.00%   0.00%
+Memory some [                                         ]    0.00%   0.00%   0.00%
+Memory full [                                         ]    0.00%   0.00%   0.00%
+IO     some [|||                                      ]    6.31%   2.04%   0.88%
+IO     full [||                                       ]    4.10%   1.22%   0.51%
+```
 
-![colors.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/colors.png)
+PSI is the share of time tasks spent stalled waiting for a resource. Unlike the load average it tells a system which is merely busy apart from one which is actually short of CPU, memory or I/O. `some` is the time at least one task was stalled, `full` the time every non-idle task was. The bar follows `avg10`, which is the most immediate of the three.
+
+In addition to `pressure`, `psi`, `stall`, and `pressures` are also acceptable.
+
+#### Show cgroup Limits
+
+```bash
+mprober cgroup
+```
+
+```
+cgroup /sys/fs/cgroup/system.slice/mprober.service
+
+CPU
+  limit     2.00 CPUs
+  usage     24 minutes, and 36 seconds
+  user      16 minutes, and 18 seconds
+  system    8 minutes, and 17 seconds
+  throttled 41 of 1500 periods, for 3 seconds
+
+Memory [|||||||||||||||||                         ] 1.68 GiB / 4.00 GiB (42.06%)
+Swap   0 B, not limited
+PIDs   [                                                  ] 1251 / 75971 (1.65%)
+```
+
+This shows the CPU quota, the memory limit and the PID limit that the container or the cloud instance actually caps this machine at, which is often lower than what `cpu` and `memory` report for the host. A limit which is not set reads `not limited` and gets no bar, and the throttled counters tell whether the CPU quota is really in the way.
+
+In addition to `cgroup`, `g`, `container`, `limit`, `limits`, and `cgroups` are also acceptable.
+
+#### Show Processes
+
+```bash
+mprober process --top 5
+```
+
+```
+   PID  PPID   PR  NI %CPU       VSZ       RSS       ANON THD TTY  USER
+348084     1   25   5  4.2  75.2 MiB   5.7 MiB 1012.0 KiB   2      magiclen
+105294  4025   20   0  0.0   1.4 TiB 478.3 MiB  315.6 MiB  34      magiclen
+ 18313 16498   20   0  0.0   1.4 TiB 423.5 MiB  278.6 MiB  32      magiclen
+ 16569 16498   20   0  0.0   1.4 TiB 381.2 MiB  242.5 MiB  31      magiclen
+ 51467 16498   20   0  0.0   1.4 TiB 439.6 MiB  302.5 MiB  31      magiclen
+```
+
+The rows are ordered by CPU and then by memory usage. `--pid-filter`, `--user-filter`, `--group-filter`, `--program-filter` and `--tty-filter` narrow the list, the last two by a regex. `-t` adds the start time of each process, and `--truncate` shortens the names.
+
+In addition to `process`, `p`, and `ps` are also acceptable.
 
 #### Benchmark
 
@@ -208,11 +343,30 @@ To benchmark the performance of CPU, memory and volumes,
 mprober benchmark
 ```
 
+```
+Intel(R) Core(TM) Ultra 9 285K 24C/24T
+5300 5300 5300 5300 5300 5300 5197 5300 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601 4601
+
+CPU (multi-thread) : 29998617843.41 iterations/s
+CPU (single thread): 1527022854.21 iterations/s
+Memory             : 29.77 GiB/s
+```
+
+The second line is the frequency of each core in MHz while the CPU was loaded, which is where a machine that cannot hold its boost clock shows up.
+
+An iteration is one term of a series that needs a division and an addition. It is counted in batches, so that what the figure reports is the work rather than the clock the timer reads.
+
+The memory figure is the rate of reading through a buffer sized from the last-level cache this machine reports, so that the read has to reach the memory rather than the cache in front of it. The buffer never takes more than a quarter of the free memory, and a machine with too little free to get past its cache says so and measures what it can. Reading rather than copying keeps the figure about the machine: a copy goes to the C library's `memcpy`, and musl's is about half the speed of glibc's, so the same machine would score differently depending on which build you run.
+
+The volume benchmark writes a file with `O_DIRECT` and reads it back the same way, so the page cache is out of the picture and the figures are those of the device at a queue depth of one. A file system that does not implement the flag, e.g. tmpfs or a network mount, says so and falls back to buffered I/O.
+
+```
+nvme1n1            : Read 91.41 MiB/s, Write 186.97 MiB/s
+```
+
 In addition to `benchmark`, `b`, `bench`, and `performance` are also acceptable.
 
-Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run.
-
-![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/benchmark.png)
+Adding the `--disable-xxx` or `--enable-xxx` flags can control what benchmarks you want to run. The volume benchmark writes to each volume, so `--disable-volume` is worth knowing about. A volume is only measured when it would still have 1 GiB free afterwards.
 
 ### Web (HTTP)
 
@@ -226,411 +380,148 @@ In addition to `web`, `w`, `server`, and `http` are also acceptable.
 
 Once you start the server, you can open [`http://0.0.0.0:8000`](http://0.0.0.0:8000) via a web browser such as Firefox or Chrome.
 
-![web.png](https://raw.githubusercontent.com/magiclen/m-prober/master/doc-images/web.png)
+The page is one dashboard which follows the machine live, with a panel per subsystem: system identity, load average and per-core CPU, memory and swap, PSI, cgroup limits, network interfaces and volumes. A panel whose data the kernel does not provide says so rather than showing an error. It follows the light or dark theme of the browser, and can be toggled either way.
 
-To change the listening port, use the `-p <port>` option. To change the detecting time interval, use the `-m <SECONDS>` option, where the `<SECONDS>` is ranged from `1` to `15`.
+To change the listening port, use the `-p <PORT>` option. To change the detecting time interval, use the `-m <SECONDS>` option. To bind somewhere other than `0.0.0.0`, use `--addr <ADDRESS>`.
+
+One background sampler serves every client, so opening the page in several tabs still costs one sampling round per interval, and the sampler stops entirely while nobody is watching.
+
+The page and its stylesheet and script are served gzipped to a browser that takes them, which is most of a megabyte down to about 150 KB, and revalidated with an `ETag` so an upgrade is picked up without re-downloading anything that did not change.
 
 #### HTTP APIs
 
-##### *GET* `/api/hostname`
+Every response is the JSON that [`mprober-lib`](https://crates.io/crates/mprober-lib) serializes, so the field names are those of its types. A `std::time::Duration` is an object rather than a number:
 
 ```json
-{
-    "code": 0,
-    "data": "magiclen-linux"
-}
+{ "secs": 7942, "nanos": 390000000 }
 ```
 
-##### *GET* `/api/kernel`
+An endpoint answers `404` with `{"error": "..."}` when the kernel does not provide the data at all, e.g. `/api/pressure` on a kernel without `CONFIG_PSI`. It answers `500` with the same shape when a probe fails.
+
+##### Instant readings
+
+These read `/proc` and `/sys` once and answer right away.
+
+| Endpoint | Content |
+| --- | --- |
+| *GET* `/api/hostname` | The hostname, as a JSON string. |
+| *GET* `/api/kernel` | The kernel version, as a JSON string. |
+| *GET* `/api/uptime` | `total_uptime` and `all_cpu_idle_time`. |
+| *GET* `/api/time` | The RTC (UTC) date and time, as an ISO 8601 string. |
+| *GET* `/api/cpu` | `load_average` and `cpus`. |
+| *GET* `/api/memory` | `mem` and `swap`, in bytes. |
+| *GET* `/api/network` | Every interface with its counters. |
+| *GET* `/api/volume` | Every mounted volume with its size, usage and I/O counters. |
+| *GET* `/api/pressure` | The PSI of `cpu`, `memory` and `io`. |
+| *GET* `/api/cgroup` | The full cgroup report: `cpu`, `cpuset`, `memory`, `memory_stat`, `memory_events`, `pids` and `io`. |
+| *GET* `/api/config` | The version and the detect interval. Reachable without an auth key. |
+
+For example, *GET* `/api/memory`:
 
 ```json
 {
-    "code": 0,
-    "data": "4.15.0-48-generic"
-}
-```
-
-##### *GET* `/api/uptime`
-
-```json
-{
-    "code": 0,
-    "data": 31694
-}
-```
-
-The unit of data is **seconds**.
-
-##### *GET* `/api/time`
-
-```json
-{
-    "code": 0,
-    "data": {
-        "date": "2019-05-03",
-        "time": "12:43:14"
+    "mem": {
+        "total": 66645028864,
+        "used": 21888958464,
+        "free": 2135752704,
+        "shared": 689647616,
+        "buffers": 6873088,
+        "cache": 44048076800,
+        "available": 44756070400
+    },
+    "swap": {
+        "total": 8192520192,
+        "used": 0,
+        "free": 8192520192,
+        "cache": 0
     }
 }
 ```
 
-It's RTC time.
+##### Sampled readings
 
-##### *GET* `/api/cpu`
+A rate can only be measured over a period, so these serve the latest snapshot of the shared sampler. The first request after an idle period waits for one detect interval; the rest are answered immediately.
+
+| Endpoint | Content |
+| --- | --- |
+| *GET* `/api/cpu-detect` | `load_average`, `cpus` and `cpus_stat`. |
+| *GET* `/api/network-detect` | Every interface with its counters and its `speed`. |
+| *GET* `/api/volume-detect` | Every volume with its counters and its `speed`. |
+| *GET* `/api/all` | One full snapshot, which is everything above in a single response. |
+
+`cpus_stat` is the CPU utilization as a fraction from `0` to `1`. Its first entry is the average over every CPU and the rest are the individual ones.
+
+*GET* `/api/all` answers with:
 
 ```json
 {
-    "code": 0,
-    "data": {
-        "cpus": [
-            {
-                "cores": 4,
-                "mhz": [
-                    2571.96,
-                    2688.208,
-                    2604.095,
-                    2700.238,
-                    2700.034,
-                    2699.908,
-                    2700.329,
-                    2699.986
-                ],
-                "model_name": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
-                "threads": 8
-            }
-        ],
-        "load_average": {
-            "fifteen": 1.02,
-            "five": 0.83,
-            "one": 0.61
-        }
-    }
+    "hostname": "magiclen-linux",
+    "kernel": "6.17.0-40-generic",
+    "uptime": { "total_uptime": { "secs": 7942, "nanos": 390000000 }, "all_cpu_idle_time": { "secs": 187517, "nanos": 980000000 } },
+    "rtc_time": "2026-09-07T13:01:46",
+    "load_average": { "one": 0.55, "five": 0.62, "fifteen": 0.7 },
+    "cpus": [ { "physical_id": 0, "model_name": "Intel(R) Core(TM) Ultra 9 285K", "cpus_mhz": [800.0], "siblings": 24, "cpu_cores": 24 } ],
+    "cpus_stat": [0.0375, 0.14, 0.01],
+    "cpu_threads": [
+        { "id": 0, "physical_id": 0, "usage": 0.14, "frequency_mhz": 2830.0 },
+        { "id": 1, "physical_id": 0, "usage": 0.01, "frequency_mhz": 800.0 }
+    ],
+    "memory": { "mem": {}, "swap": {} },
+    "network": [ { "interface": "lo", "stat": {}, "speed": { "receive": 0.0, "transmit": 0.0, "receive_packets": 0.0, "transmit_packets": 0.0 } } ],
+    "volumes": [ { "device": "nvme0n1p1", "stat": {}, "size": 97033216, "used": 6399488, "fs_type": "vfat", "points": ["/boot/efi"], "speed": {} } ],
+    "pressure": { "cpu": {}, "memory": {}, "io": {} },
+    "cgroup": { "path": "/sys/fs/cgroup/...", "cpu": {}, "memory": {}, "pids": {} }
 }
 ```
 
-##### *GET* `/api/cpu-detect`
+`pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2.
 
-```json
-{
-    "code": 0,
-    "data": {
-        "cpus": [
-            {
-                "cores": 4,
-                "mhz": [
-                    1808.254,
-                    1787.732,
-                    1430.044,
-                    1845.768,
-                    1751.993,
-                    1751.121,
-                    1769.048,
-                    1663.091
-                ],
-                "model_name": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
-                "threads": 8
-            }
-        ],
-        "cpus_stat": [
-            0.08386009270965024,
-            0.09152542372881356,
-            0.10472972972972971,
-            0.11295681063122924,
-            0.06418918918918919,
-            0.09364548494983276,
-            0.06397306397306397,
-            0.053691275167785234,
-            0.0821917808219178
-        ],
-        "load_average": {
-            "fifteen": 1.02,
-            "five": 0.84,
-            "one": 0.74
-        }
-    }
-}
-```
+`cpu_threads` in `/api/all` and its stream pairs each logical CPU's kernel number (`id`) with its physical CPU (`physical_id`), utilization fraction (`usage`) and frequency in MHz (`frequency_mhz`). Entries are ordered by `id`; the latter three fields can be `null` when unavailable. A CPU without a reading at the start of the interval has `usage: null`; its legacy `cpus_stat` entry is `0`. Existing fields and endpoints are unchanged.
 
-The first value in the `cpus_stat` field is the average usage of each cores. The remaining values are the usage for each logical CPU core.
+##### *GET* `/api/all/stream`
 
-##### *GET* `/api/memory`
+The same snapshot, pushed over [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) once per detect interval. This is what the web page uses, so that a browser does not have to poll.
 
-```json
-{
-    "code": 0,
-    "data": {
-        "memory": {
-            "available": 22659469312,
-            "buffers": 10412032,
-            "cache": 19094446080,
-            "free": 4154060800,
-            "shared": 119246848,
-            "total": 33633140736,
-            "used": 10374221824
-        },
-        "swap": {
-            "cache": 385024,
-            "free": 4082888704,
-            "total": 4094685184,
-            "used": 11411456
-        }
-    }
-}
-```
-
-The unit of numbers is **bytes**.
-
-##### *GET* `/api/network-detect`
-
-```json
-{
-    "code": 0,
-    "data": [
-        {
-            "download_rate": 0.0,
-            "download_total": 55713769,
-            "interface": "lo",
-            "upload_rate": 0.0,
-            "upload_total": 55713769
-        },
-        {
-            "download_rate": 702.0,
-            "download_total": 7461474545,
-            "interface": "enp0s20f0u4",
-            "upload_rate": 1280.6666666666667,
-            "upload_total": 331829069
-        }
-    ]
-}
-```
-
-The unit of totals is **bytes**. The unit of rates is **bytes/second**.
-
-##### *GET* `/api/volume`
-
-```json
-{
-    "code": 0,
-    "data": [
-        {
-            "device": "sda2",
-            "mount_points": [
-                "/",
-                "/var/lib/docker/btrfs"
-            ],
-            "read_total": 7612149760,
-            "size": 249809600512,
-            "used": 70506823680,
-            "write_total": 12919939072
-        },
-        {
-            "device": "sdb1",
-            "mount_points": [
-                "/storage"
-            ],
-            "read_total": 7080878080,
-            "size": 239938535424,
-            "used": 218200993792,
-            "write_total": 21799934464
-        },
-        {
-            "device": "sdc2",
-            "mount_points": [
-                "/home"
-            ],
-            "read_total": 27511930880,
-            "size": 496011051008,
-            "used": 370128474112,
-            "write_total": 56615944192
-        }
-    ]
-}
-```
-
-The unit of totals is **bytes**.
-
-##### *GET* `/api/volume-detect`
-
-```json
-{
-    "code": 0,
-    "data": [
-        {
-            "device": "sda2",
-            "mount_points": [
-                "/",
-                "/var/lib/docker/btrfs"
-            ],
-            "read_rate": 0.0,
-            "read_total": 7612149760,
-            "size": 249809600512,
-            "used": 70506823680,
-            "write_rate": 0.0,
-            "write_total": 12928978944
-        },
-        {
-            "device": "sdb1",
-            "mount_points": [
-                "/storage"
-            ],
-            "read_rate": 0.0,
-            "read_total": 7080878080,
-            "size": 239938535424,
-            "used": 218200993792,
-            "write_rate": 0.0,
-            "write_total": 21799934464
-        },
-        {
-            "device": "sdc2",
-            "mount_points": [
-                "/home"
-            ],
-            "read_rate": 0.0,
-            "read_total": 27511934976,
-            "size": 496011051008,
-            "used": 370131861504,
-            "write_rate": 4965717.333333333,
-            "write_total": 56771334144
-        }
-    ]
-}
-```
-
-The unit of totals is **bytes**. The unit of rates is **bytes/second**.
-
-##### *GET* `/api/all`
-
-```json
-{
-    "code": 0,
-    "data": {
-        "cpus": [
-            {
-                "cores": 4,
-                "mhz": [
-                    1200.121,
-                    1200.272,
-                    1200.12,
-                    1200.055,
-                    1200.098,
-                    1200.034,
-                    1200.014,
-                    1200.124
-                ],
-                "model_name": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
-                "threads": 8
-            }
-        ],
-        "cpus_stat": [
-            0.04951741502308015,
-            0.043333333333333335,
-            0.030405405405405407,
-            0.05743243243243243,
-            0.056666666666666664,
-            0.04983388704318937,
-            0.05387205387205387,
-            0.05405405405405406,
-            0.05067567567567568
-        ],
-        "hostname": "magiclen-linux",
-        "kernel": "4.15.0-48-generic",
-        "load_average": {
-            "fifteen": 0.8,
-            "five": 0.53,
-            "one": 0.28
-        },
-        "memory": {
-            "available": 22578839552,
-            "buffers": 10412032,
-            "cache": 19104878592,
-            "free": 4062957568,
-            "shared": 119230464,
-            "total": 33633140736,
-            "used": 10454892544
-        },
-        "network": [
-            {
-                "download_rate": 0.0,
-                "download_total": 55798721,
-                "interface": "lo",
-                "upload_rate": 0.0,
-                "upload_total": 55798721
-            },
-            {
-                "download_rate": 9.333333333333334,
-                "download_total": 7463048290,
-                "interface": "enp0s20f0u4",
-                "upload_rate": 28.666666666666668,
-                "upload_total": 333465932
-            }
-        ],
-        "rtc_time": {
-            "date": "2019-05-03",
-            "time": "12:54:34"
-        },
-        "swap": {
-            "cache": 385024,
-            "free": 4082888704,
-            "total": 4094685184,
-            "used": 11411456
-        },
-        "uptime": 32437,
-        "volumes": [
-            {
-                "device": "sda2",
-                "mount_points": [
-                    "/",
-                    "/var/lib/docker/btrfs"
-                ],
-                "read_rate": 0.0,
-                "read_total": 7612149760,
-                "size": 249809600512,
-                "used": 70506831872,
-                "write_rate": 0.0,
-                "write_total": 12939075584
-            },
-            {
-                "device": "sdb1",
-                "mount_points": [
-                    "/storage"
-                ],
-                "read_rate": 0.0,
-                "read_total": 7080878080,
-                "size": 239938535424,
-                "used": 218200993792,
-                "write_rate": 0.0,
-                "write_total": 21799934464
-            },
-            {
-                "device": "sdc2",
-                "mount_points": [
-                    "/home"
-                ],
-                "read_rate": 0.0,
-                "read_total": 27521441792,
-                "size": 496011051008,
-                "used": 370118373376,
-                "write_rate": 744106.6666666666,
-                "write_total": 56883159040
-            }
-        ]
-    }
-}
+```bash
+curl -N http://127.0.0.1:8000/api/all/stream
 ```
 
 ##### Authorization
 
-If you need to expose above HTTP APIs to the Internet. In order to prevent these APIs from being invoked by anyone, you can enable a simple authorization mechanism that is built in this program.
- 
-When starting the HTTP server from CLI, you can add a `-a <AUTH_KEY>` option. Then, every API needs to be invoked by a request which contains a `Authorization` header to send the `AUTH_KEY`.
+If you expose these APIs to the Internet, add the `-a <AUTH_KEY>` option so that not just anyone can invoke them.
+
+A request may then carry the key in an `Authorization` header:
+
+```bash
+curl -H 'Authorization: <AUTH_KEY>' http://127.0.0.1:8000/api/all
+```
+
+`EventSource` cannot set headers, so the web page signs in instead and gets a session cookie:
+
+| Endpoint | Content |
+| --- | --- |
+| *GET* `/api/auth` | `{"required": bool, "authenticated": bool}`. Reachable without an auth key. |
+| *POST* `/api/auth` | Takes `{"auth_key": "..."}`. Answers `204` and sets an `HttpOnly` cookie, or `401`. |
+| *POST* `/api/logout` | Clears the cookie. |
+
+The cookie holds a random token this process generates at startup, so the key itself never leaves the server. The `Secure` attribute is set when a reverse proxy reports `X-Forwarded-Proto: https`.
 
 Also, you may want to disable the web page. Just add a `--only-api` flag.
 
+#### Developing the Web UI
+
+The page lives in [`web-ui`](web-ui) and is built with Vite, React and Mantine. Its build output is committed under [`front-end`](front-end) and embedded into the executable, so `cargo install mprober` needs no Node. See [`web-ui/README.md`](web-ui/README.md).
+
 ## TODO
 
-1. Process snapshot (HTTP, documentation)
+1. Process snapshot (HTTP API, web page)
+1. Sensors and batteries (`hwmon`, `power_supply`)
+1. Sockets and routes
 1. Database Detection
 1. Benchmark (networks)
 
 ## License
 
 [MIT](LICENSE)
+
+The web page is set in Roboto Mono, which is bundled with it under the [SIL Open Font License](LICENSE-RobotoMono.txt).

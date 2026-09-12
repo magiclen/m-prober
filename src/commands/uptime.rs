@@ -1,9 +1,9 @@
 use mprober_lib::{format_duration, uptime};
 
-use crate::{terminal::*, CLIArgs, CLICommands};
+use crate::{CLIArgs, CLICommands, terminal::*};
 
 #[inline]
-pub fn handle_uptime(args: CLIArgs) {
+pub fn handle_uptime(args: CLIArgs) -> anyhow::Result<()> {
     debug_assert!(matches!(args.command, CLICommands::Uptime { .. }));
 
     if let CLICommands::Uptime {
@@ -15,12 +15,14 @@ pub fn handle_uptime(args: CLIArgs) {
     {
         set_color_mode(plain, light);
 
-        monitor_handler!(monitor, 1000, draw_uptime(second));
+        monitor_handler!(monitor.then_some(Duration::from_secs(1)), draw_uptime(second)?);
     }
+
+    Ok(())
 }
 
-fn draw_uptime(second: bool) {
-    let uptime = uptime::get_uptime().unwrap().total_uptime;
+fn draw_uptime(second: bool) -> anyhow::Result<()> {
+    let uptime = uptime::get_uptime()?.total_uptime;
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();
@@ -34,7 +36,7 @@ fn draw_uptime(second: bool) {
         stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
         write!(&mut stdout, "{uptime_sec} second").unwrap();
 
-        if uptime_sec > 1 {
+        if uptime_sec != 1 {
             write!(&mut stdout, "s").unwrap();
         }
     } else {
@@ -51,4 +53,6 @@ fn draw_uptime(second: bool) {
     writeln!(&mut stdout).unwrap();
 
     output.print(&stdout).unwrap();
+
+    Ok(())
 }

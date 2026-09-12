@@ -54,6 +54,11 @@ const APP_ABOUT: &str = concat!(
         "volume -u kb                  # Show current volume stats in KB",
         "volume -i                     # Only show volume information without I/O rates",
         "volume --mounts               # Show current volume stats including mount points",
+        "pressure                      # Show PSI, which tells resource shortage apart from a busy but healthy system",
+        "pressure -m 1000              # Show PSI and refresh every 1000 milliseconds",
+        "cgroup                        # Show the CPU, memory and PID limits of the container or VM this runs in",
+        "cgroup -m 1000                # Show the cgroup stats and refresh every 1000 milliseconds",
+        "cgroup -u kb                  # Show the cgroup stats in KB",
         "process                       # Show a snapshot of the current processes",
         "process -m 1000               # Show a snapshot of the current processes and refresh every 1000 milliseconds",
         "process -p                    # Show a snapshot of the current processes without colors",
@@ -144,7 +149,7 @@ pub enum CLICommands {
         light:            bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show CPU stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
@@ -166,7 +171,7 @@ pub enum CLICommands {
         light:   bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show memory stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
@@ -186,7 +191,7 @@ pub enum CLICommands {
         light:   bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show network stats and refresh every N milliseconds")]
         monitor: Option<Duration>,
         #[arg(short, long)]
@@ -206,7 +211,7 @@ pub enum CLICommands {
         light:            bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show volume stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
@@ -220,6 +225,42 @@ pub enum CLICommands {
         #[arg(help = "Also shows mount points")]
         mounts:           bool,
     },
+    #[command(aliases = ["psi", "stall", "pressures"])]
+    #[command(about = "Show PSI (Pressure Stall Information)")]
+    #[command(after_help = AFTER_HELP)]
+    Pressure {
+        #[arg(short, long)]
+        #[arg(help = "No colors")]
+        plain:   bool,
+        #[arg(short, long)]
+        #[arg(help = "Darker colors")]
+        light:   bool,
+        #[arg(short, long, value_name = "MILLI_SECONDS")]
+        #[arg(num_args = 0..=1, default_missing_value = "1000")]
+        #[arg(value_parser = parse_monitor_interval)]
+        #[arg(help = "Show PSI and refresh every N milliseconds")]
+        monitor: Option<Duration>,
+    },
+    #[command(aliases = ["g", "container", "limit", "limits", "cgroups"])]
+    #[command(about = "Show the limits and usage of the cgroup this program runs in")]
+    #[command(after_help = AFTER_HELP)]
+    Cgroup {
+        #[arg(short, long)]
+        #[arg(help = "No colors")]
+        plain:   bool,
+        #[arg(short, long)]
+        #[arg(help = "Darker colors")]
+        light:   bool,
+        #[arg(short, long, value_name = "MILLI_SECONDS")]
+        #[arg(num_args = 0..=1, default_missing_value = "1000")]
+        #[arg(value_parser = parse_monitor_interval)]
+        #[arg(help = "Show the cgroup stats and refresh every N milliseconds")]
+        monitor: Option<Duration>,
+        #[arg(short, long)]
+        #[arg(value_parser = parse_unit)]
+        #[arg(help = "Forces to use a fixed unit")]
+        unit:    Option<Unit>,
+    },
     #[command(aliases = ["p", "ps"])]
     #[command(about = "Show process stats")]
     #[command(after_help = AFTER_HELP)]
@@ -232,7 +273,7 @@ pub enum CLICommands {
         light:            bool,
         #[arg(short, long, value_name = "MILLI_SECONDS")]
         #[arg(num_args = 0..=1, default_missing_value = "1000")]
-        #[arg(value_parser = parse_duration)]
+        #[arg(value_parser = parse_monitor_interval)]
         #[arg(help = "Show process stats and refresh every N milliseconds")]
         monitor:          Option<Duration>,
         #[arg(short, long)]
@@ -278,7 +319,7 @@ pub enum CLICommands {
     Web {
         #[arg(short, long, value_name = "SECONDS")]
         #[arg(default_value = "3")]
-        #[arg(value_parser = parse_duration_sec)]
+        #[arg(value_parser = parse_monitor_interval_sec)]
         #[arg(help = "Automatically refresh every N seconds")]
         monitor:     Duration,
         #[arg(long, visible_alias = "addr")]
@@ -292,6 +333,7 @@ pub enum CLICommands {
         #[arg(help = "Assign a TCP port for the HTTP service")]
         listen_port: u16,
         #[arg(short, long)]
+        #[arg(value_parser = parse_auth_key)]
         #[arg(help = "Assign an auth key")]
         auth_key:    Option<String>,
         #[arg(long, aliases = ["only-apis"])]
@@ -347,9 +389,37 @@ fn parse_duration(arg: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(arg.parse()?))
 }
 
+/// A refresh interval of zero would redraw or sample in a tight loop, which pegs a core and measures nothing, so it is refused rather than accepted and then worked around.
 #[inline]
-fn parse_duration_sec(arg: &str) -> Result<Duration, ParseIntError> {
-    Ok(Duration::from_secs(arg.parse()?))
+fn parse_monitor_interval(arg: &str) -> Result<Duration, String> {
+    let milliseconds: u64 = arg.parse().map_err(|error: ParseIntError| error.to_string())?;
+
+    if milliseconds == 0 {
+        return Err(String::from("the interval has to be at least 1 millisecond"));
+    }
+
+    Ok(Duration::from_millis(milliseconds))
+}
+
+#[inline]
+fn parse_monitor_interval_sec(arg: &str) -> Result<Duration, String> {
+    let seconds: u64 = arg.parse().map_err(|error: ParseIntError| error.to_string())?;
+
+    if seconds == 0 {
+        return Err(String::from("the interval has to be at least 1 second"));
+    }
+
+    Ok(Duration::from_secs(seconds))
+}
+
+/// An empty key would accept an empty `Authorization` header while the service still reports that it is protected, so `-a "$UNSET_VARIABLE"` is refused rather than silently letting everyone in.
+#[inline]
+fn parse_auth_key(arg: &str) -> Result<String, String> {
+    if arg.is_empty() {
+        return Err(String::from("the auth key must not be empty"));
+    }
+
+    Ok(String::from(arg))
 }
 
 #[inline]
