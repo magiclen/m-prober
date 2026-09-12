@@ -39,6 +39,10 @@ pub fn serve(
     auth_key: Option<String>,
     only_api: bool,
 ) -> anyhow::Result<()> {
+    if !only_api {
+        static_files::warm_up();
+    }
+
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
 
     let result = runtime.block_on(async move {

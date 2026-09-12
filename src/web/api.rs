@@ -141,7 +141,7 @@ pub async fn all(State(state): State<AppState>) -> ApiResult<Response> {
     Ok(Json(&*snapshot).into_response())
 }
 
-/// The sampler always has a snapshot once it has run one round, so a failure here means it stopped for good.
+/// The sampler publishes a snapshot every round, so nothing here means it has stopped for good or its probes keep failing.
 async fn latest(state: &AppState) -> ApiResult<Arc<Snapshot>> {
     state
         .sampler

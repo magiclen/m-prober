@@ -152,6 +152,11 @@ pub async fn login(
     headers: HeaderMap,
     Json(body): Json<LoginBody>,
 ) -> Response {
+    if !state.auth.is_required() {
+        // There is nothing to sign in to, and a cookie which stands for no key would only mislead.
+        return StatusCode::NO_CONTENT.into_response();
+    }
+
     if !state.auth.verify_key(&body.auth_key) {
         return ApiError::unauthorized().into_response();
     }

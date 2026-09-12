@@ -174,6 +174,11 @@ static FILES: LazyLock<HashMap<&'static str, StaticFile>> = LazyLock::new(|| {
     .collect()
 });
 
+/// Compress every asset now, so that the first visitor does not wait for it and no runtime thread is held up doing it.
+pub fn warm_up() {
+    LazyLock::force(&FILES);
+}
+
 /// Serve an asset, falling back to the page itself so that the single-page app owns every other path.
 pub async fn serve(uri: Uri, headers: HeaderMap) -> Response {
     let file = FILES.get(uri.path()).unwrap_or_else(|| &FILES[INDEX_PATH]);

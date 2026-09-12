@@ -8,7 +8,10 @@ use mprober_lib::{
     Error, cpu, hostname, kernel, load_average, memory, network, rtc_time, uptime, volume,
 };
 use serde::Serialize;
-use tokio::sync::{Notify, watch};
+use tokio::{
+    sync::{Notify, watch},
+    time,
+};
 
 use super::{
     cpu_sample::{self, CpuThreadSnapshot},
@@ -20,6 +23,12 @@ const IDLE_INTERVALS: u32 = 3;
 
 /// How old a sample may be before it is treated as left over from before a pause, in detect intervals.
 const STALE_INTERVALS: u32 = 2;
+
+/// How long a request waits for a fresh sample, in detect intervals.
+///
+/// A round takes a whole detect interval, and a round which fails publishes nothing while it waits to
+/// try again, so without a bound a request would wait for ever on a machine whose probes never succeed.
+const WAIT_INTERVALS: u32 = 3;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
@@ -102,6 +111,8 @@ impl Sampler {
     }
 
     /// Get the latest snapshot, waiting for a fresh one when sampling has just started or has just resumed.
+    ///
+    /// `None` once the wait has gone on for `WAIT_INTERVALS`, or when the sampler is gone for good.
     pub async fn latest(&self) -> Option<Arc<Snapshot>> {
         *self.shared.last_request.lock().unwrap() = Instant::now();
 
@@ -110,19 +121,24 @@ impl Sampler {
 
         self.shared.wake.notify_one();
 
-        loop {
-            // The age is checked here rather than cleared by the sampler, because the sampler cannot
-            // clear it before this reader looks: it is woken by the same notification that follows.
-            if let Some(sample) = receiver.borrow_and_update().clone()
-                && sample.is_fresh(self.detect_interval)
-            {
-                return Some(sample.snapshot);
-            }
+        let wait = async {
+            loop {
+                // The age is checked here rather than cleared by the sampler, because the sampler
+                // cannot clear it before this reader looks: it is woken by the same notification that
+                // follows.
+                if let Some(sample) = receiver.borrow_and_update().clone()
+                    && sample.is_fresh(self.detect_interval)
+                {
+                    return Some(sample.snapshot);
+                }
 
-            if receiver.changed().await.is_err() {
-                return None;
+                if receiver.changed().await.is_err() {
+                    return None;
+                }
             }
-        }
+        };
+
+        time::timeout(self.detect_interval * WAIT_INTERVALS, wait).await.ok().flatten()
     }
 }
 
