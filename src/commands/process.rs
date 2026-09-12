@@ -68,6 +68,9 @@ fn truncate_with_marker(name: &str, width: usize) -> Cow<'_, str> {
     Cow::Owned(format!("{}+", &name[..end]))
 }
 
+/// The width of the start time, which is an RFC 3339 timestamp in seconds, e.g. `2026-09-12T13:15:35Z`.
+const START_TIME_WIDTH: usize = 20;
+
 /// Below this a process is idle enough that its memory size says more about it than its share of the CPU does.
 const BUSY_PERCENTAGE: f64 = 0.01;
 
@@ -216,7 +219,7 @@ fn draw_process(
     };
 
     let processes: Vec<(process::Process, f64)> = if only_information {
-        let mut processes_with_stats = process::get_processes_with_stat(&process_filter).unwrap();
+        let mut processes_with_stats = process::get_processes_with_stat(&process_filter)?;
 
         processes_with_stats.sort_unstable_by_key(|(a, _)| std::cmp::Reverse(a.vsz));
 
@@ -230,8 +233,7 @@ fn draw_process(
             process::get_processes_with_cpu_utilization_in_percentage(
                 &process_filter,
                 monitor.unwrap_or(DEFAULT_INTERVAL),
-            )
-            .unwrap();
+            )?;
 
         processes_with_percentage.sort_unstable_by(
             |(process_a, percentage_a), (process_b, percentage_b)| {
@@ -344,12 +346,13 @@ fn draw_process(
         width += 4;
 
         if !only_information {
-            if width + 5 > terminal_width {
+            if width + 6 > terminal_width {
                 break 'header;
             }
 
-            write!(&mut stdout, " %CPU").unwrap(); // 5
-            width += 5;
+            // The share is of every CPU together, so a process on all of them prints `100.0`.
+            write!(&mut stdout, "  %CPU").unwrap(); // 6
+            width += 6;
         }
 
         if width + 1 + vsz_len > terminal_width {
@@ -399,64 +402,77 @@ fn draw_process(
         write!(&mut stdout, " TTY").unwrap(); // 4
         width += 4;
 
-        write!(&mut stdout, "{:1$}", "", tty_len.saturating_sub(3)).unwrap();
-        width += tty_len.saturating_sub(3);
+        // A heading is padded out to the width of its column, but that padding is only written once the next heading is known to fit, so a line cut short by a narrow terminal ends in a word rather than in blanks.
+        let mut pending = tty_len.saturating_sub(3);
+        width += pending;
 
         if width + 1 + user_len > terminal_width {
             break 'header;
         }
 
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
+
         write!(&mut stdout, " USER").unwrap(); // 5
         width += 5;
 
-        write!(&mut stdout, "{:1$}", "", user_len.saturating_sub(4)).unwrap();
-        width += user_len.saturating_sub(4);
+        pending = user_len.saturating_sub(4);
+        width += pending;
 
         if width + 1 + group_len > terminal_width {
             break 'header;
         }
 
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
+
         write!(&mut stdout, " GROUP").unwrap(); // 6
         width += 6;
 
-        write!(&mut stdout, "{:1$}", "", group_len.saturating_sub(5)).unwrap();
-        width += group_len.saturating_sub(5);
+        pending = group_len.saturating_sub(5);
+        width += pending;
 
         if width + 1 + program_len > terminal_width {
             break 'header;
         }
 
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
+
         write!(&mut stdout, " PROGRAM").unwrap(); // 8
         width += 8;
 
-        write!(&mut stdout, "{:1$}", "", program_len.saturating_sub(7)).unwrap();
-        width += program_len.saturating_sub(7);
+        pending = program_len.saturating_sub(7);
+        width += pending;
 
         if width + 1 + state_len > terminal_width {
             break 'header;
         }
 
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
+
         write!(&mut stdout, " STATE").unwrap(); // 6
         width += 6;
 
-        write!(&mut stdout, "{:1$}", "", state_len.saturating_sub(5)).unwrap();
-        width += state_len.saturating_sub(5);
+        pending = state_len.saturating_sub(5);
+        width += pending;
 
         if start_time {
-            if width + 21 > terminal_width {
+            if width + 1 + START_TIME_WIDTH > terminal_width {
                 break 'header;
             }
+
+            write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
             write!(&mut stdout, " START").unwrap(); // 6
             width += 6;
 
-            write!(&mut stdout, "{:15}", "").unwrap();
-            width += 15;
+            pending = START_TIME_WIDTH - 5;
+            width += pending;
         }
 
         if width + 8 > terminal_width {
             break 'header;
         }
+
+        write!(&mut stdout, "{:1$}", "", pending).unwrap();
 
         write!(&mut stdout, " COMMAND").unwrap(); // 8
     }
@@ -511,15 +527,15 @@ fn draw_process(
         width += 4;
 
         if !only_information {
-            if width + 5 > terminal_width {
+            if width + 6 > terminal_width {
                 stdout.set_color(&COLOR_DEFAULT).unwrap();
                 writeln!(&mut stdout).unwrap();
 
                 continue;
             }
 
-            write!(&mut stdout, " {:>4.1}", row.percentage * 100.0).unwrap();
-            width += 5;
+            write!(&mut stdout, " {:>5.1}", row.percentage * 100.0).unwrap();
+            width += 6;
         }
 
         if width + 1 + vsz_len > terminal_width {
@@ -569,8 +585,8 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " ").unwrap();
-        write_left_aligned(&mut stdout, &row.tty, tty_len).unwrap();
+        // Each of these columns pays off the blank it is separated by and the blanks the columns before it owe, so a row cut short by a narrow terminal ends in a word rather than in blanks.
+        let mut pending = write_column(&mut stdout, 1, &row.tty, tty_len).unwrap();
         width += 1 + tty_len;
 
         if width + 1 + user_len > terminal_width {
@@ -580,9 +596,13 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " ").unwrap();
-        write_left_aligned(&mut stdout, &truncate_with_marker(&row.user, truncate_inc), user_len)
-            .unwrap();
+        pending = write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.user, truncate_inc),
+            user_len,
+        )
+        .unwrap();
         width += 1 + user_len;
 
         if width + 1 + group_len > terminal_width {
@@ -592,9 +612,13 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " ").unwrap();
-        write_left_aligned(&mut stdout, &truncate_with_marker(&row.group, truncate_inc), group_len)
-            .unwrap();
+        pending = write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.group, truncate_inc),
+            group_len,
+        )
+        .unwrap();
         width += 1 + group_len;
 
         if width + 1 + program_len > terminal_width {
@@ -604,9 +628,9 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " ").unwrap();
-        write_left_aligned(
+        pending = write_column(
             &mut stdout,
+            pending + 1,
             &truncate_with_marker(&row.program, truncate_inc),
             program_len,
         )
@@ -620,22 +644,21 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " {1:<0$}", state_len, row.state).unwrap();
+        pending = write_column(&mut stdout, pending + 1, row.state, state_len).unwrap();
         width += 1 + state_len;
 
         if start_time {
-            if width + 21 > terminal_width {
+            if width + 1 + START_TIME_WIDTH > terminal_width {
                 stdout.set_color(&COLOR_DEFAULT).unwrap();
                 writeln!(&mut stdout).unwrap();
 
                 continue;
             }
 
-            write!(&mut stdout, " ").unwrap(); // 1
-
-            stdout.write_all(row.start_time.as_bytes()).unwrap();
-
-            width += 21;
+            // The timestamp is always the same length, so this column never owes anything.
+            pending =
+                write_column(&mut stdout, pending + 1, &row.start_time, START_TIME_WIDTH).unwrap();
+            width += 1 + START_TIME_WIDTH;
         }
 
         if width + 8 > terminal_width {
@@ -645,12 +668,18 @@ fn draw_process(
             continue;
         }
 
-        write!(&mut stdout, " ").unwrap(); // 1
         width += 1;
 
         let remain_width = terminal_width - width;
 
-        stdout.write_all(truncate_with_marker(&row.cmdline, remain_width).as_bytes()).unwrap();
+        // A kernel thread has no command line, and the last column owes nothing to a column after it.
+        write_column(
+            &mut stdout,
+            pending + 1,
+            &truncate_with_marker(&row.cmdline, remain_width),
+            0,
+        )
+        .unwrap();
 
         stdout.set_color(&COLOR_DEFAULT).unwrap();
         writeln!(&mut stdout).unwrap();

@@ -38,6 +38,7 @@ mprober-lib = { version = "0.2", features = ["serde"] }
 
 termcolor = "1"
 getch = "0.3"
+signal-hook = "0.4"
 
 byte-unit = "5"
 

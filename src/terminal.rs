@@ -1,5 +1,6 @@
 use std::{
     env,
+    io::{self, Read},
     sync::{
         LazyLock,
         atomic::{AtomicBool, Ordering},
@@ -7,6 +8,10 @@ use std::{
 };
 pub use std::{io::Write, time::Duration};
 
+use signal_hook::{
+    consts::{SIGINT, SIGTERM},
+    iterator::Signals,
+};
 pub use termcolor::WriteColor;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec};
 use terminal_size::terminal_size;
@@ -218,6 +223,26 @@ pub fn display_width(text: &str) -> usize {
     UnicodeWidthStr::width(text)
 }
 
+/// Pay off the `pending` blanks the columns before it owe, write `text`, and hand back what a column `width` wide still owes.
+///
+/// A column that holds nothing writes nothing and passes the whole debt on, so a row cut short by a narrow terminal ends in a word rather than in the blanks of the columns that follow it.
+pub fn write_column(
+    output: &mut impl Write,
+    pending: usize,
+    text: &str,
+    width: usize,
+) -> std::io::Result<usize> {
+    if text.is_empty() {
+        return Ok(pending + width);
+    }
+
+    write_cells(output, b' ', pending)?;
+
+    output.write_all(text.as_bytes())?;
+
+    Ok(width.saturating_sub(display_width(text)))
+}
+
 /// Write `text` and then enough blanks to fill `width` columns.
 ///
 /// `{:width$}` counts characters instead, so a column holding a name outside ASCII would come out ragged.
@@ -226,9 +251,9 @@ pub fn write_left_aligned(
     text: &str,
     width: usize,
 ) -> std::io::Result<()> {
-    output.write_all(text.as_bytes())?;
+    let pending = write_column(output, 0, text, width)?;
 
-    write_cells(output, b' ', width.saturating_sub(display_width(text)))
+    write_cells(output, b' ', pending)
 }
 
 pub fn get_term_width() -> usize {
@@ -237,24 +262,47 @@ pub fn get_term_width() -> usize {
         .unwrap_or(DEFAULT_TERMINAL_WIDTH)
 }
 
-/// Watch for the `q` that stops a monitoring loop, on a thread of its own since reading a key blocks.
+/// Watch for the `q` that stops a monitoring loop, and for the signals that stop it from outside.
+///
+/// `Getch` turns off echo and line buffering so that a key is seen as soon as it is pressed, and it
+/// puts the terminal back only when it is dropped. Neither `exit` nor a signal runs destructors, so
+/// the handle is held by the thread that ends the process and the key is read here instead.
 pub fn spawn_quit_watcher() {
-    ::std::thread::spawn(|| {
-        // `Getch` puts the terminal back the way it found it when it is dropped, and `exit` runs no destructors, so it has to go out of scope first.
-        {
-            let getch = ::getch::Getch::new();
+    let getch = ::getch::Getch::new();
 
-            loop {
-                match getch.getch() {
-                    Ok(b'q') => break,
-                    // Reading nothing means stdin is at its end, e.g. it was redirected from `/dev/null`, so no key will ever arrive and only a signal can stop this run.
-                    Ok(0) | Err(_) => return,
-                    Ok(_) => (),
-                }
+    let mut signals =
+        Signals::new([SIGINT, SIGTERM]).expect("cannot listen for SIGINT and SIGTERM");
+
+    let handle = signals.handle();
+
+    // Reading a key blocks, so it needs a thread of its own.
+    ::std::thread::spawn(move || {
+        let mut stdin = io::stdin();
+        let mut key = [0u8; 1];
+
+        loop {
+            match stdin.read(&mut key) {
+                Ok(1) if key[0] == b'q' => break,
+                // Reading nothing means stdin is at its end, e.g. it was redirected from `/dev/null`, so no key will ever arrive and only a signal can stop this run.
+                Ok(0) | Err(_) => return,
+                Ok(_) => (),
             }
         }
 
-        ::std::process::exit(0);
+        // This ends the wait below, which is what puts the terminal back.
+        handle.close();
+    });
+
+    ::std::thread::spawn(move || {
+        // `forever` ends on the first signal, or with nothing when the key watcher closed the handle.
+        let status = match signals.forever().next() {
+            Some(signal) => 128 + signal,
+            None => 0,
+        };
+
+        drop(getch);
+
+        ::std::process::exit(status);
     });
 }
 
