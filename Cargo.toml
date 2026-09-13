@@ -15,6 +15,7 @@ license = "MIT"
 include = [
     "/src/**/*",
     "/Cargo.toml",
+    "/Cargo.lock",
     "/README.md",
     "/LICENSE",
     # The Open Font License asks to travel with the fonts embedded in `front-end`.
