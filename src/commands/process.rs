@@ -4,7 +4,6 @@ use anyhow::anyhow;
 use byte_unit::{Byte, Unit, UnitType};
 use chrono::SecondsFormat;
 use mprober_lib::process;
-use regex::Regex;
 use terminal_size::terminal_size;
 use unicode_width::UnicodeWidthChar;
 use uzers::{Groups, Users, UsersCache};
@@ -109,10 +108,43 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
         pid_filter,
     } = args.command
     {
-        let user_filter = user_filter.as_deref();
-        let group_filter = group_filter.as_deref();
-        let program_filter = program_filter.as_ref();
-        let tty_filter = tty_filter.as_ref();
+        // The names are looked up once rather than for every frame, and before a monitoring loop takes over the terminal.
+        let user_cache = UsersCache::new();
+
+        let uid_filter = match user_filter {
+            Some(user_filter) => match user_cache.get_user_by_name(&user_filter) {
+                Some(user) => Some(user.uid()),
+                None => {
+                    return Err(anyhow!("Cannot find the user {:?}.", user_filter));
+                },
+            },
+            None => None,
+        };
+
+        let gid_filter = match group_filter {
+            Some(group_filter) => match user_cache.get_group_by_name(&group_filter) {
+                Some(group) => Some(group.gid()),
+                None => {
+                    return Err(anyhow!("Cannot find the group {:?}.", group_filter));
+                },
+            },
+            None => None,
+        };
+
+        // The filters are predicates now, so the regexes have to be wrapped before they are borrowed.
+        let program_matcher =
+            program_filter.as_ref().map(|regex| move |program: &str| regex.is_match(program));
+        let tty_matcher = tty_filter.as_ref().map(|regex| move |tty: &str| regex.is_match(tty));
+
+        let process_filter = process::ProcessFilter {
+            pid_filter,
+            uid_filter,
+            gid_filter,
+            program_filter: program_matcher
+                .as_ref()
+                .map(|matcher| matcher as &dyn Fn(&str) -> bool),
+            tty_filter: tty_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
+        };
 
         set_color_mode(plain, light);
 
@@ -125,11 +157,8 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
                 unit,
                 only_information,
                 start_time,
-                user_filter,
-                group_filter,
-                program_filter,
-                tty_filter,
-                pid_filter,
+                &user_cache,
+                &process_filter,
             )?,
             draw_process(
                 Some(DEFAULT_INTERVAL),
@@ -138,11 +167,8 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
                 unit,
                 only_information,
                 start_time,
-                user_filter,
-                group_filter,
-                program_filter,
-                tty_filter,
-                pid_filter,
+                &user_cache,
+                &process_filter,
             )?,
             only_information
         );
@@ -159,11 +185,8 @@ fn draw_process(
     unit: Option<Unit>,
     only_information: bool,
     start_time: bool,
-    user_filter: Option<&str>,
-    group_filter: Option<&str>,
-    program_filter: Option<&Regex>,
-    tty_filter: Option<&Regex>,
-    pid_filter: Option<u32>,
+    user_cache: &UsersCache,
+    process_filter: &process::ProcessFilter,
 ) -> anyhow::Result<()> {
     let output = get_stdout_output();
     let mut stdout = output.buffer();
@@ -184,42 +207,8 @@ fn draw_process(
         None => DEFAULT_TERMINAL_WIDTH,
     };
 
-    let user_cache = UsersCache::new();
-
-    let uid_filter = match user_filter {
-        Some(user_filter) => match user_cache.get_user_by_name(user_filter) {
-            Some(user) => Some(user.uid()),
-            None => {
-                return Err(anyhow!("Cannot find the user {:?}.", user_filter));
-            },
-        },
-        None => None,
-    };
-
-    let gid_filter = match group_filter {
-        Some(group_filter) => match user_cache.get_group_by_name(group_filter) {
-            Some(group) => Some(group.gid()),
-            None => {
-                return Err(anyhow!("Cannot find the group {:?}.", group_filter));
-            },
-        },
-        None => None,
-    };
-
-    // The filters are predicates now, so the regexes have to be wrapped before they are borrowed.
-    let program_matcher = program_filter.map(|regex| move |program: &str| regex.is_match(program));
-    let tty_matcher = tty_filter.map(|regex| move |tty: &str| regex.is_match(tty));
-
-    let process_filter = process::ProcessFilter {
-        pid_filter,
-        uid_filter,
-        gid_filter,
-        program_filter: program_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
-        tty_filter: tty_matcher.as_ref().map(|matcher| matcher as &dyn Fn(&str) -> bool),
-    };
-
     let processes: Vec<(process::Process, f64)> = if only_information {
-        let mut processes_with_stats = process::get_processes_with_stat(&process_filter)?;
+        let mut processes_with_stats = process::get_processes_with_stat(process_filter)?;
 
         processes_with_stats.sort_unstable_by_key(|(a, _)| std::cmp::Reverse(a.vsz));
 
@@ -231,7 +220,7 @@ fn draw_process(
     } else {
         let mut processes_with_percentage =
             process::get_processes_with_cpu_utilization_in_percentage(
-                &process_filter,
+                process_filter,
                 monitor.unwrap_or(DEFAULT_INTERVAL),
             )?;
 
@@ -269,18 +258,18 @@ fn draw_process(
             anon: format_byte(process.rss_anon),
             thd: process.threads.to_string(),
             tty: sanitize(process.tty.unwrap_or_default()),
-            // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
+            // A name which cannot be looked up, e.g. a dynamic user of systemd on musl, is shown as its number, as `ps` does.
             user: sanitize(
                 user_cache
                     .get_user_by_uid(process.effective_uid)
                     .map(|user| user.name().to_string_lossy().into_owned())
-                    .unwrap_or_else(|| String::from("systemd?")),
+                    .unwrap_or_else(|| process.effective_uid.to_string()),
             ),
             group: sanitize(
                 user_cache
                     .get_group_by_gid(process.effective_gid)
                     .map(|group| group.name().to_string_lossy().into_owned())
-                    .unwrap_or_else(|| String::from("systemd?")),
+                    .unwrap_or_else(|| process.effective_gid.to_string()),
             ),
             program: sanitize(process.program),
             state: process.state.as_str(),
