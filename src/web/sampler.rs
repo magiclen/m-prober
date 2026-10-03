@@ -13,10 +13,8 @@ use tokio::{
     time,
 };
 
-use super::{
-    cpu_sample::{self, CpuThreadSnapshot},
-    probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithSpeed, optional},
-};
+use super::probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithSpeed, optional};
+use crate::cpu_sample::{self, CpuThreadSnapshot};
 
 /// How long sampling keeps running after the last one-shot request, expressed in detect intervals.
 const IDLE_INTERVALS: u32 = 3;

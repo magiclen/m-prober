@@ -1,6 +1,7 @@
 mod benchmark;
 mod cli;
 mod commands;
+mod cpu_sample;
 mod terminal;
 mod web;
 

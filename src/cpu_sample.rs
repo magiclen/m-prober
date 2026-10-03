@@ -39,10 +39,14 @@ fn read_counts(reader: impl BufRead) -> io::Result<Counts> {
 
     for line in reader.lines() {
         let line = line?;
+
         let mut fields = line.split_ascii_whitespace();
+
         let Some(label) = fields.next() else { continue };
         let Some(suffix) = label.strip_prefix("cpu") else { break };
+
         let mut values = [0; 10];
+
         for value in &mut values {
             *value = fields
                 .next()
@@ -50,6 +54,7 @@ fn read_counts(reader: impl BufRead) -> io::Result<Counts> {
                 .parse::<u64>()
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         }
+
         let stat = CPUStat {
             user:       values[0],
             nice:       values[1],
@@ -62,12 +67,14 @@ fn read_counts(reader: impl BufRead) -> io::Result<Counts> {
             guest:      values[8],
             guest_nice: values[9],
         };
+
         if suffix.is_empty() {
             average = Some(stat);
         } else {
             let id = suffix
                 .parse::<usize>()
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+
             threads.insert(id, stat);
         }
     }
@@ -78,19 +85,31 @@ fn read_counts(reader: impl BufRead) -> io::Result<Counts> {
     })
 }
 
+#[inline]
+fn read_proc_stat() -> io::Result<Counts> {
+    read_counts(BufReader::new(File::open("/proc/stat")?))
+}
+
 fn parse_info(data: &str) -> BTreeMap<usize, ThreadInfo> {
     let mut result = BTreeMap::<usize, ThreadInfo>::new();
+
     let mut id = None;
+
     for line in data.lines() {
         if line.trim().is_empty() {
             id = None;
+
             continue;
         }
+
         let Some((key, value)) = line.split_once(':') else { continue };
+
         let value = value.trim();
+
         match key.trim() {
             "processor" => {
                 id = value.parse::<usize>().ok();
+
                 if let Some(id) = id {
                     result.entry(id).or_default();
                 }
@@ -109,44 +128,17 @@ fn parse_info(data: &str) -> BTreeMap<usize, ThreadInfo> {
             _ => (),
         }
     }
+
     result
 }
 
-fn combine(before: Counts, after: Counts, info: &BTreeMap<usize, ThreadInfo>) -> CpuSample {
-    let mut cpus_stat = vec![before.average.compute_cpu_utilization_in_percentage(&after.average)];
-    let threads = after
-        .threads
-        .into_iter()
-        .map(|(id, stat)| {
-            // Match the same kernel CPU number even when CPUs go offline between samples.
-            let usage = before
-                .threads
-                .get(&id)
-                .map(|previous| previous.compute_cpu_utilization_in_percentage(&stat));
-            let info = info.get(&id);
-            // The legacy array cannot represent a missing first reading; the new field can.
-            cpus_stat.push(usage.unwrap_or(0.0));
-            CpuThreadSnapshot {
-                id,
-                physical_id: info.and_then(|info| info.physical_id),
-                usage,
-                frequency_mhz: info.and_then(|info| info.frequency_mhz),
-            }
-        })
-        .collect();
-    CpuSample {
-        cpus_stat,
-        threads,
-    }
-}
-
-pub fn sample(interval: Duration) -> Result<CpuSample, Error> {
-    let before = read_counts(BufReader::new(File::open("/proc/stat")?))?;
-    thread::sleep(interval);
-    let after = read_counts(BufReader::new(File::open("/proc/stat")?))?;
+/// Read the package and the frequency of each CPU in `ids`, from `/proc/cpuinfo` first and then from sysfs for what it leaves out.
+fn read_info(ids: impl Iterator<Item = usize>) -> BTreeMap<usize, ThreadInfo> {
     let mut info = parse_info(&fs::read_to_string("/proc/cpuinfo").unwrap_or_default());
-    for id in after.threads.keys() {
-        let entry = info.entry(*id).or_default();
+
+    for id in ids {
+        let entry = info.entry(id).or_default();
+
         // Read only the missing attributes, not every file in the topology and cpufreq folders.
         if entry.physical_id.is_none() {
             entry.physical_id = fs::read_to_string(format!(
@@ -155,6 +147,7 @@ pub fn sample(interval: Duration) -> Result<CpuSample, Error> {
             .ok()
             .and_then(|value| value.trim().parse().ok());
         }
+
         if entry.frequency_mhz.is_none() {
             entry.frequency_mhz = fs::read_to_string(format!(
                 "/sys/devices/system/cpu/cpu{id}/cpufreq/scaling_cur_freq"
@@ -165,7 +158,75 @@ pub fn sample(interval: Duration) -> Result<CpuSample, Error> {
             .map(|khz| khz / 1000.0);
         }
     }
+
+    info
+}
+
+fn combine(before: Counts, after: Counts, info: &BTreeMap<usize, ThreadInfo>) -> CpuSample {
+    let mut cpus_stat = vec![before.average.compute_cpu_utilization_in_percentage(&after.average)];
+
+    let threads = after
+        .threads
+        .into_iter()
+        .map(|(id, stat)| {
+            // Match the same kernel CPU number even when CPUs go offline between samples.
+            let usage = before
+                .threads
+                .get(&id)
+                .map(|previous| previous.compute_cpu_utilization_in_percentage(&stat));
+
+            let info = info.get(&id);
+
+            // The legacy array cannot represent a missing first reading; the new field can.
+            cpus_stat.push(usage.unwrap_or(0.0));
+
+            CpuThreadSnapshot {
+                id,
+                physical_id: info.and_then(|info| info.physical_id),
+                usage,
+                frequency_mhz: info.and_then(|info| info.frequency_mhz),
+            }
+        })
+        .collect();
+
+    CpuSample {
+        cpus_stat,
+        threads,
+    }
+}
+
+pub fn sample(interval: Duration) -> Result<CpuSample, Error> {
+    let before = read_proc_stat()?;
+
+    thread::sleep(interval);
+
+    let after = read_proc_stat()?;
+
+    let info = read_info(after.threads.keys().copied());
+
     Ok(combine(before, after, &info))
+}
+
+/// Every CPU which is online, with its package and its frequency but without a usage, which would need two readings an interval apart.
+pub fn read_threads() -> Result<Vec<CpuThreadSnapshot>, Error> {
+    let counts = read_proc_stat()?;
+
+    let info = read_info(counts.threads.keys().copied());
+
+    Ok(counts
+        .threads
+        .into_keys()
+        .map(|id| {
+            let info = info.get(&id);
+
+            CpuThreadSnapshot {
+                id,
+                physical_id: info.and_then(|info| info.physical_id),
+                usage: None,
+                frequency_mhz: info.and_then(|info| info.frequency_mhz),
+            }
+        })
+        .collect())
 }
 
 #[cfg(test)]
@@ -181,7 +242,9 @@ mod tests {
         )
         .unwrap();
         let info = parse_info("processor : 0\nphysical id : 0\ncpu MHz : 2830.00\n");
+
         let sample = combine(before, after, &info);
+
         assert_eq!(vec![0.25, 0.25], sample.cpus_stat);
         assert_eq!(1, sample.threads.len());
         assert_eq!(Some(0), sample.threads[0].physical_id);
@@ -204,7 +267,9 @@ mod tests {
         let info = parse_info(
             "processor : 4\nphysical id : 0\ncpu MHz : 3200\n\nprocessor : 1\nphysical id : 1\n",
         );
+
         let sample = combine(before, after, &info);
+
         assert_eq!(vec![0.5, 0.25, 0.75], sample.cpus_stat);
         assert_eq!(2, sample.threads.len());
         assert_eq!(1, sample.threads[0].id);
@@ -220,7 +285,9 @@ mod tests {
         let before = read_counts("cpu 0 0 0 0 0 0 0 0 0 0\n".as_bytes()).unwrap();
         let after =
             read_counts("cpu 1 0 0 1 0 0 0 0 0 0\ncpu8 1 0 0 1 0 0 0 0 0 0\n".as_bytes()).unwrap();
+
         let sample = combine(before, after, &BTreeMap::new());
+
         assert_eq!(8, sample.threads[0].id);
         assert_eq!(None, sample.threads[0].usage);
         assert_eq!(None, sample.threads[0].physical_id);
