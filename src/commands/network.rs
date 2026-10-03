@@ -66,7 +66,7 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) -> anyhow::Result
             download.push_str("/s");
 
             Row {
-                interface: network.interface,
+                interface: sanitize(network.interface),
                 upload,
                 upload_total,
                 download,

@@ -223,6 +223,15 @@ pub fn display_width(text: &str) -> usize {
     UnicodeWidthStr::width(text)
 }
 
+/// Replace every control character with `?`, as `ps` does, so that a name or a command line which anyone can set cannot move the cursor or recolor the terminal.
+pub fn sanitize(text: String) -> String {
+    if !text.chars().any(char::is_control) {
+        return text;
+    }
+
+    text.chars().map(|character| if character.is_control() { '?' } else { character }).collect()
+}
+
 /// Pay off the `pending` blanks the columns before it owe, write `text`, and hand back what a column `width` wide still owes.
 ///
 /// A column that holds nothing writes nothing and passes the whole debt on, so a row cut short by a narrow terminal ends in a word rather than in the blanks of the columns that follow it.
@@ -415,6 +424,12 @@ mod tests {
 
         write_left_aligned(&mut buffer, "magiclen", 4).unwrap();
         assert_eq!(b"magiclen", buffer.as_slice());
+    }
+
+    #[test]
+    fn test_sanitize() {
+        assert_eq!("magiclen", sanitize(String::from("magiclen")));
+        assert_eq!("sleep ?[2J?", sanitize(String::from("sleep \x1B[2J\x07")));
     }
 
     #[test]

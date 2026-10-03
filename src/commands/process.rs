@@ -268,24 +268,28 @@ fn draw_process(
             rss: format_byte(process.rss),
             anon: format_byte(process.rss_anon),
             thd: process.threads.to_string(),
-            tty: process.tty.unwrap_or_default(),
+            tty: sanitize(process.tty.unwrap_or_default()),
             // TODO: musl cannot directly handle dynamic users (with systemd). It causes `UserCache` returns `None`.
-            user: user_cache
-                .get_user_by_uid(process.effective_uid)
-                .map(|user| user.name().to_string_lossy().into_owned())
-                .unwrap_or_else(|| String::from("systemd?")),
-            group: user_cache
-                .get_group_by_gid(process.effective_gid)
-                .map(|group| group.name().to_string_lossy().into_owned())
-                .unwrap_or_else(|| String::from("systemd?")),
-            program: process.program,
+            user: sanitize(
+                user_cache
+                    .get_user_by_uid(process.effective_uid)
+                    .map(|user| user.name().to_string_lossy().into_owned())
+                    .unwrap_or_else(|| String::from("systemd?")),
+            ),
+            group: sanitize(
+                user_cache
+                    .get_group_by_gid(process.effective_gid)
+                    .map(|group| group.name().to_string_lossy().into_owned())
+                    .unwrap_or_else(|| String::from("systemd?")),
+            ),
+            program: sanitize(process.program),
             state: process.state.as_str(),
             start_time: if start_time {
                 process.start_time.to_rfc3339_opts(SecondsFormat::Secs, true)
             } else {
                 String::new()
             },
-            cmdline: process.cmdline,
+            cmdline: sanitize(process.cmdline),
         })
         .collect();
 

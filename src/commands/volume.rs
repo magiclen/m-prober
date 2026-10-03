@@ -33,8 +33,8 @@ impl Row {
             used_text: format_byte(Byte::from_u64(volume.used)),
             size_text: format_byte(Byte::from_u64(volume.size)),
             used_percentage: format!("{:.2}%", percentage_of(volume.used, volume.size)),
-            device: volume.device,
-            points: volume.points,
+            device: sanitize(volume.device),
+            points: volume.points.into_iter().map(sanitize).collect(),
             columns,
         }
     }
