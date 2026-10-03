@@ -93,7 +93,7 @@ impl CgroupSummary {
     }
 }
 
-/// Everything the cgroup exposes, for the dedicated endpoint and the CLI.
+/// Everything the cgroup exposes, for the dedicated endpoint.
 #[derive(Debug, Clone, Serialize)]
 pub struct CgroupReport {
     pub path:          PathBuf,

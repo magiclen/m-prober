@@ -37,6 +37,7 @@ pub const CLEAR_SCREEN_DATA: [u8; 11] =
 
 const ENV_LIGHT_MODE: &str = "MPROBER_LIGHT";
 const ENV_FORCE_PLAIN: &str = "MPROBER_FORCE_PLAIN";
+const ENV_NO_COLOR: &str = "NO_COLOR";
 
 pub const DEFAULT_TERMINAL_WIDTH: usize = 80;
 pub const MIN_TERMINAL_WIDTH: usize = 60;
@@ -147,16 +148,16 @@ pub fn set_color_mode(plain: bool, light: bool) {
     if plain {
         FORCE_PLAIN_MODE.store(true, Ordering::Relaxed);
     } else {
-        match env::var_os(ENV_FORCE_PLAIN).map(|v| v.ne("0")) {
-            Some(true) => {
-                FORCE_PLAIN_MODE.store(true, Ordering::Relaxed);
-            },
-            _ => {
-                let light =
-                    light || env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+        let force_plain = env::var_os(ENV_FORCE_PLAIN).is_some_and(|v| v.ne("0"))
+            // https://no-color.org asks for no colors whenever this is set to anything but an empty string.
+            || env::var_os(ENV_NO_COLOR).is_some_and(|v| !v.is_empty());
 
-                LIGHT_MODE.store(light, Ordering::Relaxed);
-            },
+        if force_plain {
+            FORCE_PLAIN_MODE.store(true, Ordering::Relaxed);
+        } else {
+            let light = light || env::var_os(ENV_LIGHT_MODE).map(|v| v.ne("0")).unwrap_or(false);
+
+            LIGHT_MODE.store(light, Ordering::Relaxed);
         }
     }
 }

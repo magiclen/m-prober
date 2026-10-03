@@ -43,7 +43,7 @@ mprober network -u kb                 # Show current network stats in KB
 mprober volume                        # Show current volume stats
 mprober volume -m 1000                # Show current volume stats and refresh every 1000 milliseconds
 mprober volume -p                     # Show current volume stats without colors
-mprober volume -l                     # Show current volume stats without colors
+mprober volume -l                     # Show current volume stats with darker colors (fitting in with light themes)
 mprober volume -u kb                  # Show current volume stats in KB
 mprober volume -i                     # Only show volume information without I/O rates
 mprober volume --mounts               # Show current volume stats including mount points
@@ -138,7 +138,7 @@ Every subcommand accepts a few shared flags:
 | `-l`, `--light` | Darker colors, which fit a light terminal theme. |
 | `-u`, `--unit` | Force a fixed unit, e.g. `-u kb`, instead of picking one per value. |
 
-`MPROBER_FORCE_PLAIN` and `MPROBER_LIGHT` set `--plain` and `--light` for every run, which is useful when the output is piped or when the terminal has a light theme. Set either to anything other than `0` to enable it.
+`MPROBER_FORCE_PLAIN` and `MPROBER_LIGHT` set `--plain` and `--light` for every run, which is useful when the output is piped or when the terminal has a light theme. Set either to anything other than `0` to enable it. [`NO_COLOR`](https://no-color.org), set to anything but an empty string, turns the colors off as well.
 
 The samples below are the plain output, so they are what you get when the color escapes are stripped.
 

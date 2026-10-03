@@ -50,7 +50,7 @@ const APP_ABOUT: &str = concat!(
         "volume                        # Show current volume stats",
         "volume -m 1000                # Show current volume stats and refresh every 1000 milliseconds",
         "volume -p                     # Show current volume stats without colors",
-        "volume -l                     # Show current volume stats without colors",
+        "volume -l                     # Show current volume stats with darker colors (fitting in with light themes)",
         "volume -u kb                  # Show current volume stats in KB",
         "volume -i                     # Only show volume information without I/O rates",
         "volume --mounts               # Show current volume stats including mount points",
@@ -292,7 +292,7 @@ pub enum CLICommands {
                       Set '0' to disable")]
         truncate:         usize,
         #[arg(short = 't', long)]
-        #[arg(help = "Show when the progresses start")]
+        #[arg(help = "Show when the processes start")]
         start_time:       bool,
         #[arg(long, alias = "filter-user", value_name = "USER_NAME")]
         #[arg(help = "Show only processes which are related to a specific user")]
