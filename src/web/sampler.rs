@@ -15,7 +15,7 @@ use tokio::{
 
 use super::{
     cpu_sample::{self, CpuThreadSnapshot},
-    probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithSpeed},
+    probes::{CgroupSummary, NetworkWithSpeed, SystemPressure, VolumeWithSpeed, optional},
 };
 
 /// How long sampling keeps running after the last one-shot request, expressed in detect intervals.
@@ -35,7 +35,8 @@ pub struct Snapshot {
     pub hostname:     String,
     pub kernel:       String,
     pub uptime:       uptime::Uptime,
-    pub rtc_time:     chrono::NaiveDateTime,
+    /// `None` when no RTC driver is loaded, which is the case in most containers.
+    pub rtc_time:     Option<chrono::NaiveDateTime>,
     pub load_average: load_average::LoadAverage,
     pub cpus:         Vec<cpu::CPU>,
     pub cpus_stat:    Vec<f64>,
@@ -196,7 +197,7 @@ fn sample(detect_interval: Duration) -> Result<Snapshot, Error> {
         hostname:     hostname::get_hostname()?,
         kernel:       kernel::get_kernel_version()?,
         uptime:       uptime::get_uptime()?,
-        rtc_time:     rtc_time::get_rtc_date_time()?,
+        rtc_time:     optional(rtc_time::get_rtc_date_time())?,
         load_average: load_average::get_load_average()?,
         cpus:         cpu::get_cpus()?,
         cpus_stat:    cpu_sample.cpus_stat,

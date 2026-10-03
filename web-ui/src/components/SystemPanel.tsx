@@ -13,7 +13,11 @@ export function SystemPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Ele
                 <TextInput label="Hostname" value={snapshot.hostname} readOnly />
                 <TextInput
                     label="RTC time (UTC)"
-                    value={formatDateTime(snapshot.rtc_time)}
+                    value={
+                        snapshot.rtc_time === null
+                            ? "Unavailable"
+                            : formatDateTime(snapshot.rtc_time)
+                    }
                     readOnly
                 />
                 <TextInput

@@ -214,6 +214,11 @@ test("tells the reader when PSI and cgroup are unavailable", () => {
     expect(screen.getByText(/does not run mprober under cgroup v2/)).toBeInTheDocument();
 });
 
+test("tells the reader when the RTC is unavailable", () => {
+    render(<Dashboard snapshot={{ ...testSnapshot, rtc_time: null }} />);
+    expect(screen.getByLabelText("RTC time (UTC)")).toHaveValue("Unavailable");
+});
+
 test("aligns volume usage below rates and keeps extra mount points in the last column", () => {
     render(
         <Dashboard

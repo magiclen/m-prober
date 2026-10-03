@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use mprober_lib::rtc_time;
 
 use crate::{CLIArgs, CLICommands, terminal::*};
@@ -21,7 +22,15 @@ pub fn handle_time(args: CLIArgs) -> anyhow::Result<()> {
 }
 
 fn draw_time() -> anyhow::Result<()> {
-    let rtc_date_time = rtc_time::get_rtc_date_time()?;
+    let rtc_date_time = match rtc_time::get_rtc_date_time() {
+        Ok(rtc_date_time) => rtc_date_time,
+        Err(error) if error.is_not_supported() => {
+            return Err(anyhow!(
+                "This machine has no RTC driver loaded, so there is no RTC time to show."
+            ));
+        },
+        Err(error) => return Err(error.into()),
+    };
 
     let output = get_stdout_output();
     let mut stdout = output.buffer();

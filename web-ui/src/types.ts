@@ -175,7 +175,8 @@ export interface Snapshot {
     hostname: string;
     kernel: string;
     uptime: Uptime;
-    rtc_time: string;
+    /** `null` when no RTC driver is loaded, which is the case in most containers. */
+    rtc_time: string | null;
     load_average: LoadAverage;
     cpus: Cpu[];
     /** The first entry is the average over every CPU, the rest are the individual ones. */

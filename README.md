@@ -474,7 +474,7 @@ A rate can only be measured over a period, so these serve the latest snapshot of
 }
 ```
 
-`pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2.
+`rtc_time` is `null` when no RTC driver is loaded, which is the case in most containers, `pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2.
 
 `cpu_threads` in `/api/all` and its stream pairs each logical CPU's kernel number (`id`) with its physical CPU (`physical_id`), utilization fraction (`usage`) and frequency in MHz (`frequency_mhz`). Entries are ordered by `id`; the latter three fields can be `null` when unavailable. A CPU without a reading at the start of the interval has `usage: null`; its legacy `cpus_stat` entry is `0`. Existing fields and endpoints are unchanged.
 

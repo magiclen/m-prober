@@ -131,9 +131,9 @@ fn cgroup_path() -> Option<PathBuf> {
     cgroup::get_cgroup_path().ok()
 }
 
-/// A controller which is not enabled for the cgroup has no files, which is not an error here.
+/// A missing file means the kernel or the environment does not provide the data, e.g. a controller which is not enabled for the cgroup or an RTC without a driver, which is not an error here.
 #[inline]
-fn optional<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
+pub fn optional<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
     match result {
         Ok(value) => Ok(Some(value)),
         Err(error) if error.is_not_supported() => Ok(None),
