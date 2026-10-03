@@ -425,10 +425,13 @@ fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option
         let path = Path::new(point).join(format!("mprober-{:016x}.tmp", rand::random::<u64>()));
 
         let Some((mut file, direct)) =
-            open_test_file(&path, OpenOptions::new().write(true).create_new(true))
+            open_test_file(&path, OpenOptions::new().read(true).write(true).create_new(true))
         else {
             continue;
         };
+
+        // The file is unlinked at once and only used through this handle from here on, so that it goes away with the process however the run ends, e.g. by Ctrl+C.
+        try_delete(&path);
 
         if config.verbose {
             eprintln!(
@@ -445,13 +448,7 @@ fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option
             }
         }
 
-        let result = measure_file(&mut file, &path, direct, config.benchmark_duration);
-
-        drop(file);
-
-        try_delete(&path);
-
-        return match result {
+        return match measure_file(&mut file, config.benchmark_duration) {
             Ok(speeds) => Some(speeds),
             Err(stage) => {
                 if config.verbose {
@@ -471,12 +468,7 @@ fn benchmark_volume(volume: &volume::Volume, config: &BenchmarkConfig) -> Option
 }
 
 /// Measure one file, writing to it first and then reading it back. The error names the step that failed.
-fn measure_file(
-    file: &mut File,
-    path: &Path,
-    direct: bool,
-    duration: Duration,
-) -> Result<(f64, f64), &'static str> {
+fn measure_file(file: &mut File, duration: Duration) -> Result<(f64, f64), &'static str> {
     let write_result = measure_write(file, duration).ok_or("written")?;
 
     let mut file_size = stream_len(file).map_err(|_| "read")?;
@@ -491,7 +483,7 @@ fn measure_file(
         file_size += VOLUME_BUFFER_SIZE as u64;
     }
 
-    let read_result = measure_read(path, direct, file_size, duration).ok_or("read")?;
+    let read_result = measure_read(file, file_size, duration).ok_or("read")?;
 
     Ok((read_result, write_result))
 }
@@ -536,16 +528,8 @@ fn measure_write(file: &mut File, duration: Duration) -> Option<f64> {
 /// Read the file back for the whole duration, rewinding it once it has been read to the end. `None` means a read failed.
 ///
 /// A benchmark too short to fill a whole `TEST_FILE_SIZE` leaves a smaller file behind, so turning around at that size instead would read past the end and report the volume as unreadable.
-fn measure_read(path: &Path, direct: bool, file_size: u64, duration: Duration) -> Option<f64> {
-    let mut options = OpenOptions::new();
-
-    options.read(true);
-
-    let mut file = if direct {
-        options.custom_flags(libc::O_DIRECT).open(path).ok()?
-    } else {
-        options.open(path).ok()?
-    };
+fn measure_read(file: &mut File, file_size: u64, duration: Duration) -> Option<f64> {
+    file.seek(SeekFrom::Start(0)).ok()?;
 
     // Whole buffers only, since the last part of the file is shorter than one and `read_exact` would fail on it.
     let lap_size = u128::from(file_size - file_size % VOLUME_BUFFER_SIZE as u64);
