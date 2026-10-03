@@ -9,11 +9,15 @@ import { UsageBar } from "./UsageBar.tsx";
 function MemoryBar({
     label,
     used,
+    usedSegment,
     cache,
     total,
 }: {
     label: string;
+    /** The figure shown, which is what the `free` command and the CLI show. */
     used: number;
+    /** The part of `used` drawn before the cache, which leaves out a cache that `used` counts too. */
+    usedSegment: number;
     cache: number;
     total: number;
 }): React.JSX.Element {
@@ -27,7 +31,11 @@ function MemoryBar({
             value={`${formatBinaryBytes(used)} / ${formatBinaryBytes(total)}`}
             text={label === "Swap" && total === 0 ? "Not configured" : undefined}
             segments={[
-                { label: `${label} Used`, value: used, description: describe(used) },
+                {
+                    label: `${label} Used`,
+                    value: usedSegment,
+                    description: describe(usedSegment),
+                },
                 {
                     label: `${label} ${label === "Mem" ? "Buffers + cache" : "Cache"}`,
                     value: cache,
@@ -41,15 +49,26 @@ function MemoryBar({
 
 export function MemoryPanel({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
     const { mem, swap } = snapshot.memory;
+    // `mem.used` also counts the part of the cache that cannot be reclaimed, so the cache drawn after it is clamped to the bar.
     const cache = mem.buffers + mem.cache;
-    // The legacy display counts cache separately from used memory.
-    const memUsed = Math.max(0, mem.total - mem.free - cache);
-    const swapUsed = Math.max(0, swap.used - swap.cache);
+    const swapUsedSegment = Math.max(0, swap.used - swap.cache);
     return (
         <Panel title="Memory">
             <Stack gap="sm">
-                <MemoryBar label="Mem" used={memUsed} cache={cache} total={mem.total} />
-                <MemoryBar label="Swap" used={swapUsed} cache={swap.cache} total={swap.total} />
+                <MemoryBar
+                    label="Mem"
+                    used={mem.used}
+                    usedSegment={mem.used}
+                    cache={cache}
+                    total={mem.total}
+                />
+                <MemoryBar
+                    label="Swap"
+                    used={swap.used}
+                    usedSegment={swapUsedSegment}
+                    cache={swap.cache}
+                    total={swap.total}
+                />
             </Stack>
         </Panel>
     );

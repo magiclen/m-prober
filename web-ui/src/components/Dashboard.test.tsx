@@ -87,7 +87,7 @@ test("keeps missing CPU data unavailable instead of guessing its group or freque
     expect(screen.getByRole("progressbar", { name: "CPU8" })).toHaveAttribute("aria-valuenow", "0");
 });
 
-test("splits memory into legacy used and cache with matching text and keyboard tooltips", async () => {
+test("splits memory into used and cache as the CLI does, with matching text and keyboard tooltips", async () => {
     const { rerender } = render(
         <Dashboard
             snapshot={{
@@ -107,14 +107,18 @@ test("splits memory into legacy used and cache with matching text and keyboard t
     const memory = within(screen.getByRole("region", { name: "Memory" }));
     expect(memory.getByRole("progressbar", { name: "Mem Used" })).toHaveAttribute(
         "aria-valuenow",
-        "25",
+        "50",
     );
     expect(memory.getByRole("progressbar", { name: "Mem Buffers + cache" })).toHaveAttribute(
         "aria-valuenow",
         "25",
     );
-    expect(memory.getByText("1.00 GiB / 4.00 GiB (25.00%)")).toBeInTheDocument();
-    expect(memory.getByText("384.00 MiB / 1.00 GiB (37.50%)")).toBeInTheDocument();
+    expect(memory.getByText("2.00 GiB / 4.00 GiB (50.00%)")).toBeInTheDocument();
+    expect(memory.getByText("512.00 MiB / 1.00 GiB (50.00%)")).toBeInTheDocument();
+    expect(memory.getByRole("progressbar", { name: "Swap Used" })).toHaveAttribute(
+        "aria-valuenow",
+        "37.5",
+    );
     expect(memory.getByRole("progressbar", { name: "Swap Cache" })).toHaveAttribute(
         "aria-valuenow",
         "12.5",
