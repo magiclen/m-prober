@@ -35,7 +35,7 @@ terminal_size = "0.4"
 
 anyhow = "1"
 
-mprober-lib = { version = "0.2", features = ["serde"] }
+mprober-lib = { version = "0.2.1", features = ["serde"] }
 
 termcolor = "1.1.1"
 getch = "0.3"
