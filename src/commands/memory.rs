@@ -131,7 +131,13 @@ fn draw_memory(unit: Option<Unit>) -> anyhow::Result<()> {
 
     let mut remaining = progress_max;
 
-    let progress_used = bar_cells(free.swap.used, free.swap.total, progress_max, &mut remaining);
+    // `used` counts the swap cache too, which has a segment of its own.
+    let progress_used = bar_cells(
+        free.swap.used.saturating_sub(free.swap.cache),
+        free.swap.total,
+        progress_max,
+        &mut remaining,
+    );
     let progress_cache = bar_cells(free.swap.cache, free.swap.total, progress_max, &mut remaining);
 
     stdout.set_color(&COLOR_USED).unwrap();
