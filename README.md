@@ -8,7 +8,7 @@ This program collects Linux system information: hostname, kernel version, uptime
 ## Help
 
 ```
-M Prober 0.12.0
+M Prober 0.12.1
 Magic Len <len@magiclen.org>
 M Prober is a free and simple probe utility for Linux.
 

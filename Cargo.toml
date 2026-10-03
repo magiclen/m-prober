@@ -1,6 +1,6 @@
 [package]
 name = "mprober"
-version = "0.12.0"
+version = "0.12.1"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2024"
 rust-version = "1.89"
