@@ -326,7 +326,7 @@ fn draw_cpu_info(
         }
     }
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }

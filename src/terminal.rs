@@ -2,12 +2,13 @@ use std::{
     env,
     io::{self, Read},
     sync::{
-        LazyLock,
+        LazyLock, Mutex, PoisonError,
         atomic::{AtomicBool, Ordering},
     },
 };
 pub use std::{io::Write, time::Duration};
 
+use getch::Getch;
 use signal_hook::{
     consts::{SIGINT, SIGTERM},
     iterator::Signals,
@@ -271,13 +272,20 @@ pub fn get_term_width() -> usize {
         .unwrap_or(DEFAULT_TERMINAL_WIDTH)
 }
 
-/// Watch for the `q` that stops a monitoring loop, and for the signals that stop it from outside.
+/// The terminal mode a monitoring loop changed, held here so that whichever way the process ends can put it back.
 ///
-/// `Getch` turns off echo and line buffering so that a key is seen as soon as it is pressed, and it
-/// puts the terminal back only when it is dropped. Neither `exit` nor a signal runs destructors, so
-/// the handle is held by the thread that ends the process and the key is read here instead.
+/// `Getch` turns off echo and line buffering so that a key is seen as soon as it is pressed, and it puts the terminal back only when it is dropped. Neither `exit` nor a signal runs destructors, so it has to be dropped on purpose.
+static TERMINAL: Mutex<Option<Getch>> = Mutex::new(None);
+
+/// Put the terminal back the way it was before a monitoring loop started. It does nothing when no loop has started.
+pub fn restore_terminal() {
+    // A thread which panicked while holding the lock still leaves the mode to put back.
+    drop(TERMINAL.lock().unwrap_or_else(PoisonError::into_inner).take());
+}
+
+/// Watch for the `q` that stops a monitoring loop, and for the signals that stop it from outside.
 pub fn spawn_quit_watcher() {
-    let getch = ::getch::Getch::new();
+    *TERMINAL.lock().unwrap_or_else(PoisonError::into_inner) = Some(Getch::new());
 
     let mut signals =
         Signals::new([SIGINT, SIGTERM]).expect("cannot listen for SIGINT and SIGTERM");
@@ -309,12 +317,13 @@ pub fn spawn_quit_watcher() {
             None => 0,
         };
 
-        drop(getch);
+        restore_terminal();
 
         ::std::process::exit(status);
     });
 }
 
+// The clear sequence has no newline, so it stays in the line buffer of stdout until the next frame is printed, which keeps the screen from going blank while that frame is sampled.
 macro_rules! monitor_handler {
     ($monitor:expr, $s:stmt) => {
         match $monitor {
@@ -324,7 +333,7 @@ macro_rules! monitor_handler {
                 let sleep_interval = monitor;
 
                 loop {
-                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA).unwrap();
+                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA)?;
 
                     $s
 
@@ -341,7 +350,7 @@ macro_rules! monitor_handler {
             Some(monitor) => {
                 crate::terminal::spawn_quit_watcher();
 
-                ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA).unwrap();
+                ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA)?;
 
                 $si
 
@@ -352,7 +361,7 @@ macro_rules! monitor_handler {
                         ::std::thread::sleep(sleep_interval);
                     }
 
-                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA).unwrap();
+                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA)?;
 
                     $s
                 }

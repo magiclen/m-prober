@@ -52,7 +52,7 @@ fn draw_uptime(second: bool) -> anyhow::Result<()> {
     stdout.set_color(&COLOR_DEFAULT).unwrap();
     writeln!(&mut stdout).unwrap();
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }

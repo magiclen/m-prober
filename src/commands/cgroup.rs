@@ -102,7 +102,7 @@ fn draw_cgroup(unit: Option<Unit>) -> anyhow::Result<()> {
 
     stdout.set_color(&COLOR_DEFAULT).unwrap();
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }

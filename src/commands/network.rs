@@ -81,7 +81,7 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) -> anyhow::Result
 
         stdout.set_color(&COLOR_DEFAULT).unwrap();
 
-        output.print(&stdout).unwrap();
+        output.print(&stdout)?;
 
         return Ok(());
     }
@@ -142,7 +142,7 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) -> anyhow::Result
         writeln!(&mut stdout).unwrap();
     }
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }

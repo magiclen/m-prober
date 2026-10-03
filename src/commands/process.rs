@@ -689,7 +689,7 @@ fn draw_process(
         writeln!(&mut stdout).unwrap();
     }
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }

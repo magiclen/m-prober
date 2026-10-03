@@ -137,7 +137,7 @@ fn draw_volume(
         draw_rows(&mut stdout, headers, &rows, terminal_width, mounts);
     }
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }

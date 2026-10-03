@@ -88,7 +88,7 @@ fn draw_pressure() -> anyhow::Result<()> {
 
     stdout.set_color(&COLOR_DEFAULT).unwrap();
 
-    output.print(&stdout).unwrap();
+    output.print(&stdout)?;
 
     Ok(())
 }
