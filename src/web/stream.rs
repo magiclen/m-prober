@@ -22,9 +22,9 @@ pub async fn all(
     let stream = WatchStream::new(receiver)
         .filter_map(move |sample: Option<Sample>| {
             let event = sample.filter(|sample| sample.is_fresh(detect_interval)).map(|sample| {
-                Ok(Event::default()
-                    .json_data(&*sample.snapshot)
-                    .unwrap_or_else(|error| Event::default().event("error").data(error.to_string())))
+                Ok(Event::default().json_data(&*sample.snapshot).unwrap_or_else(|error| {
+                    Event::default().event("error").data(error.to_string())
+                }))
             });
 
             std::future::ready(event)

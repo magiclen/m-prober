@@ -116,9 +116,7 @@ fn router(state: AppState, only_api: bool) -> Router {
         let index = Arc::new(static_files::index(&state.base_path));
 
         app.fallback(move |uri: Uri, headers: HeaderMap| {
-            let index = Arc::clone(&index);
-
-            async move { static_files::serve(&index, uri, headers) }
+            std::future::ready(static_files::serve(&index, uri, headers))
         })
     };
 

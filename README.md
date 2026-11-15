@@ -70,7 +70,7 @@ mprober web                           # Start a HTTP service on port 8000 to mon
 mprober web -m 2                      # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds
 mprober web -p 7777                   # Start a HTTP service on port 7777 to monitor this computer
 mprober web --addr 127.0.0.1          # Start a HTTP service on 127.0.0.1:8000 to monitor this computer
-mprober web --base-path /mprober       # Serve the web page and HTTP APIs under /mprober
+mprober web --base-path /mprober      # Serve the web page and HTTP APIs under /mprober
 mprober web -a auth_key               # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key
 mprober web --only-api                # Start a HTTP service on port 8000 to serve only HTTP APIs
 mprober benchmark                     # Run benchmarks

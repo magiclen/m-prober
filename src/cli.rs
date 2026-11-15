@@ -77,7 +77,7 @@ const APP_ABOUT: &str = concat!(
         "web -m 2                      # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds",
         "web -p 7777                   # Start a HTTP service on port 7777 to monitor this computer",
         "web --addr 127.0.0.1          # Start a HTTP service on 127.0.0.1:8000 to monitor this computer",
-        "web --base-path /mprober       # Serve the web page and HTTP APIs under /mprober",
+        "web --base-path /mprober      # Serve the web page and HTTP APIs under /mprober",
         "web -a auth_key               # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key",
         "web --only-api                # Start a HTTP service on port 8000 to serve only HTTP APIs",
         "benchmark                     # Run benchmarks",
@@ -427,6 +427,9 @@ fn parse_auth_key(arg: &str) -> Result<String, String> {
     Ok(String::from(arg))
 }
 
+/// The base path goes into `<base href>`, the routes and the cookie `Path`, so only a fixed absolute path is accepted.
+///
+/// `//` would make `<base href>` point at another host, `{` and `}` would make a route parameter, and axum panics at startup on a segment that starts with `:` or `*`.
 fn parse_base_path(arg: &str) -> Result<String, String> {
     let invalid = || {
         String::from(
@@ -482,7 +485,20 @@ fn parse_base_path(arg: &str) -> Result<String, String> {
         }
     }
 
-    Ok(String::from(path))
+    // Browsers send percent-encoded bytes in upper case, and the routes and the cookie `Path` compare bytes as they are.
+    let mut parts = path.split('%');
+    let mut normalized = String::from(parts.next().unwrap_or_default());
+
+    for part in parts {
+        // Every `%` was checked above to be followed by two hex digits.
+        let (hex, rest) = part.split_at(2);
+
+        normalized.push('%');
+        normalized.push_str(&hex.to_ascii_uppercase());
+        normalized.push_str(rest);
+    }
+
+    Ok(normalized)
 }
 
 #[inline]
@@ -529,6 +545,7 @@ mod tests {
             ("/mprober/", "/mprober"),
             ("/admin/tools/mprober/", "/admin/tools/mprober"),
             ("/%E7%9B%A3%E6%8E%A7", "/%E7%9B%A3%E6%8E%A7"),
+            ("/%e7%9b%a3%e6%8e%a7/", "/%E7%9B%A3%E6%8E%A7"),
         ] {
             assert_eq!(expected, parse_base_path(input).unwrap());
         }
