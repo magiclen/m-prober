@@ -26,7 +26,7 @@ fn draw_memory(unit: Option<Unit>) -> anyhow::Result<()> {
     let free = memory::free()?;
 
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     let (mem_used, mem_total, swap_used, swap_total) = {
         let (mem_used, mem_total, swap_used, swap_total) = (

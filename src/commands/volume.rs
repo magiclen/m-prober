@@ -73,7 +73,7 @@ fn draw_volume(
     mounts: bool,
 ) -> anyhow::Result<()> {
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     let terminal_width = get_term_width();
 

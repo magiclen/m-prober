@@ -189,7 +189,7 @@ fn draw_process(
     process_filter: &process::ProcessFilter,
 ) -> anyhow::Result<()> {
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     let terminal_width = match terminal_size() {
         Some((width, height)) => {

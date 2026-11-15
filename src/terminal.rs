@@ -14,7 +14,7 @@ use signal_hook::{
     iterator::Signals,
 };
 pub use termcolor::WriteColor;
-use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec};
+use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec};
 use terminal_size::terminal_size;
 use unicode_width::UnicodeWidthStr;
 
@@ -47,6 +47,9 @@ pub const DEFAULT_INTERVAL: Duration = Duration::from_millis(333); // should be 
 // `set_color_mode` runs before any of the color specs below is initialized, but a `LazyLock` may be initialized on any thread, so these have to be synchronized.
 static FORCE_PLAIN_MODE: AtomicBool = AtomicBool::new(false);
 static LIGHT_MODE: AtomicBool = AtomicBool::new(false);
+
+/// Whether a monitoring loop has started, so that every frame begins by clearing the screen.
+static MONITORING: AtomicBool = AtomicBool::new(false);
 
 #[inline]
 pub fn is_plain_mode() -> bool {
@@ -170,6 +173,19 @@ pub fn get_stdout_output() -> BufferWriter {
     }
 }
 
+/// Start the buffer of a frame, which clears the screen first while a monitoring loop runs.
+///
+/// The clear sequence is printed together with the frame, so nothing is left waiting in stdout to wipe out an error message or the last frame when the process ends.
+pub fn frame_buffer(output: &BufferWriter) -> Buffer {
+    let mut buffer = output.buffer();
+
+    if MONITORING.load(Ordering::Relaxed) {
+        buffer.write_all(&CLEAR_SCREEN_DATA).unwrap();
+    }
+
+    buffer
+}
+
 /// A total of zero means the resource is absent, e.g. a machine with no swap or a file system which reports no size, so it reads as empty rather than as `NaN`.
 #[inline]
 pub fn percentage_of(used: u64, total: u64) -> f64 {
@@ -286,6 +302,8 @@ pub fn restore_terminal() {
 
 /// Watch for the `q` that stops a monitoring loop, and for the signals that stop it from outside.
 pub fn spawn_quit_watcher() {
+    MONITORING.store(true, Ordering::Relaxed);
+
     *TERMINAL.lock().unwrap_or_else(PoisonError::into_inner) = Some(Getch::new());
 
     let mut signals =
@@ -324,7 +342,7 @@ pub fn spawn_quit_watcher() {
     });
 }
 
-// The clear sequence has no newline, so it stays in the line buffer of stdout until the next frame is printed, which keeps the screen from going blank while that frame is sampled.
+// Each frame clears the screen when it is printed (see `frame_buffer`), which keeps the screen from going blank while the next frame is sampled.
 macro_rules! monitor_handler {
     ($monitor:expr, $s:stmt) => {
         match $monitor {
@@ -334,8 +352,6 @@ macro_rules! monitor_handler {
                 let sleep_interval = monitor;
 
                 loop {
-                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA)?;
-
                     $s
 
                     ::std::thread::sleep(sleep_interval);
@@ -351,8 +367,6 @@ macro_rules! monitor_handler {
             Some(monitor) => {
                 crate::terminal::spawn_quit_watcher();
 
-                ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA)?;
-
                 $si
 
                 let sleep_interval = monitor;
@@ -361,8 +375,6 @@ macro_rules! monitor_handler {
                     if $no_self_sleep {
                         ::std::thread::sleep(sleep_interval);
                     }
-
-                    ::std::io::stdout().write_all(&crate::terminal::CLEAR_SCREEN_DATA)?;
 
                     $s
                 }

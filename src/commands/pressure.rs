@@ -54,7 +54,7 @@ fn draw_pressure() -> anyhow::Result<()> {
     }
 
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     let progress_max = bar_width(get_term_width(), LABEL_WIDTH + 4 + VALUES_WIDTH);
 

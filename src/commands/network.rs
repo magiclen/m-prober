@@ -36,7 +36,7 @@ fn draw_network(monitor: Option<Duration>, unit: Option<Unit>) -> anyhow::Result
         network::get_networks_with_speed(monitor.unwrap_or(DEFAULT_INTERVAL))?;
 
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     let rows: Vec<Row> = networks_with_speed
         .into_iter()

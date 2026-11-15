@@ -25,7 +25,7 @@ fn draw_uptime(second: bool) -> anyhow::Result<()> {
     let uptime = uptime::get_uptime()?.total_uptime;
 
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
     write!(&mut stdout, "This computer has been up for ").unwrap();

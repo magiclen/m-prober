@@ -32,7 +32,7 @@ fn draw_cgroup(unit: Option<Unit>) -> anyhow::Result<()> {
     })?;
 
     let output = get_stdout_output();
-    let mut stdout = output.buffer();
+    let mut stdout = frame_buffer(&output);
 
     stdout.set_color(&COLOR_LABEL).unwrap();
     write!(&mut stdout, "cgroup ").unwrap();
