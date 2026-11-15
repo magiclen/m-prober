@@ -423,7 +423,7 @@ Every response is the JSON that [`mprober-lib`](https://crates.io/crates/mprober
 { "secs": 7942, "nanos": 390000000 }
 ```
 
-An endpoint answers `404` with `{"error": "..."}` when the kernel does not provide the data at all, e.g. `/api/pressure` on a kernel without `CONFIG_PSI`. It answers `500` with the same shape when a probe fails.
+An endpoint answers `404` with `{"error": "..."}` when the kernel does not provide the data at all, e.g. `/api/pressure` on a kernel without `CONFIG_PSI`. It answers `500` with the same shape when a probe fails. The sampled readings below answer `503` with the same shape when no fresh snapshot arrives within three detect intervals, e.g. because a probe keeps failing.
 
 ##### Instant readings
 
@@ -501,7 +501,7 @@ A rate can only be measured over a period, so these serve the latest snapshot of
 }
 ```
 
-`rtc_time` is `null` when no RTC driver is loaded, which is the case in most containers, `pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2.
+`rtc_time` is `null` when no RTC driver is loaded, which is the case in most containers, `pressure` is `null` when the kernel provides no PSI, and `cgroup` is `null` when the program does not run under cgroup v2. `rtc_time` is also `null` when the RTC cannot be read, and `network` and `volumes` are empty when the kernel does not provide `/proc/net/dev` or `/proc/diskstats`.
 
 `cpu_threads` in `/api/all` and its stream pairs each logical CPU's kernel number (`id`) with its physical CPU (`physical_id`), utilization fraction (`usage`) and frequency in MHz (`frequency_mhz`). Entries are ordered by `id`; the latter three fields can be `null` when unavailable. A CPU without a reading at the start of the interval has `usage: null`; its legacy `cpus_stat` entry is `0`. Existing fields and endpoints are unchanged.
 

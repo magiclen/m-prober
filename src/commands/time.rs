@@ -1,5 +1,7 @@
+use std::io;
+
 use anyhow::anyhow;
-use mprober_lib::rtc_time;
+use mprober_lib::{Error, rtc_time};
 
 use crate::{CLIArgs, CLICommands, terminal::*};
 
@@ -27,6 +29,13 @@ fn draw_time() -> anyhow::Result<()> {
         Err(error) if error.is_not_supported() => {
             return Err(anyhow!(
                 "This machine has no RTC driver loaded, so there is no RTC time to show."
+            ));
+        },
+        // A driver which cannot read the RTC still provides `/proc/driver/rtc`, only without the time.
+        Err(Error::IOError(error)) if error.kind() == io::ErrorKind::UnexpectedEof => {
+            return Err(anyhow!(
+                "The RTC driver reports no time, which usually means that the RTC holds an \
+                 invalid one."
             ));
         },
         Err(error) => return Err(error.into()),

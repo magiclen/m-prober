@@ -300,6 +300,18 @@ pub fn restore_terminal() {
     drop(TERMINAL.lock().unwrap_or_else(PoisonError::into_inner).take());
 }
 
+/// Put the terminal back when this is dropped, so that it is restored however `main` ends.
+///
+/// A panic skips the code after the call that panicked, but it still drops what was created before that call.
+pub struct TerminalGuard;
+
+impl Drop for TerminalGuard {
+    #[inline]
+    fn drop(&mut self) {
+        restore_terminal();
+    }
+}
+
 /// Watch for the `q` that stops a monitoring loop, and for the signals that stop it from outside.
 pub fn spawn_quit_watcher() {
     MONITORING.store(true, Ordering::Relaxed);

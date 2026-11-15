@@ -83,17 +83,16 @@ impl StaticFile {
         // A cache in the middle would otherwise hand the compressed body to a client which cannot read it.
         let vary = (header::VARY, "accept-encoding");
 
+        let cache_control = (header::CACHE_CONTROL, "no-cache");
+
         if cached {
-            return (StatusCode::NOT_MODIFIED, [(header::ETAG, etag), vary]).into_response();
+            // RFC 9110 asks a 304 to carry the same caching headers as the 200 it stands for.
+            return (StatusCode::NOT_MODIFIED, [(header::ETAG, etag), cache_control, vary])
+                .into_response();
         }
 
         let mut response = (
-            [
-                (header::CONTENT_TYPE, self.content_type),
-                (header::ETAG, etag),
-                (header::CACHE_CONTROL, "no-cache"),
-                vary,
-            ],
+            [(header::CONTENT_TYPE, self.content_type), (header::ETAG, etag), cache_control, vary],
             content.clone(),
         )
             .into_response();

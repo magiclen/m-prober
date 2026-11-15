@@ -537,7 +537,15 @@ pub fn get_args() -> CLIArgs {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_base_path;
+    use clap::CommandFactory;
+
+    use super::{CLIArgs, parse_base_path};
+
+    #[test]
+    fn test_command_definition() {
+        // Nothing else builds the command in a test, so a clash between flags or aliases would only show up when a debug binary runs.
+        CLIArgs::command().debug_assert();
+    }
 
     #[test]
     fn test_base_path_normalization() {

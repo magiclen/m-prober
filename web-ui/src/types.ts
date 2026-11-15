@@ -175,7 +175,10 @@ export interface Snapshot {
     hostname: string;
     kernel: string;
     uptime: Uptime;
-    /** `null` when no RTC driver is loaded, which is the case in most containers. */
+    /**
+     * `null` when no RTC driver is loaded, which is the case in most containers, or when the RTC
+     * cannot be read.
+     */
     rtc_time: string | null;
     load_average: LoadAverage;
     cpus: Cpu[];

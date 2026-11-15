@@ -33,7 +33,7 @@ pub struct Snapshot {
     pub hostname:     String,
     pub kernel:       String,
     pub uptime:       uptime::Uptime,
-    /// `None` when no RTC driver is loaded, which is the case in most containers.
+    /// `None` when no RTC driver is loaded, which is the case in most containers, or when the RTC cannot be read.
     pub rtc_time:     Option<chrono::NaiveDateTime>,
     pub load_average: load_average::LoadAverage,
     pub cpus:         Vec<cpu::CPU>,
@@ -195,14 +195,16 @@ fn sample(detect_interval: Duration) -> Result<Snapshot, Error> {
         hostname:     hostname::get_hostname()?,
         kernel:       kernel::get_kernel_version()?,
         uptime:       uptime::get_uptime()?,
-        rtc_time:     optional(rtc_time::get_rtc_date_time())?,
+        // A driver which cannot read the RTC still provides `/proc/driver/rtc` without the time, so any error here only means that the time is unknown.
+        rtc_time:     rtc_time::get_rtc_date_time().ok(),
         load_average: load_average::get_load_average()?,
         cpus:         cpu::get_cpus()?,
         cpus_stat:    cpu_sample.cpus_stat,
         cpu_threads:  cpu_sample.threads,
         memory:       memory::free()?,
-        network:      NetworkWithSpeed::collect(network?),
-        volumes:      VolumeWithSpeed::collect(volumes?),
+        // An environment without `/proc/net/dev` or `/proc/diskstats` has nothing to list, which must not take every other panel down with it.
+        network:      NetworkWithSpeed::collect(optional(network)?.unwrap_or_default()),
+        volumes:      VolumeWithSpeed::collect(optional(volumes)?.unwrap_or_default()),
         pressure:     SystemPressure::probe()?,
         cgroup:       CgroupSummary::probe()?,
     })

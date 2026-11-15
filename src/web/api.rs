@@ -143,9 +143,10 @@ pub async fn all(State(state): State<AppState>) -> ApiResult<Response> {
 
 /// The sampler publishes a snapshot every round, so nothing here means it has stopped for good or its probes keep failing.
 async fn latest(state: &AppState) -> ApiResult<Arc<Snapshot>> {
-    state
-        .sampler
-        .latest()
-        .await
-        .ok_or_else(|| ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "the sampler is not running"))
+    state.sampler.latest().await.ok_or_else(|| {
+        ApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "no fresh snapshot is available, see the server log",
+        )
+    })
 }

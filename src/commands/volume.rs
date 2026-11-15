@@ -242,11 +242,11 @@ fn draw_rows(
         writeln!(stdout).unwrap();
 
         if mounts {
-            stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-
             for point in row.points.iter() {
                 write!(stdout, "{:1$}", "", devices_len_inc).unwrap();
 
+                // Each line ends by resetting the color, so it has to be set again for every point.
+                stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
                 stdout.write_all(point.as_bytes()).unwrap();
 
                 stdout.set_color(&COLOR_DEFAULT).unwrap();

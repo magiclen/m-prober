@@ -11,10 +11,10 @@ use cli::*;
 use commands::*;
 
 fn main() -> anyhow::Result<()> {
-    let result = run(get_args());
+    // A signal puts the terminal back by itself, but an error or a panic ends a monitoring loop here instead.
+    let _terminal_guard = terminal::TerminalGuard;
 
-    // A signal puts the terminal back by itself, but an error ends a monitoring loop here instead.
-    terminal::restore_terminal();
+    let result = run(get_args());
 
     match result {
         // A reader which stopped early, e.g. `head`, is not a failure of this program.
