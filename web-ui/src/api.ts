@@ -34,6 +34,11 @@ export const login = async (authKey: string): Promise<boolean> => {
         body: JSON.stringify({ auth_key: authKey }),
     });
 
+    // Only a 401 says that the key is wrong, and anything else, e.g. a 502 from a proxy while the probe is down, means the probe was not reached.
+    if (!response.ok && response.status !== 401) {
+        throw new Error(`auth responded with ${response.status}`);
+    }
+
     return response.ok;
 };
 

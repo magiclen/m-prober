@@ -10,24 +10,24 @@ interface LoginPageProps {
 
 export function LoginPage({ version, onAuthenticated }: LoginPageProps): React.JSX.Element {
     const [authKey, setAuthKey] = useState("");
-    const [rejected, setRejected] = useState(false);
+    const [failure, setFailure] = useState<"rejected" | "unreachable" | null>(null);
     const [busy, setBusy] = useState(false);
 
     const submit = (event: React.FormEvent): void => {
         event.preventDefault();
 
         setBusy(true);
-        setRejected(false);
+        setFailure(null);
 
         login(authKey)
             .then((accepted) => {
                 if (accepted) {
                     onAuthenticated();
                 } else {
-                    setRejected(true);
+                    setFailure("rejected");
                 }
             })
-            .catch(() => setRejected(true))
+            .catch(() => setFailure("unreachable"))
             .finally(() => setBusy(false));
     };
 
@@ -52,9 +52,11 @@ export function LoginPage({ version, onAuthenticated }: LoginPageProps): React.J
                             onChange={(event) => setAuthKey(event.currentTarget.value)}
                         />
 
-                        {rejected && (
+                        {failure !== null && (
                             <Alert color="red" variant="light">
-                                That auth key was rejected.
+                                {failure === "rejected"
+                                    ? "That auth key was rejected."
+                                    : "The server could not be reached. Please try again."}
                             </Alert>
                         )}
 

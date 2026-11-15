@@ -8,3 +8,10 @@ export const sections = [
     { id: "pressure", label: "Pressure" },
     { id: "cgroup", label: "cgroup" },
 ] as const;
+
+/**
+ * Link a section to this page itself, since a bare `#id` resolves against `<base>` and would reload
+ * a page opened at another path such as `/mprober`.
+ */
+export const sectionHref = (id: string): string =>
+    `${window.location.pathname}${window.location.search}#${id}`;

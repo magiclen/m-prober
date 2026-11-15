@@ -6,7 +6,7 @@ import type * as Api from "@/api.ts";
 import { testSnapshot } from "@/test/snapshot.ts";
 import type { Snapshot } from "@/types.ts";
 
-import { useSnapshot } from "./useSnapshot.ts";
+import { RETRY_INTERVAL, useSnapshot } from "./useSnapshot.ts";
 
 vi.mock("@/api.ts", async () => ({
     ...(await vi.importActual<typeof Api>("@/api.ts")),
@@ -14,9 +14,11 @@ vi.mock("@/api.ts", async () => ({
 }));
 
 class Stream extends EventTarget {
+    static readonly CLOSED = 2;
     static latest: Stream;
     readonly close = vi.fn();
     readonly url: string;
+    readyState = 0;
     constructor(url: string) {
         super();
         this.url = url;
@@ -115,4 +117,28 @@ test("ignores a late HTTP response and resets readings between authenticated ses
     rerender({ enabled: true });
     expect(result.current.snapshot).toBeNull();
     expect(result.current.connection).toBe("connecting");
+});
+
+test("connects again after an HTTP error closes the stream", () => {
+    vi.mocked(fetchSnapshot).mockReturnValue(new Promise(() => {}));
+    const { result, unmount } = renderHook(() => useSnapshot(true));
+    const closed = Stream.latest;
+    act(() => {
+        // A 502 from a proxy, for example, makes the browser give the stream up.
+        closed.readyState = Stream.CLOSED;
+        closed.dispatchEvent(new Event("error"));
+    });
+    expect("lost").toBe(result.current.connection);
+    act(() => {
+        vi.advanceTimersByTime(RETRY_INTERVAL);
+    });
+    expect(Stream.latest).not.toBe(closed);
+    act(() => {
+        Stream.latest.dispatchEvent(
+            new MessageEvent("message", { data: JSON.stringify(testSnapshot) }),
+        );
+    });
+    expect("live").toBe(result.current.connection);
+    unmount();
+    expect(Stream.latest.close).toHaveBeenCalledOnce();
 });

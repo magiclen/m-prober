@@ -17,8 +17,8 @@ import { fetchAuthStatus, fetchConfig, logout } from "@/api.ts";
 import { Dashboard } from "@/components/Dashboard.tsx";
 import { LastUpdate } from "@/components/LastUpdate.tsx";
 import { LoginPage } from "@/components/LoginPage.tsx";
-import { useSnapshot } from "@/hooks/useSnapshot.ts";
-import { sections } from "@/sections.ts";
+import { RETRY_INTERVAL, useSnapshot } from "@/hooks/useSnapshot.ts";
+import { sectionHref, sections } from "@/sections.ts";
 import type { AuthStatus, Config } from "@/types.ts";
 
 import classes from "./App.module.css";
@@ -50,26 +50,44 @@ export function App(): React.JSX.Element {
     const refreshAuth = useCallback(() => {
         fetchAuthStatus()
             .then(setAuth)
-            .catch(() => setAuth(null));
+            .catch((): void => {
+                // What is already known stays on the page, and the retry below asks again.
+            });
+    }, []);
+
+    const refreshConfig = useCallback(() => {
+        fetchConfig()
+            .then(setConfig)
+            .catch((): void => {
+                // The retry below asks again.
+            });
     }, []);
 
     useEffect(() => {
-        fetchConfig()
-            .then(setConfig)
-            .catch(() => setConfig(null));
+        refreshConfig();
         refreshAuth();
-    }, [refreshAuth]);
+    }, [refreshConfig, refreshAuth]);
 
     const authenticated = auth?.authenticated ?? false;
     const { snapshot, connection, lastReceivedAt } = useSnapshot(authenticated);
 
-    // A browser retries a dropped stream on its own and never gives up, so an expired session would
-    // otherwise leave the page saying "reconnecting" for good instead of asking to sign in again.
-    useEffect(() => {
-        if (connection === "lost") {
-            refreshAuth();
+    // Ask again while the probe cannot be reached, so that the page comes back by itself, or asks to sign in again when a restarted probe no longer accepts the session.
+    const configMissing = config === null;
+    const waiting = configMissing || auth === null || connection === "lost";
+    useEffect((): (() => void) | undefined => {
+        if (!waiting) {
+            return undefined;
         }
-    }, [connection, refreshAuth]);
+        const timer = setInterval((): void => {
+            if (configMissing) {
+                refreshConfig();
+            }
+            refreshAuth();
+        }, RETRY_INTERVAL);
+        return (): void => {
+            clearInterval(timer);
+        };
+    }, [waiting, configMissing, refreshConfig, refreshAuth]);
 
     const hasSnapshot = snapshot !== null;
     useEffect((): (() => void) | undefined => {
@@ -194,7 +212,7 @@ export function App(): React.JSX.Element {
                             }
                         }}
                         component="a"
-                        href={`#${section.id}`}
+                        href={sectionHref(section.id)}
                         label={section.label}
                         active={activeSection === section.id}
                         aria-current={activeSection === section.id ? "location" : undefined}
