@@ -162,8 +162,8 @@ pub async fn login(
     }
 
     let mut cookie = format!(
-        "{COOKIE_NAME}={}; HttpOnly; SameSite=Strict; Path=/; Max-Age={COOKIE_MAX_AGE}",
-        state.auth.session_token
+        "{COOKIE_NAME}={}; HttpOnly; SameSite=Strict; Path={}; Max-Age={COOKIE_MAX_AGE}",
+        state.auth.session_token, state.base_path
     );
 
     if is_secure(&headers) {
@@ -173,8 +173,9 @@ pub async fn login(
     ([(header::SET_COOKIE, cookie)], StatusCode::NO_CONTENT).into_response()
 }
 
-pub async fn logout() -> Response {
-    let cookie = format!("{COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0");
+pub async fn logout(State(state): State<AppState>) -> Response {
+    let cookie =
+        format!("{COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path={}; Max-Age=0", state.base_path);
 
     ([(header::SET_COOKIE, cookie)], StatusCode::NO_CONTENT).into_response()
 }

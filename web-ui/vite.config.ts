@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 
 // The Rust side lists every asset by name (see `src/web/static_files.rs`), so the file names must not carry a content hash.
 export default defineConfig(({ mode }) => ({
-    base: "/",
+    base: "./",
     build: {
         outDir: "../front-end",
         // The favicons live in `front-end` and are not produced by this build.

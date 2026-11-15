@@ -11,12 +11,13 @@ mod tests;
 
 use std::{
     net::{IpAddr, SocketAddr},
+    sync::Arc,
     time::Duration,
 };
 
 use axum::{
     Json, Router,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, Uri},
     middleware,
     routing::{get, post},
 };
@@ -37,6 +38,7 @@ pub fn serve(
     listen_port: u16,
     auth_key: Option<String>,
     only_api: bool,
+    base_path: String,
 ) -> anyhow::Result<()> {
     if !only_api {
         static_files::warm_up();
@@ -47,12 +49,16 @@ pub fn serve(
     let result = runtime.block_on(async move {
         let (shutdown_sender, shutdown) = Shutdown::channel();
 
-        let state = AppState::new(monitor, auth_key, shutdown);
+        let state = AppState::new(monitor, auth_key, &base_path, shutdown);
         let app = router(state, only_api);
 
         let listener = TcpListener::bind(SocketAddr::new(address, listen_port)).await?;
 
-        println!("mprober is listening on http://{}", listener.local_addr()?);
+        println!(
+            "mprober is listening on http://{}{}/",
+            listener.local_addr()?,
+            base_path.trim_end_matches('/')
+        );
 
         let server = axum::serve(listener, app)
             .with_graceful_shutdown(shutdown_signal(shutdown_sender.clone()));
@@ -104,9 +110,22 @@ fn router(state: AppState, only_api: bool) -> Router {
 
     let app = Router::new().nest("/api", api);
 
-    let app = if only_api { app } else { app.fallback(static_files::serve) };
+    let app = if only_api {
+        app
+    } else {
+        let index = Arc::new(static_files::index(&state.base_path));
 
-    app.with_state(state)
+        app.fallback(move |uri: Uri, headers: HeaderMap| {
+            let index = Arc::clone(&index);
+
+            async move { static_files::serve(&index, uri, headers) }
+        })
+    };
+
+    let base_path = Arc::clone(&state.base_path);
+    let app = app.with_state(state);
+
+    if base_path.as_ref() == "/" { app } else { Router::new().nest_service(&base_path, app) }
 }
 
 async fn api_not_found() -> (StatusCode, Json<serde_json::Value>) {

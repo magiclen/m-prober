@@ -2,18 +2,24 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { fetchSnapshot } from "@/api.ts";
+import type * as Api from "@/api.ts";
 import { testSnapshot } from "@/test/snapshot.ts";
 import type { Snapshot } from "@/types.ts";
 
 import { useSnapshot } from "./useSnapshot.ts";
 
-vi.mock("@/api.ts", () => ({ fetchSnapshot: vi.fn() }));
+vi.mock("@/api.ts", async () => ({
+    ...(await vi.importActual<typeof Api>("@/api.ts")),
+    fetchSnapshot: vi.fn(),
+}));
 
 class Stream extends EventTarget {
     static latest: Stream;
     readonly close = vi.fn();
-    constructor() {
+    readonly url: string;
+    constructor(url: string) {
         super();
+        this.url = url;
         Stream.latest = this;
     }
 }
@@ -28,6 +34,25 @@ afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.resetAllMocks();
+});
+
+test("uses the page base for streamed snapshots", async () => {
+    const base = document.createElement("base");
+    base.href = "/admin/tools/mprober/";
+    document.head.append(base);
+    vi.mocked(fetchSnapshot).mockResolvedValue(testSnapshot);
+    try {
+        const { unmount } = renderHook(() => useSnapshot(true));
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(Stream.latest.url).toBe(
+            `${window.location.origin}/admin/tools/mprober/api/all/stream`,
+        );
+        unmount();
+    } finally {
+        base.remove();
+    }
 });
 
 test("dates the accepted HTTP snapshot and each stream update, preserving time on disconnect", async () => {

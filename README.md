@@ -8,7 +8,7 @@ This program collects Linux system information: hostname, kernel version, uptime
 ## Help
 
 ```
-M Prober 0.12.1
+M Prober 0.12.2
 Magic Len <len@magiclen.org>
 M Prober is a free and simple probe utility for Linux.
 
@@ -70,6 +70,7 @@ mprober web                           # Start a HTTP service on port 8000 to mon
 mprober web -m 2                      # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds
 mprober web -p 7777                   # Start a HTTP service on port 7777 to monitor this computer
 mprober web --addr 127.0.0.1          # Start a HTTP service on 127.0.0.1:8000 to monitor this computer
+mprober web --base-path /mprober       # Serve the web page and HTTP APIs under /mprober
 mprober web -a auth_key               # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key
 mprober web --only-api                # Start a HTTP service on port 8000 to serve only HTTP APIs
 mprober benchmark                     # Run benchmarks
@@ -384,6 +385,32 @@ The page is one dashboard which follows the machine live, with a panel per subsy
 
 To change the listening port, use the `-p <PORT>` option. To change the detecting time interval, use the `-m <SECONDS>` option. To bind somewhere other than `0.0.0.0`, use `--addr <ADDRESS>`.
 
+Use `--base-path <PATH>` to mount the whole service under a path. The default is `/`. For example:
+
+```bash
+mprober web --addr 127.0.0.1 --base-path /mprober
+```
+
+Both `http://127.0.0.1:8000/mprober` and `http://127.0.0.1:8000/mprober/` open the dashboard. Its APIs are under `/mprober/api`, such as `/mprober/api/all/stream`. Paths outside `/mprober` return `404`. The same option works with `--only-api` and accepts deeper paths such as `/admin/tools/mprober`. A trailing slash in the option is removed. Use a fixed absolute URL path without a query, fragment or route parameters, and percent-encode special characters, including non-ASCII text.
+
+A reverse proxy must keep this prefix when forwarding requests. For example, to expose the dashboard at `http://admin.magiclen.org/mprober`, add these locations to the Nginx server block:
+
+```nginx
+location = /mprober {
+    return 308 /mprober/$is_args$args;
+}
+
+location /mprober/ {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+}
+```
+
+The `proxy_pass` URL has no trailing slash or URI part, so Nginx forwards `/mprober/...` unchanged. `proxy_buffering off` lets streamed snapshots reach the browser as they arrive. The same executable and embedded page work at any supported base path without rebuilding the web UI.
+
 One background sampler serves every client, so opening the page in several tabs still costs one sampling round per interval, and the sampler stops entirely while nobody is watching.
 
 The page and its stylesheet and script are served gzipped to a browser that takes them, which is most of a megabyte down to about 150 KB, and revalidated with an `ETag` so an upgrade is picked up without re-downloading anything that did not change.
@@ -504,7 +531,7 @@ curl -H 'Authorization: <AUTH_KEY>' http://127.0.0.1:8000/api/all
 | *POST* `/api/auth` | Takes `{"auth_key": "..."}`. Answers `204` and sets an `HttpOnly` cookie, or `401`. |
 | *POST* `/api/logout` | Clears the cookie. |
 
-The cookie holds a random token this process generates at startup, so the key itself never leaves the server. The `Secure` attribute is set when a reverse proxy reports `X-Forwarded-Proto: https`.
+The cookie holds a random token this process generates at startup, so the key itself never leaves the server. Its `Path` follows `--base-path`, and signing out clears the cookie at that same path. The `Secure` attribute is set when a reverse proxy reports `X-Forwarded-Proto: https`.
 
 Also, you may want to disable the web page. Just add a `--only-api` flag.
 

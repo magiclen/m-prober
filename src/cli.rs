@@ -77,6 +77,7 @@ const APP_ABOUT: &str = concat!(
         "web -m 2                      # Start a HTTP service on port 8000 to monitor this computer. The time interval is set to 2 seconds",
         "web -p 7777                   # Start a HTTP service on port 7777 to monitor this computer",
         "web --addr 127.0.0.1          # Start a HTTP service on 127.0.0.1:8000 to monitor this computer",
+        "web --base-path /mprober       # Serve the web page and HTTP APIs under /mprober",
         "web -a auth_key               # Start a HTTP service on port 8000 to monitor this computer. APIs need to be invoked with an auth key",
         "web --only-api                # Start a HTTP service on port 8000 to serve only HTTP APIs",
         "benchmark                     # Run benchmarks",
@@ -332,6 +333,10 @@ pub enum CLICommands {
         #[arg(default_value = "8000")]
         #[arg(help = "Assign a TCP port for the HTTP service")]
         listen_port: u16,
+        #[arg(long, value_name = "PATH", default_value = "/")]
+        #[arg(value_parser = parse_base_path)]
+        #[arg(help = "Assign a base path for the web page and HTTP APIs")]
+        base_path:   String,
         #[arg(short, long)]
         #[arg(value_parser = parse_auth_key)]
         #[arg(help = "Assign an auth key")]
@@ -422,6 +427,64 @@ fn parse_auth_key(arg: &str) -> Result<String, String> {
     Ok(String::from(arg))
 }
 
+fn parse_base_path(arg: &str) -> Result<String, String> {
+    let invalid = || {
+        String::from(
+            "the base path must be a fixed absolute URL path without a query or fragment; use \
+             percent-encoding for special characters",
+        )
+    };
+
+    if !arg.starts_with('/')
+        || arg.starts_with("//")
+        || !arg
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"/-._~!$&'()+,=:@%".contains(&byte))
+    {
+        return Err(invalid());
+    }
+
+    let path = arg.trim_end_matches('/');
+
+    if path.is_empty() {
+        return Ok(String::from("/"));
+    }
+
+    for segment in path[1..].split('/') {
+        if segment.is_empty() || segment.starts_with(':') {
+            return Err(invalid());
+        }
+
+        let mut decoded = Vec::with_capacity(segment.len());
+        let mut bytes = segment.bytes();
+
+        while let Some(byte) = bytes.next() {
+            let byte = if byte == b'%' {
+                let high = bytes.next().and_then(|byte| (byte as char).to_digit(16));
+                let low = bytes.next().and_then(|byte| (byte as char).to_digit(16));
+
+                match (high, low) {
+                    (Some(high), Some(low)) => (high * 16 + low) as u8,
+                    _ => return Err(invalid()),
+                }
+            } else {
+                byte
+            };
+
+            decoded.push(byte);
+        }
+
+        // Browsers normalize dot segments, and proxies may decode path separators before forwarding.
+        if matches!(decoded.as_slice(), b"." | b"..")
+            || decoded.iter().any(|byte| matches!(byte, b'/' | b'\\'))
+        {
+            return Err(invalid());
+        }
+    }
+
+    Ok(String::from(path))
+}
+
 #[inline]
 fn parse_unit(arg: &str) -> Result<Unit, UnitParseError> {
     Unit::from_str(arg)
@@ -451,5 +514,40 @@ pub fn get_args() -> CLIArgs {
         Err(err) => {
             err.exit();
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_base_path;
+
+    #[test]
+    fn test_base_path_normalization() {
+        for (input, expected) in [
+            ("/", "/"),
+            ("/mprober", "/mprober"),
+            ("/mprober/", "/mprober"),
+            ("/admin/tools/mprober/", "/admin/tools/mprober"),
+            ("/%E7%9B%A3%E6%8E%A7", "/%E7%9B%A3%E6%8E%A7"),
+        ] {
+            assert_eq!(expected, parse_base_path(input).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_base_path_must_be_a_fixed_path() {
+        for input in [
+            "mprober",
+            "//mprober",
+            "/mprober?query",
+            "/mprober#fragment",
+            "/{capture}",
+            "/mprober;Path=/",
+            "/a/%2e%2e/b",
+            "/a%2fb",
+            "/a/%",
+        ] {
+            assert!(parse_base_path(input).is_err(), "{input}");
+        }
     }
 }

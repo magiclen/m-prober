@@ -37,15 +37,22 @@ impl Shutdown {
 pub struct AppState {
     pub detect_interval: Duration,
     pub auth:            Arc<Auth>,
+    pub base_path:       Arc<str>,
     pub sampler:         Sampler,
     pub shutdown:        Shutdown,
 }
 
 impl AppState {
-    pub fn new(detect_interval: Duration, auth_key: Option<String>, shutdown: Shutdown) -> Self {
+    pub fn new(
+        detect_interval: Duration,
+        auth_key: Option<String>,
+        base_path: &str,
+        shutdown: Shutdown,
+    ) -> Self {
         AppState {
             detect_interval,
             auth: Arc::new(Auth::new(auth_key)),
+            base_path: Arc::from(base_path),
             sampler: Sampler::spawn(detect_interval),
             shutdown,
         }

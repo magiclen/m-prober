@@ -8,11 +8,12 @@ pub fn handle_web(args: CLIArgs) -> anyhow::Result<()> {
         monitor,
         address,
         listen_port,
+        base_path,
         auth_key,
         only_api,
     } = args.command
     {
-        web::serve(monitor, address, listen_port, auth_key, only_api)?;
+        web::serve(monitor, address, listen_port, auth_key, only_api, base_path)?;
     }
 
     Ok(())

@@ -15,6 +15,12 @@ Rust side embeds into the executable. The file names carry no content hash on pu
 `src/web/static_files.rs` lists every asset by name. **The build output is committed**, so that
 `cargo install mprober` works on a machine without Node.
 
+The build uses relative asset URLs. `index.html` keeps a `<base href="/">` before any asset links;
+the Rust server sets its path once at startup to match `--base-path`, before building the page's
+gzip body and `ETag`. Both HTTP requests and `EventSource` resolve their API URLs against
+`document.baseURI`. Keep this base tag and the relative links so one build works at `/` and at
+paths such as `/admin/tools/mprober`, including the page served for unknown paths inside that mount.
+
 ## Font
 
 The page is set in Roboto Mono, self-hosted so that a probe with no route to the internet still
@@ -47,6 +53,11 @@ Run it from the root of the repository. It writes `favicon.ico`, `apple-touch-ic
 `icon-192.png`, `icon-512.png`, `icon-mask.png` and `manifest.webmanifest`, and prints the tags for
 the `<head>` of `index.html`. Adding or renaming one of them means updating the list in
 `src/web/static_files.rs` as well.
+
+After generating the icons, keep their HTML links relative (`./favicon.ico`,
+`./apple-touch-icon.png` and `./manifest.webmanifest`). In `front-end/manifest.webmanifest`, set
+`start_url` to `./` and use relative icon paths such as `./icon-192.png`. The generator's root-based
+paths would otherwise bypass `--base-path`.
 
 ## Develop
 

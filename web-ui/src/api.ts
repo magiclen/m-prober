@@ -1,7 +1,9 @@
 import type { AuthStatus, Config, Snapshot } from "@/types.ts";
 
+export const apiUrl = (path: string): string => new URL(`api/${path}`, document.baseURI).href;
+
 const getJson = async <T>(path: string): Promise<T> => {
-    const response = await fetch(path, { credentials: "same-origin" });
+    const response = await fetch(apiUrl(path), { credentials: "same-origin" });
 
     if (!response.ok) {
         throw new Error(`${path} responded with ${response.status}`);
@@ -14,18 +16,18 @@ const getJson = async <T>(path: string): Promise<T> => {
     return body as T;
 };
 
-export const fetchConfig = (): Promise<Config> => getJson<Config>("/api/config");
+export const fetchConfig = (): Promise<Config> => getJson<Config>("config");
 
-export const fetchAuthStatus = (): Promise<AuthStatus> => getJson<AuthStatus>("/api/auth");
+export const fetchAuthStatus = (): Promise<AuthStatus> => getJson<AuthStatus>("auth");
 
-export const fetchSnapshot = (): Promise<Snapshot> => getJson<Snapshot>("/api/all");
+export const fetchSnapshot = (): Promise<Snapshot> => getJson<Snapshot>("all");
 
 /**
  * Resolves to whether the key was accepted, since a wrong key is an expected answer rather than a
  * failure.
  */
 export const login = async (authKey: string): Promise<boolean> => {
-    const response = await fetch("/api/auth", {
+    const response = await fetch(apiUrl("auth"), {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -36,5 +38,5 @@ export const login = async (authKey: string): Promise<boolean> => {
 };
 
 export const logout = async (): Promise<void> => {
-    await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+    await fetch(apiUrl("logout"), { method: "POST", credentials: "same-origin" });
 };

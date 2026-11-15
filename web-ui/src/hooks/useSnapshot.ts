@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchSnapshot } from "@/api.ts";
+import { apiUrl, fetchSnapshot } from "@/api.ts";
 import type { Snapshot } from "@/types.ts";
 
 type ConnectionState = "connecting" | "live" | "lost";
@@ -46,7 +46,7 @@ export const useSnapshot = (enabled: boolean): SnapshotState => {
                 // The stream reports the connection state on its own.
             });
 
-        const source = new EventSource("/api/all/stream", { withCredentials: true });
+        const source = new EventSource(apiUrl("all/stream"), { withCredentials: true });
         source.addEventListener("message", (event: MessageEvent<string>): void => {
             if (cancelled) {
                 return;
