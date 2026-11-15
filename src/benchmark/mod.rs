@@ -189,6 +189,9 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
         return Err(BenchmarkError::NoNeedBenchmark);
     }
 
+    // `println!` panics when the reader has gone away, e.g. `| head -n1`, so the results are written with `?` instead.
+    let mut stdout = io::stdout();
+
     let cpus = cpu::get_cpus()?;
 
     let cpus_num = cpus.iter().map(|cpu| cpu.siblings).sum();
@@ -211,20 +214,20 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
             let model_name =
                 cpu.model_name.as_deref().unwrap_or(crate::commands::UNKNOWN_CPU_MODEL_NAME);
 
-            println!("{model_name} {}C/{}T", cpu.cpu_cores, cpu.siblings);
+            writeln!(stdout, "{model_name} {}C/{}T", cpu.cpu_cores, cpu.siblings)?;
 
             // An architecture whose `/proc/cpuinfo` reports no `cpu MHz`, and which has no cpufreq files either, leaves nothing to print here.
             let mut cpu_mhz_iter = cpu.cpus_mhz.into_iter();
 
             if let Some(cpu_mhz) = cpu_mhz_iter.next() {
-                print!("{cpu_mhz:.0}");
+                write!(stdout, "{cpu_mhz:.0}")?;
 
                 for cpu_mhz in cpu_mhz_iter {
-                    print!(" {cpu_mhz:.0}");
+                    write!(stdout, " {cpu_mhz:.0}")?;
                 }
             }
 
-            println!("\n");
+            writeln!(stdout, "\n")?;
         }
     }
 
@@ -247,7 +250,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
 
                 let speed = bench_result.speed() * CPU_TERMS_PER_ROUND as f64;
 
-                println!("CPU (multi-thread) : {speed:.2} iterations/s");
+                writeln!(stdout, "CPU (multi-thread) : {speed:.2} iterations/s")?;
 
                 if config.verbose {
                     eprintln!();
@@ -266,7 +269,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
 
             let speed = bench_result.speed() * CPU_TERMS_PER_ROUND as f64;
 
-            println!("CPU (single thread): {speed:.2} iterations/s");
+            writeln!(stdout, "CPU (single thread): {speed:.2} iterations/s")?;
         }
     }
 
@@ -316,7 +319,7 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
                 Byte::from_f64(speed).unwrap().get_appropriate_unit(UnitType::Binary)
             );
 
-            println!("Memory             : {memory_result}/s");
+            writeln!(stdout, "Memory             : {memory_result}/s")?;
         }
     }
 
@@ -338,10 +341,11 @@ pub fn run_benchmark(config: &BenchmarkConfig) -> Result<(), BenchmarkError> {
                     let read_result_string = format_speed(read_result);
                     let write_result_string = format_speed(write_result);
 
-                    println!(
+                    writeln!(
+                        stdout,
                         "{:<19}: Read {read_result_string}/s, Write {write_result_string}/s",
                         volume.device
-                    );
+                    )?;
                 }
             }
         }
@@ -370,8 +374,11 @@ impl AlignedBuffer {
 ///
 /// `O_NOFOLLOW` joins the `O_EXCL` the caller asks for, so that neither a file nor a link to one that is already there is ever opened.
 fn open_test_file(path: &Path, options: &mut OpenOptions) -> Option<(File, bool)> {
-    if let Ok(file) = options.custom_flags(libc::O_DIRECT | libc::O_NOFOLLOW).open(path) {
-        return Some((file, true));
+    match options.custom_flags(libc::O_DIRECT | libc::O_NOFOLLOW).open(path) {
+        Ok(file) => return Some((file, true)),
+        // Linux creates the file before it finds out that `O_DIRECT` is refused, and the name was new, so the empty file is ours to remove before it is created again.
+        Err(error) if error.raw_os_error() == Some(libc::EINVAL) => try_delete(path),
+        Err(_) => (),
     }
 
     options.custom_flags(libc::O_NOFOLLOW).open(path).ok().map(|file| (file, false))

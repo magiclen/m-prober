@@ -33,7 +33,11 @@ pub fn handle_benchmark(args: CLIArgs) -> anyhow::Result<()> {
             volume,
         };
 
-        benchmark::run_benchmark(&benchmark_config)?;
+        match benchmark::run_benchmark(&benchmark_config) {
+            // `main` only recognizes a reader which went away by an `io::Error`, so it must not stay wrapped.
+            Err(benchmark::BenchmarkError::IOError(error)) => return Err(error.into()),
+            result => result?,
+        }
     }
 
     Ok(())
