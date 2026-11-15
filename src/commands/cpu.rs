@@ -287,6 +287,8 @@ fn draw_cpu_info(
             stdout.set_color(&COLOR_BOLD_TEXT).unwrap();
             write!(&mut stdout, "{}C/{}T", cpu.cpu_cores, cpu.siblings).unwrap();
 
+            // With `-i`, a CPU without a frequency prints no row, so the color is reset here rather than left to the rows.
+            stdout.set_color(&COLOR_DEFAULT).unwrap();
             writeln!(&mut stdout).unwrap();
 
             draw_threads(&mut stdout, &groups[index], only_information, terminal_width);
@@ -297,7 +299,10 @@ fn draw_cpu_info(
             writeln!(&mut stdout).unwrap();
 
             stdout.set_color(&COLOR_NORMAL_TEXT).unwrap();
-            writeln!(&mut stdout, "{UNKNOWN_CPU_MODEL_NAME}").unwrap();
+            write!(&mut stdout, "{UNKNOWN_CPU_MODEL_NAME}").unwrap();
+
+            stdout.set_color(&COLOR_DEFAULT).unwrap();
+            writeln!(&mut stdout).unwrap();
 
             draw_threads(&mut stdout, &unknown, only_information, terminal_width);
         }

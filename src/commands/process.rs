@@ -114,8 +114,12 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
         let uid_filter = match user_filter {
             Some(user_filter) => match user_cache.get_user_by_name(&user_filter) {
                 Some(user) => Some(user.uid()),
-                None => {
-                    return Err(anyhow!("Cannot find the user {:?}.", user_filter));
+                // A user without a name is shown as its number, so the number is accepted as well.
+                None => match user_filter.parse() {
+                    Ok(uid) => Some(uid),
+                    Err(_) => {
+                        return Err(anyhow!("Cannot find the user {:?}.", user_filter));
+                    },
                 },
             },
             None => None,
@@ -124,8 +128,12 @@ pub fn handle_process(args: CLIArgs) -> anyhow::Result<()> {
         let gid_filter = match group_filter {
             Some(group_filter) => match user_cache.get_group_by_name(&group_filter) {
                 Some(group) => Some(group.gid()),
-                None => {
-                    return Err(anyhow!("Cannot find the group {:?}.", group_filter));
+                // A group without a name is shown as its number, so the number is accepted as well.
+                None => match group_filter.parse() {
+                    Ok(gid) => Some(gid),
+                    Err(_) => {
+                        return Err(anyhow!("Cannot find the group {:?}.", group_filter));
+                    },
                 },
             },
             None => None,
@@ -284,15 +292,15 @@ fn draw_process(
 
     let truncate_inc = if truncate == 0 { usize::MAX } else { truncate + 1 };
 
-    let pid_len = rows.iter().map(|row| row.pid.len()).max().map(|s| s.max(5)).unwrap_or(0);
-    let ppid_len = rows.iter().map(|row| row.ppid.len()).max().map(|s| s.max(5)).unwrap_or(0);
-    let vsz_len = rows.iter().map(|row| row.vsz.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let rss_len = rows.iter().map(|row| row.rss.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let anon_len = rows.iter().map(|row| row.anon.len()).max().map(|s| s.max(9)).unwrap_or(0);
-    let thd_len = rows.iter().map(|row| row.thd.len()).max().map(|s| s.max(3)).unwrap_or(0);
-    let tty_len =
-        rows.iter().map(|row| display_width(&row.tty)).max().map(|s| s.max(4)).unwrap_or(0);
-    let state_len = rows.iter().map(|row| row.state.len()).max().map(|s| s.max(5)).unwrap_or(0);
+    // The headings have to fit even when no process matched the filters.
+    let pid_len = rows.iter().map(|row| row.pid.len()).max().unwrap_or(0).max(5);
+    let ppid_len = rows.iter().map(|row| row.ppid.len()).max().unwrap_or(0).max(5);
+    let vsz_len = rows.iter().map(|row| row.vsz.len()).max().unwrap_or(0).max(9);
+    let rss_len = rows.iter().map(|row| row.rss.len()).max().unwrap_or(0).max(9);
+    let anon_len = rows.iter().map(|row| row.anon.len()).max().unwrap_or(0).max(9);
+    let thd_len = rows.iter().map(|row| row.thd.len()).max().unwrap_or(0).max(3);
+    let tty_len = rows.iter().map(|row| display_width(&row.tty)).max().unwrap_or(0).max(4);
+    let state_len = rows.iter().map(|row| row.state.len()).max().unwrap_or(0).max(5);
 
     let user_len = column_width(rows.iter().map(|row| display_width(&row.user)), 4, truncate_inc);
     let group_len = column_width(rows.iter().map(|row| display_width(&row.group)), 5, truncate_inc);

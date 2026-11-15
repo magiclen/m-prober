@@ -332,7 +332,7 @@ mprober process --top 5
  51467 16498   20   0  0.0   1.4 TiB 439.6 MiB  302.5 MiB  31      magiclen
 ```
 
-The rows are ordered by CPU and then by memory usage. `--pid-filter`, `--user-filter`, `--group-filter`, `--program-filter` and `--tty-filter` narrow the list, the last two by a regex. `-t` adds the start time of each process, and `--truncate` shortens the names.
+The rows are ordered by CPU and then by memory usage. `--pid-filter`, `--user-filter`, `--group-filter`, `--program-filter` and `--tty-filter` narrow the list, the last two by a regex. A user or a group can be given by its name or its number. `-t` adds the start time of each process, and `--truncate` shortens the names.
 
 In addition to `process`, `p`, and `ps` are also acceptable.
 

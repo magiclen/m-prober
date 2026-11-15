@@ -295,11 +295,13 @@ pub enum CLICommands {
         #[arg(short = 't', long)]
         #[arg(help = "Show when the processes start")]
         start_time:       bool,
-        #[arg(long, alias = "filter-user", value_name = "USER_NAME")]
-        #[arg(help = "Show only processes which are related to a specific user")]
+        #[arg(long, alias = "filter-user", value_name = "USER")]
+        #[arg(help = "Show only processes which are related to a specific user, given by its \
+                      name or UID")]
         user_filter:      Option<String>,
-        #[arg(long, alias = "filter-group", value_name = "GROUP_NAME")]
-        #[arg(help = "Show only processes which are related to a specific group")]
+        #[arg(long, alias = "filter-group", value_name = "GROUP")]
+        #[arg(help = "Show only processes which are related to a specific group, given by its \
+                      name or GID")]
         group_filter:     Option<String>,
         #[arg(long, alias = "filter-program", value_name = "REGEX")]
         #[arg(value_parser = parse_regex)]
